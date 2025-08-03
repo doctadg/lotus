@@ -57,7 +57,7 @@ export default function Home() {
       const reader = response.body?.getReader()
       if (!reader) throw new Error('No response stream')
 
-      let assistantMessage: Message = {
+      const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         content: '',
         role: 'assistant',
@@ -88,7 +88,7 @@ export default function Home() {
                     : msg
                 ))
               }
-            } catch (e) {
+            } catch {
               // Handle non-JSON chunks
               if (data && data !== '[DONE]') {
                 setMessages(prev => prev.map(msg => 
@@ -217,7 +217,7 @@ export default function Home() {
                   {messages.length === 0 && (
                     <div className="text-center text-gray-400 mt-8">
                       <p>👋 Start a conversation to test the AI integration!</p>
-                      <p className="text-sm mt-2">Try asking: "What can you help me with?"</p>
+                      <p className="text-sm mt-2">Try asking: &quot;What can you help me with?&quot;</p>
                     </div>
                   )}
                   
