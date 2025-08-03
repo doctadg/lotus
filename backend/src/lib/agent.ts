@@ -1,8 +1,11 @@
+import { config } from 'dotenv'
 import { ChatOpenAI } from '@langchain/openai'
 import { AgentExecutor, createOpenAIFunctionsAgent } from 'langchain/agents'
 import { DynamicTool } from '@langchain/core/tools'
 import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts'
 import agentConfig from '../../config/agent-prompts.json'
+
+config()
 // Web search functionality - can be extended with real APIs
 
 // Web search tool implementation
