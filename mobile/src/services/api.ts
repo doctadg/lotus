@@ -131,6 +131,9 @@ class ApiService {
       throw new Error('No authentication token')
     }
 
+    console.log('Sending request to:', `${this.baseURL}/chat/${chatId}/stream`)
+    console.log('Request data:', data)
+    
     const response = await fetch(`${this.baseURL}/chat/${chatId}/stream`, {
       method: 'POST',
       headers: {
@@ -140,8 +143,14 @@ class ApiService {
       body: JSON.stringify(data)
     })
 
+    console.log('Response status:', response.status)
+    console.log('Response headers:', response.headers)
+    console.log('Response body available:', !!response.body)
+
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
+      const errorText = await response.text()
+      console.error('Response error text:', errorText)
+      throw new Error(`HTTP error! status: ${response.status} - ${errorText}`)
     }
 
     const reader = response.body?.getReader()

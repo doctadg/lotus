@@ -48,6 +48,10 @@ export default function App() {
     setSelectedChatId(chatId)
   }
 
+  const handleChatCreated = (chatId: string) => {
+    setSelectedChatId(chatId)
+  }
+
   const toggleSidebar = () => {
     setIsSidebarVisible(!isSidebarVisible)
   }
@@ -62,6 +66,7 @@ export default function App() {
         <ChatScreen
           chatId={selectedChatId}
           onMenuPress={toggleSidebar}
+          onChatCreated={handleChatCreated}
         />
         
         <Sidebar

@@ -25,9 +25,10 @@ import { Message, Chat } from '../types'
 interface ChatScreenProps {
   chatId: string | null
   onMenuPress: () => void
+  onChatCreated?: (chatId: string) => void
 }
 
-export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress }) => {
+export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onChatCreated }) => {
   const [messages, setMessages] = useState<Message[]>([])
   const [inputText, setInputText] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -72,17 +73,31 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress }) =
   }
 
   const sendMessage = async () => {
-    if (!inputText.trim() || isSending || !chatId) return
+    if (!inputText.trim() || isSending) return
 
     const messageText = inputText.trim()
     setInputText('')
     setIsSending(true)
 
     try {
+      // Create a new chat if none exists
+      let currentChatId = chatId
+      if (!currentChatId) {
+        const newChat = await apiService.createChat({
+          title: messageText.slice(0, 50) + (messageText.length > 50 ? '...' : '')
+        })
+        currentChatId = newChat.id
+        setChat(newChat)
+        // Notify parent component about the new chat
+        if (onChatCreated) {
+          onChatCreated(currentChatId)
+        }
+      }
+
       let currentAIMessage: Message | null = null
       let streamingContent = ''
 
-      for await (const event of apiService.sendMessageStream(chatId, {
+      for await (const event of apiService.sendMessageStream(currentChatId, {
         content: messageText
       })) {
         switch (event.type) {
@@ -96,7 +111,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress }) =
               // Create a temporary message for streaming
               currentAIMessage = {
                 id: 'temp-' + Date.now(),
-                chatId: chatId,
+                chatId: currentChatId,
                 role: 'assistant',
                 content: '',
                 createdAt: new Date().toISOString()
@@ -239,7 +254,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress }) =
                   (!inputText.trim() || isSending) && styles.sendButtonDisabled
                 ]}
                 onPress={sendMessage}
-                disabled={!inputText.trim() || isSending || !chatId}
+                disabled={!inputText.trim() || isSending}
               >
                 {isSending ? (
                   <ActivityIndicator size="small" color="white" />

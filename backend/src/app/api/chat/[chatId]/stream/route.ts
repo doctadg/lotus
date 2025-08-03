@@ -3,13 +3,29 @@ import { prisma } from '@/lib/prisma'
 import { authenticateUser } from '@/lib/auth'
 import { aiAgent } from '@/lib/agent'
 
+// Add OPTIONS handler for CORS preflight
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
+    },
+  })
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ chatId: string }> }
 ) {
+  console.log('🚀 Streaming request received')
   try {
     const { chatId } = await params
+    console.log('💬 Chat ID:', chatId)
     const userId = await authenticateUser(request)
+    console.log('👤 User ID:', userId)
     
     if (!userId) {
       return new Response('Unauthorized', { status: 401 })
