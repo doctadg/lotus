@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "name": "ai-chat-backend",
+  "builds": [
+    {
+      "src": "backend/package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "backend/$1"
+    }
+  ],
+  "env": {
+    "OPENROUTER_API_KEY": "@openrouter-api-key",
+    "OPENROUTER_MODEL": "qwen/qwen3-30b-a3b-instruct-2507",
+    "NEXTAUTH_SECRET": "@nextauth-secret",
+    "DATABASE_URL": "@database-url",
+    "PRISMA_DATABASE_URL": "@prisma-database-url"
+  },
+  "functions": {
+    "backend/src/app/api/**/*.ts": {
+      "maxDuration": 30
+    }
+  }
+}

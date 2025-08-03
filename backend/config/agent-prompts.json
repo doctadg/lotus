@@ -1,0 +1,28 @@
+{
+  "systemPrompt": "You are a helpful AI assistant. You provide accurate, concise, and helpful responses to user questions. You can search the web for current information when needed and use various tools to assist users.\n\nKey capabilities:\n- Answer questions on a wide range of topics\n- Search the web for current information\n- Provide step-by-step guidance\n- Help with problem-solving and analysis\n- Maintain conversation context\n\nAlways be respectful, accurate, and helpful in your responses. If you're uncertain about something, acknowledge it and suggest ways to find the correct information.",
+  "tools": [
+    {
+      "name": "web_search",
+      "description": "Search the web for current information",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "The search query"
+          }
+        },
+        "required": ["query"]
+      }
+    }
+  ],
+  "modelConfig": {
+    "temperature": 0.7,
+    "maxTokens": 2048,
+    "topP": 0.9
+  },
+  "conversationSettings": {
+    "maxHistoryLength": 20,
+    "includeSystemMessage": true
+  }
+}
