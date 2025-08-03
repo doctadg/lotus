@@ -33,27 +33,20 @@ class AIAgent {
   constructor() {
     const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY
     
-    console.log('Environment check:', {
-      OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY ? 'SET' : 'NOT SET',
-      OPENAI_API_KEY: process.env.OPENAI_API_KEY ? 'SET' : 'NOT SET',
-      NODE_ENV: process.env.NODE_ENV,
-      apiKeyFirst10: apiKey?.substring(0, 10) + '...'
-    })
     if (!apiKey) {
       throw new Error('OpenRouter API key is required. Set OPENROUTER_API_KEY environment variable.')
     }
 
     const baseConfig = {
-      openAIApiKey: apiKey,
-      modelName: process.env.OPENROUTER_MODEL || 'qwen/qwen3-30b-a3b-instruct-2507',
+      apiKey: apiKey,
+      model: process.env.OPENROUTER_MODEL || 'qwen/qwen3-30b-a3b-instruct-2507',
       temperature: agentConfig.modelConfig.temperature,
       maxTokens: agentConfig.modelConfig.maxTokens,
       configuration: {
         baseURL: 'https://openrouter.ai/api/v1',
         defaultHeaders: {
           'HTTP-Referer': process.env.NEXTAUTH_URL || 'https://lotus-backend.vercel.app',
-          'X-Title': 'AI Chat App',
-          'Authorization': `Bearer ${apiKey}`
+          'X-Title': 'AI Chat App'
         }
       }
     }
