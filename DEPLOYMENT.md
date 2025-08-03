@@ -54,7 +54,7 @@ git push -u origin main
    
    OPENROUTER_MODEL=qwen/qwen3-30b-a3b-instruct-2507
    
-   NEXTAUTH_SECRET=your-super-secret-key-here-change-in-production
+   NEXTAUTH_SECRET=d21ad7f9d7dc10d10716c0f46b1f90c734d04ecb007782733aef9679b77e18e6
    ```
 
 4. **Deploy**:

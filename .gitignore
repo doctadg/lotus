@@ -133,3 +133,4 @@ android/app/release
 
 # Claude specific
 .claude/
+DEPLOYMENT.md
