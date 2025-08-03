@@ -38,25 +38,29 @@ class AIAgent {
       throw new Error('OpenRouter API key is required. Set OPENROUTER_API_KEY environment variable.')
     }
 
-    const baseConfig = {
-      apiKey: apiKey,
+    const llmConfig = {
       model: process.env.OPENROUTER_MODEL || 'qwen/qwen3-30b-a3b-instruct-2507',
       temperature: agentConfig.modelConfig.temperature,
       maxTokens: agentConfig.modelConfig.maxTokens,
-      configuration: {
-        baseURL: 'https://openrouter.ai/api/v1',
-        defaultHeaders: {
-          'HTTP-Referer': process.env.NEXTAUTH_URL || 'https://lotus-backend.vercel.app',
-          'X-Title': 'AI Chat App'
-        }
+      apiKey: apiKey,
+    }
+
+    const clientConfig = {
+      baseURL: 'https://openrouter.ai/api/v1',
+      defaultHeaders: {
+        'HTTP-Referer': process.env.NEXTAUTH_URL || 'https://lotus-backend.vercel.app',
+        'X-Title': 'AI Chat App'
       }
     }
 
-    this.llm = new ChatOpenAI(baseConfig)
-    this.streamingLLM = new ChatOpenAI({
-      ...baseConfig,
+    // Using the exact OpenRouter documented format with TypeScript override
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.llm = new (ChatOpenAI as any)(llmConfig, clientConfig)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.streamingLLM = new (ChatOpenAI as any)({
+      ...llmConfig,
       streaming: true
-    })
+    }, clientConfig)
 
     this.initializeAgent()
   }
