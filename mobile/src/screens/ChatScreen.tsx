@@ -122,9 +122,8 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
 
           case 'ai_chunk':
             if (currentAIMessage) {
-              // Since we're now sending full content each time (not incremental), 
-              // we replace instead of accumulate
-              streamingContent = event.data.content
+              // Accumulate chunks like the landing page does
+              streamingContent += event.data.content
               setMessages(prev => 
                 prev.map(msg => 
                   msg.id === currentAIMessage!.id 

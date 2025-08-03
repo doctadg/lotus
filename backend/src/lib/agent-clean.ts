@@ -8,16 +8,11 @@ import agentConfig from '../../config/agent-prompts.json'
 
 config({ path: path.join(process.cwd(), '.env') })
 
-// Web search functionality - can be extended with real APIs
-
-// Web search tool implementation
 const webSearchTool = new DynamicTool({
   name: 'web_search',
   description: 'Search the web for current information',
   func: async (query: string) => {
     try {
-      // For now, we'll return a placeholder response
-      // In production, integrate with a search API like SerpApi or Brave Search
       return `Web search results for "${query}": This is a placeholder response. Integrate with a real search API for production use.`
     } catch (error) {
       return `Error performing web search: ${error}`
@@ -32,51 +27,44 @@ class AIAgent {
   private tools = [webSearchTool]
 
   constructor() {
-    
     const apiKey = process.env.OPENROUTER_API_KEY
-    
-    console.log('OpenRouter API Key check:', {
-      keyExists: !!apiKey,
-      keyPrefix: apiKey?.substring(0, 10),
-      nodeEnv: process.env.NODE_ENV
-    })
     
     if (!apiKey) {
       throw new Error('OpenRouter API key is required. Set OPENROUTER_API_KEY environment variable.')
     }
 
-
-    // Configure ChatOpenAI for OpenRouter using official pattern
-    const modelName = process.env.OPENROUTER_MODEL || 'openai/gpt-3.5-turbo';
-
-    this.llm = new ChatOpenAI({
-      model: modelName,
-      temperature: agentConfig.modelConfig.temperature,
-      maxTokens: agentConfig.modelConfig.maxTokens,
-      apiKey: apiKey,
-      configuration: {
+    this.llm = new ChatOpenAI(
+      {
+        model: process.env.OPENROUTER_MODEL || 'qwen/qwen3-30b-a3b-instruct-2507',
+        temperature: agentConfig.modelConfig.temperature,
+        maxTokens: agentConfig.modelConfig.maxTokens,
+        apiKey: apiKey,
+      },
+      {
         baseURL: 'https://openrouter.ai/api/v1',
         defaultHeaders: {
           'HTTP-Referer': process.env.NEXTAUTH_URL || 'https://lotus-backend.vercel.app',
           'X-Title': 'AI Chat App',
         },
       },
-    })
+    )
 
-    this.streamingLLM = new ChatOpenAI({
-      model: modelName,
-      temperature: agentConfig.modelConfig.temperature,
-      maxTokens: agentConfig.modelConfig.maxTokens,
-      streaming: true,
-      apiKey: apiKey,
-      configuration: {
+    this.streamingLLM = new ChatOpenAI(
+      {
+        model: process.env.OPENROUTER_MODEL || 'qwen/qwen3-30b-a3b-instruct-2507',
+        temperature: agentConfig.modelConfig.temperature,
+        maxTokens: agentConfig.modelConfig.maxTokens,
+        streaming: true,
+        apiKey: apiKey,
+      },
+      {
         baseURL: 'https://openrouter.ai/api/v1',
         defaultHeaders: {
           'HTTP-Referer': process.env.NEXTAUTH_URL || 'https://lotus-backend.vercel.app',
           'X-Title': 'AI Chat App',
         },
       },
-    })
+    )
 
     this.initializeAgent()
   }
@@ -164,32 +152,15 @@ class AIAgent {
           return { role: 'system' as const, content: msg.content }
         })
 
-      try {
-        const stream = await this.streamingLLM.stream([
-          { role: 'system', content: agentConfig.systemPrompt },
-          ...formattedHistory,
-          { role: 'human', content: message }
-        ])
+      const stream = await this.streamingLLM.stream([
+        { role: 'system', content: agentConfig.systemPrompt },
+        ...formattedHistory,
+        { role: 'human', content: message }
+      ])
 
-        for await (const chunk of stream) {
-          if (chunk.content) {
-            yield chunk.content.toString()
-          }
-        }
-      } catch (err: unknown) {
-        const error = err as Error & { code?: number; status?: number }
-        console.error('Streaming error details:', {
-          message: error?.message,
-          code: error?.code,
-          status: error?.status,
-          error: err
-        })
-        if (error?.code === 408 || error?.status === 408) {
-          yield 'The AI service timed out. Please try again or check your OpenRouter API key and model availability.'
-        } else if (error?.message) {
-          yield `Streaming error: ${error.message}`
-        } else {
-          yield 'I apologize, but I encountered an error while processing your message. Please try again.'
+      for await (const chunk of stream) {
+        if (chunk.content) {
+          yield chunk.content.toString()
         }
       }
     } catch (error) {
@@ -199,7 +170,4 @@ class AIAgent {
   }
 }
 
-const aiAgent = new AIAgent()
-
-export { aiAgent }
-export default AIAgent
+export const aiAgent = new AIAgent()
