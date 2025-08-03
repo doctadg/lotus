@@ -123,12 +123,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <SafeAreaView style={styles.safeArea}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>AI Chat</Text>
+            <Text style={styles.title}>Lotus AI</Text>
             <TouchableOpacity
               style={styles.newChatButton}
               onPress={handleNewChat}
             >
-              <Text style={styles.newChatButtonText}>+ New Chat</Text>
+              <Text style={styles.newChatButtonText}>✨ New Chat</Text>
             </TouchableOpacity>
           </View>
 
@@ -157,7 +157,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             
             {chats.length === 0 && !isLoading && (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>No chats yet</Text>
+                <Text style={styles.emptyIcon}>💬</Text>
+                <Text style={styles.emptyText}>No conversations yet{"\n"}Start chatting to see your history</Text>
               </View>
             )}
           </ScrollView>
@@ -185,7 +186,7 @@ const styles = StyleSheet.create({
   },
   overlay: {
     flex: 1,
-    backgroundColor: 'black'
+    backgroundColor: 'rgba(0, 0, 0, 0.2)'
   },
   sidebar: {
     position: 'absolute',
@@ -193,12 +194,12 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: SIDEBAR_WIDTH,
-    backgroundColor: '#202123',
+    backgroundColor: '#fafafa', // --gray-50 (light background)
     shadowColor: '#000',
-    shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5
+    shadowOffset: { width: 4, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8
   },
   safeArea: {
     flex: 1
@@ -206,69 +207,99 @@ const styles = StyleSheet.create({
   header: {
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#444654'
+    borderBottomColor: '#e5e5e5' // --gray-200
   },
   title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: 'white',
-    marginBottom: 16
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#171717', // --gray-900
+    marginBottom: 16,
+    letterSpacing: -0.5
   },
   newChatButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#555',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center'
+    backgroundColor: '#171717', // --gray-900 (primary)
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2
   },
   newChatButtonText: {
-    color: 'white',
-    fontWeight: '600'
+    color: '#fafafa', // --gray-50 (primary-foreground)
+    fontWeight: '600',
+    fontSize: 16,
+    marginLeft: 8
   },
   chatList: {
     flex: 1,
-    paddingHorizontal: 12
+    paddingHorizontal: 16,
+    paddingTop: 8
   },
   chatItem: {
-    padding: 12,
-    marginVertical: 2,
-    borderRadius: 8,
-    backgroundColor: 'transparent'
+    padding: 16,
+    marginVertical: 3,
+    borderRadius: 12,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'transparent'
   },
   selectedChatItem: {
-    backgroundColor: '#343541'
+    backgroundColor: '#f5f5f5', // --gray-100
+    borderColor: '#d4d4d4' // --gray-300
   },
   chatTitle: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 4
+    color: '#171717', // --gray-900
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 6,
+    letterSpacing: -0.2
   },
   chatPreview: {
-    color: '#8e8ea0',
-    fontSize: 12,
-    lineHeight: 16
+    color: '#737373', // --gray-500
+    fontSize: 13,
+    lineHeight: 18,
+    opacity: 0.8
   },
   emptyState: {
-    padding: 20,
-    alignItems: 'center'
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1
   },
   emptyText: {
-    color: '#8e8ea0',
-    fontSize: 14
+    color: '#525252', // --gray-600
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+    opacity: 0.5
   },
   footer: {
     padding: 20,
     borderTopWidth: 1,
-    borderTopColor: '#444654'
+    borderTopColor: '#e5e5e5' // --gray-200
   },
   footerButton: {
-    padding: 12,
-    alignItems: 'center'
+    padding: 14,
+    alignItems: 'center',
+    borderRadius: 10,
+    backgroundColor: 'transparent'
   },
   footerButtonText: {
-    color: '#8e8ea0',
-    fontSize: 14
+    color: '#737373', // --gray-500
+    fontSize: 15,
+    fontWeight: '500'
+  },
+  newChatIcon: {
+    width: 20,
+    height: 20
   }
 })

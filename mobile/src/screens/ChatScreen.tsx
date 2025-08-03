@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   View,
   Text,
@@ -35,7 +35,11 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
   const [isSending, setIsSending] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
   const [chat, setChat] = useState<Chat | null>(null)
+  const [deepResearchMode, setDeepResearchMode] = useState(false)
   const flatListRef = useRef<FlatList>(null)
+  const streamingContentRef = useRef('')
+  const lastUpdateTimeRef = useRef(0)
+  const pendingUpdateRef = useRef<NodeJS.Timeout | null>(null)
   
   const inputHeight = useSharedValue(50)
 
@@ -48,6 +52,15 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
       setChat(null)
     }
   }, [chatId])
+
+  // Cleanup effect
+  useEffect(() => {
+    return () => {
+      if (pendingUpdateRef.current) {
+        clearTimeout(pendingUpdateRef.current)
+      }
+    }
+  }, [])
 
   const loadChat = async () => {
     if (!chatId) return
@@ -94,15 +107,31 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
         }
       }
 
+      // Add user message immediately to UI
+      const userMessage: Message = {
+        id: 'temp-user-' + Date.now(),
+        chatId: currentChatId,
+        role: 'user',
+        content: messageText,
+        createdAt: new Date().toISOString()
+      }
+      setMessages(prev => [...prev, userMessage])
+
       let currentAIMessage: Message | null = null
       let streamingContent = ''
 
       for await (const event of apiService.sendMessageStream(currentChatId, {
-        content: messageText
+        content: messageText,
+        deepResearchMode
       })) {
         switch (event.type) {
           case 'user_message':
-            setMessages(prev => [...prev, event.data])
+            // Replace temporary user message with real one from backend
+            setMessages(prev => prev.map(msg => 
+              msg.id === userMessage.id 
+                ? event.data 
+                : msg
+            ))
             break
 
           case 'ai_typing':
@@ -122,20 +151,47 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
 
           case 'ai_chunk':
             if (currentAIMessage) {
-              // Accumulate chunks like the landing page does
+              // Accumulate chunks in ref for better performance
               streamingContent += event.data.content
-              setMessages(prev => 
-                prev.map(msg => 
-                  msg.id === currentAIMessage!.id 
-                    ? { ...msg, content: streamingContent }
-                    : msg
+              streamingContentRef.current = streamingContent
+              
+              // Debounce updates to reduce lag (update max every 100ms)
+              const now = Date.now()
+              if (now - lastUpdateTimeRef.current > 100) {
+                setMessages(prev => 
+                  prev.map(msg => 
+                    msg.id === currentAIMessage!.id 
+                      ? { ...msg, content: streamingContentRef.current }
+                      : msg
+                  )
                 )
-              )
+                lastUpdateTimeRef.current = now
+              } else {
+                // Clear any pending update and schedule a new one
+                if (pendingUpdateRef.current) {
+                  clearTimeout(pendingUpdateRef.current)
+                }
+                pendingUpdateRef.current = setTimeout(() => {
+                  setMessages(prev => 
+                    prev.map(msg => 
+                      msg.id === currentAIMessage!.id 
+                        ? { ...msg, content: streamingContentRef.current }
+                        : msg
+                    )
+                  )
+                  lastUpdateTimeRef.current = Date.now()
+                }, 100)
+              }
             }
             break
 
           case 'ai_message_complete':
             if (currentAIMessage) {
+              // Clear any pending updates
+              if (pendingUpdateRef.current) {
+                clearTimeout(pendingUpdateRef.current)
+                pendingUpdateRef.current = null
+              }
               // Replace temporary message with final message
               setMessages(prev => 
                 prev.map(msg => 
@@ -144,12 +200,19 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
                     : msg
                 )
               )
+              streamingContentRef.current = ''
             }
             break
 
           case 'complete':
+            // Clear any pending updates
+            if (pendingUpdateRef.current) {
+              clearTimeout(pendingUpdateRef.current)
+              pendingUpdateRef.current = null
+            }
             setIsSending(false)
             setIsTyping(false)
+            streamingContentRef.current = ''
             break
 
           case 'error':
@@ -158,20 +221,33 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
             setInputText(messageText)
             setIsSending(false)
             setIsTyping(false)
-            // Clean up temporary message if it exists
+            // Clean up temporary message and pending updates
+            if (pendingUpdateRef.current) {
+              clearTimeout(pendingUpdateRef.current)
+              pendingUpdateRef.current = null
+            }
             if (currentAIMessage) {
               setMessages(prev => prev.filter(msg => msg.id !== currentAIMessage!.id))
             }
+            streamingContentRef.current = ''
             break
         }
         
-        // Auto-scroll during streaming
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true })
-        }, 50)
+        // Throttled auto-scroll during streaming (less frequent for better performance)
+        if (event.type === 'ai_chunk' && Date.now() - lastUpdateTimeRef.current > 200) {
+          setTimeout(() => {
+            flatListRef.current?.scrollToEnd({ animated: false }) // Non-animated for better performance
+          }, 50)
+        }
       }
     } catch (error) {
       console.error('Error sending message:', error)
+      // Clean up any pending updates
+      if (pendingUpdateRef.current) {
+        clearTimeout(pendingUpdateRef.current)
+        pendingUpdateRef.current = null
+      }
+      streamingContentRef.current = ''
       // Only show alert if we haven't already shown one from the streaming events
       if (!error.message?.includes('HTTP error')) {
         Alert.alert('Error', 'Failed to send message')
@@ -186,9 +262,14 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
     height: inputHeight.value
   }))
 
-  const renderMessage = ({ item, index }: { item: Message; index: number }) => (
+  // Memoize message rendering for better performance
+  const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => (
     <ChatMessage message={item} index={index} />
-  )
+  ), [])
+  
+  // Memoize key extractor
+  const keyExtractor = useCallback((item: Message, index: number) => 
+    `${item.id || 'msg'}-${index}-${item.role}`, [])
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
@@ -228,10 +309,15 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
             ref={flatListRef}
             data={messages}
             renderItem={renderMessage}
-            keyExtractor={(item, index) => item.id || `message-${index}`}
+            keyExtractor={keyExtractor}
             style={styles.messagesList}
             contentContainerStyle={styles.messagesContainer}
             showsVerticalScrollIndicator={false}
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={10}
+            windowSize={10}
+            initialNumToRender={10}
+            getItemLayout={undefined}
             ListFooterComponent={isTyping ? <TypingIndicator /> : null}
           />
         )}
@@ -244,13 +330,37 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
 
         {/* Input Area */}
         <View style={styles.inputArea}>
+          {/* Deep Research Toggle */}
+          <View style={styles.toggleContainer}>
+            <TouchableOpacity
+              style={[
+                styles.deepResearchButton,
+                deepResearchMode && styles.deepResearchButtonActive
+              ]}
+              onPress={() => setDeepResearchMode(!deepResearchMode)}
+            >
+              <Text style={[
+                styles.deepResearchIcon,
+                deepResearchMode && styles.deepResearchIconActive
+              ]}>
+                🔬
+              </Text>
+              <Text style={[
+                styles.deepResearchText,
+                deepResearchMode && styles.deepResearchTextActive
+              ]}>
+                Deep Research
+              </Text>
+            </TouchableOpacity>
+          </View>
+          
           <View style={styles.inputContainer}>
             <Animated.View style={[styles.inputWrapper, animatedInputStyle]}>
               <TextInput
                 style={styles.textInput}
                 value={inputText}
                 onChangeText={setInputText}
-                placeholder="Message ChatGPT..."
+                placeholder={deepResearchMode ? "Ask for comprehensive research..." : "Message ChatGPT..."}
                 placeholderTextColor="#9ca3af"
                 multiline
                 maxLength={1000}
@@ -263,6 +373,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
               <TouchableOpacity
                 style={[
                   styles.sendButton,
+                  deepResearchMode && styles.sendButtonResearch,
                   (!inputText.trim() || isSending) && styles.sendButtonDisabled
                 ]}
                 onPress={sendMessage}
@@ -358,6 +469,40 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     paddingTop: 8
   },
+  toggleContainer: {
+    marginBottom: 8,
+    alignItems: 'flex-start'
+  },
+  deepResearchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#e5e7eb'
+  },
+  deepResearchButtonActive: {
+    backgroundColor: '#dbeafe',
+    borderColor: '#3b82f6'
+  },
+  deepResearchIcon: {
+    fontSize: 14,
+    marginRight: 6
+  },
+  deepResearchIconActive: {
+    fontSize: 14
+  },
+  deepResearchText: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '500'
+  },
+  deepResearchTextActive: {
+    color: '#1d4ed8',
+    fontWeight: '600'
+  },
   inputContainer: {
     backgroundColor: '#f9fafb',
     borderRadius: 25,
@@ -384,6 +529,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#10a37f',
     justifyContent: 'center',
     alignItems: 'center'
+  },
+  sendButtonResearch: {
+    backgroundColor: '#3b82f6'
   },
   sendButtonDisabled: {
     backgroundColor: '#d1d5db'

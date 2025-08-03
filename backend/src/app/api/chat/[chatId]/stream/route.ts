@@ -3,6 +3,65 @@ import { prisma } from '@/lib/prisma'
 import { authenticateUser } from '@/lib/auth'
 import { aiAgent } from '@/lib/agent'
 
+// Query analysis function (duplicated from agent.ts for now)
+function analyzeQueryForSearch(query: string): boolean {
+  const lowerQuery = query.toLowerCase()
+  
+  // Temporal keywords that ALWAYS require search
+  const temporalKeywords = [
+    'latest', 'recent', 'current', 'now', 'today', 'this year', '2024', '2025',
+    'what\'s new', 'what\'s happening', 'breaking', 'update', 'news',
+    'trending', 'popular', 'hot', 'viral'
+  ]
+  
+  // Factual data keywords that ALWAYS require search
+  const factualKeywords = [
+    'price', 'cost', 'stock', 'market', 'exchange rate', 'worth',
+    'earnings', 'revenue', 'profit', 'financial',
+    'specs', 'specifications', 'availability', 'release',
+    'review', 'rating', 'comparison', 'vs', 'versus',
+    'statistics', 'stats', 'data', 'research findings'
+  ]
+  
+  // Events and people keywords
+  const eventKeywords = [
+    'election', 'vote', 'politics', 'politician',
+    'celebrity', 'public figure', 'famous person',
+    'sports', 'score', 'result', 'schedule', 'standings',
+    'weather', 'disaster', 'emergency'
+  ]
+  
+  // Technology and business keywords
+  const techKeywords = [
+    'software update', 'new feature', 'release',
+    'startup', 'ipo', 'acquisition', 'merger',
+    'ai development', 'new tool', 'platform',
+    'crypto', 'bitcoin', 'ethereum', 'nft', 'blockchain'
+  ]
+  
+  const allKeywords = [...temporalKeywords, ...factualKeywords, ...eventKeywords, ...techKeywords]
+  
+  // Check if query contains any search-triggering keywords
+  const hasSearchKeywords = allKeywords.some(keyword => lowerQuery.includes(keyword))
+  
+  // Additional patterns that suggest need for current information
+  const questionPatterns = [
+    /how much (does|is|are)/i,
+    /what (is|are) the (price|cost)/i,
+    /when (did|will|is)/i,
+    /who (is|are|won|lost)/i,
+    /where (is|are|can)/i,
+    /which (company|product|service)/i
+  ]
+  
+  const hasQuestionPattern = questionPatterns.some(pattern => pattern.test(query))
+  
+  // Check for numerical queries that might need current data
+  const hasNumbers = /\d{4}/.test(query) || /\$\d+/.test(query) || /\b\d+%\b/.test(query)
+  
+  return hasSearchKeywords || hasQuestionPattern || hasNumbers
+}
+
 // Add OPTIONS handler for CORS preflight
 export async function OPTIONS() {
   return new Response(null, {
@@ -31,7 +90,7 @@ export async function POST(
       return new Response('Unauthorized', { status: 401 })
     }
 
-    const { content } = await request.json()
+    const { content, deepResearchMode = false } = await request.json()
 
     if (!content) {
       return new Response('Message content is required', { status: 400 })
@@ -82,7 +141,7 @@ export async function POST(
           role: msg.role,
           content: msg.content,
           createdAt: msg.createdAt.toISOString()
-        })))
+        })), deepResearchMode)
       }
     })
 
@@ -107,7 +166,8 @@ async function processAIResponse(
   encoder: TextEncoder,
   chatId: string,
   content: string,
-  chatHistory: Array<{ role: string; content: string; createdAt: string }>
+  chatHistory: Array<{ role: string; content: string; createdAt: string }>,
+  deepResearchMode = false
 ) {
   try {
     // Send typing indicator
@@ -118,9 +178,36 @@ async function processAIResponse(
 
     let fullResponse = ''
 
+    // Import search analysis function
+    const needsSearch = analyzeQueryForSearch(content)
+    
+    // Add current date and time to the content
+    const now = new Date()
+    const currentDateTime = now.toISOString()
+    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    const localDateTime = now.toLocaleString('en-US', {
+      timeZone: userTimezone,
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      timeZoneName: 'short'
+    })
+
+    // Prepare message for processing
+    let processedContent = `[CURRENT DATE & TIME: ${currentDateTime} (${localDateTime})] ${content}`
+    
+    if (deepResearchMode) {
+      processedContent = `[CURRENT DATE & TIME: ${currentDateTime} (${localDateTime})] [DEEP RESEARCH MODE] Please use the deep_research tool for comprehensive analysis: ${content}`
+    } else if (needsSearch) {
+      processedContent = `[CURRENT DATE & TIME: ${currentDateTime} (${localDateTime})] [SEARCH REQUIRED] You MUST use swift_search before responding. Query: ${content}`
+    }
+
     // Stream the AI response
     for await (const chunk of aiAgent.streamMessage(
-      content,
+      processedContent,
       chatHistory.map(msg => ({
         role: msg.role,
         content: msg.content
@@ -176,6 +263,15 @@ async function processAIResponse(
     controller.close()
   } catch (error) {
     console.error('AI processing error:', error)
+    
+    // Log detailed error for debugging
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      })
+    }
     
     // Send error
     controller.enqueue(encoder.encode(`data: ${JSON.stringify({

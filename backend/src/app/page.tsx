@@ -10,12 +10,22 @@ interface Message {
   timestamp: Date
 }
 
+interface ChatSession {
+  id: string
+  title: string
+  messages: Message[]
+  updatedAt: Date
+}
+
 export default function Home() {
   const [stats, setStats] = useState({ uptime: '0ms', status: 'checking...' })
   const [messages, setMessages] = useState<Message[]>([])
   const [inputText, setInputText] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [showChat, setShowChat] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = () => {
@@ -113,6 +123,15 @@ export default function Home() {
     } finally {
       setIsLoading(false)
     }
+
+    // Update chat session
+    if (currentChatId) {
+      setChatSessions(prev => prev.map(chat => 
+        chat.id === currentChatId 
+          ? { ...chat, messages, title: messages[0]?.content.slice(0, 50) || 'New Chat', updatedAt: new Date() }
+          : chat
+      ))
+    }
   }
 
   useEffect(() => {
@@ -129,107 +148,269 @@ export default function Home() {
       })
   }, [])
 
+  const newChat = () => {
+    const newChatId = Date.now().toString()
+    const newSession: ChatSession = {
+      id: newChatId,
+      title: 'New Chat',
+      messages: [],
+      updatedAt: new Date()
+    }
+    setChatSessions(prev => [newSession, ...prev])
+    setCurrentChatId(newChatId)
+    setMessages([])
+    setSidebarOpen(false)
+  }
+
+  const selectChat = (chatId: string) => {
+    const chat = chatSessions.find(c => c.id === chatId)
+    if (chat) {
+      setCurrentChatId(chatId)
+      setMessages(chat.messages)
+      setSidebarOpen(false)
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      {/* Background Pattern */}
-      <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-20"></div>
-      
-      {/* Navigation */}
-      <nav className="relative z-10 p-6">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-r from-emerald-400 to-cyan-400 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">🤖</span>
-            </div>
-            <h1 className="text-2xl font-bold text-white">Lotus AI</h1>
-          </div>
-          
-          <div className="hidden md:flex items-center space-x-6">
-            <Link href="/api/health" className="text-gray-300 hover:text-white transition-colors">
-              API Status
-            </Link>
-            <Link href="https://github.com/doctadg/lotus" className="text-gray-300 hover:text-white transition-colors">
-              GitHub
-            </Link>
-          </div>
+    <div className="min-h-screen bg-background text-foreground">
+      {/* Sidebar */}
+      <div className={`fixed inset-y-0 left-0 z-50 w-80 bg-muted border-r border-border transform transition-transform duration-300 ease-in-out ${
+        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}>
+        {/* Sidebar Header */}
+        <div className="flex items-center justify-between p-4 border-b border-border">
+          <h2 className="text-lg font-semibold">Chat History</h2>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="p-2 hover:bg-accent rounded-lg transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
-      </nav>
 
-      {/* Hero Section */}
-      <main className="relative z-10 max-w-7xl mx-auto px-6 pt-20 pb-32">
-        <div className="text-center">
-          {/* Status Badge */}
-          <div className="inline-flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-4 py-2 mb-8">
-            <div className={`w-2 h-2 rounded-full ${stats.uptime === 'Online' ? 'bg-emerald-400' : 'bg-red-400'} animate-pulse`}></div>
-            <span className="text-emerald-300 text-sm font-medium">{stats.status}</span>
-          </div>
+        {/* New Chat Button */}
+        <div className="p-4">
+          <button
+            onClick={newChat}
+            className="w-full flex items-center gap-3 px-4 py-3 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity font-medium"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New Chat
+          </button>
+        </div>
 
-          {/* Main Heading */}
-          <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
-            AI Chat with
-            <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent"> Streaming</span>
-          </h1>
-          
-          <p className="text-xl md:text-2xl text-gray-300 mb-12 max-w-3xl mx-auto leading-relaxed">
-            Experience the next generation of AI conversations with real-time streaming responses, 
-            powered by LangChain and OpenRouter.
-          </p>
-
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
-            <button 
-              onClick={() => setShowChat(!showChat)}
-              className="bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:shadow-lg hover:shadow-emerald-500/25 transition-all duration-300 transform hover:scale-105"
+        {/* Chat Sessions */}
+        <div className="flex-1 overflow-y-auto px-4 pb-4">
+          {chatSessions.map((chat) => (
+            <button
+              key={chat.id}
+              onClick={() => selectChat(chat.id)}
+              className={`w-full text-left p-3 rounded-lg mb-2 transition-colors hover:bg-accent ${
+                currentChatId === chat.id ? 'bg-accent' : ''
+              }`}
             >
-              🤖 {showChat ? 'Hide' : 'Test'} Chat
+              <div className="font-medium text-sm truncate">{chat.title}</div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {chat.messages.length} messages
+              </div>
             </button>
-            
-            <button 
-              onClick={() => window.open('exp://192.168.1.100:8081', '_blank')}
-              className="border border-gray-600 text-gray-300 px-8 py-4 rounded-xl font-semibold text-lg hover:bg-gray-800 hover:border-gray-500 transition-all duration-300"
-            >
-              🚀 Launch Mobile App
-            </button>
-            
-            <Link 
-              href="/api/health"
-              className="border border-gray-600 text-gray-300 px-8 py-4 rounded-xl font-semibold text-lg hover:bg-gray-800 hover:border-gray-500 transition-all duration-300"
-            >
-              📊 View API Status
-            </Link>
-          </div>
+          ))}
+          {chatSessions.length === 0 && (
+            <div className="text-center text-muted-foreground py-8">
+              <div className="text-4xl mb-2">💬</div>
+              <p className="text-sm">No conversations yet</p>
+            </div>
+          )}
+        </div>
+      </div>
 
-          {/* Chat Interface */}
-          {showChat && (
-            <div className="max-w-4xl mx-auto mb-16">
-              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden">
+      {/* Sidebar Overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Main Content */}
+      <div className={`transition-all duration-300 ${sidebarOpen ? 'lg:ml-80' : ''}`}>
+        {/* Header */}
+        <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-md border-b border-border">
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="p-2 hover:bg-accent rounded-lg transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                  <span className="text-primary-foreground font-bold text-sm">L</span>
+                </div>
+                <h1 className="text-xl font-bold">Lotus AI</h1>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-4">
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${
+                stats.uptime === 'Online' 
+                  ? 'bg-green-500/10 text-green-600 border border-green-500/20' 
+                  : 'bg-red-500/10 text-red-600 border border-red-500/20'
+              }`}>
+                <div className={`w-2 h-2 rounded-full ${
+                  stats.uptime === 'Online' ? 'bg-green-500' : 'bg-red-500'
+                } animate-pulse`} />
+                {stats.status}
+              </div>
+              <Link
+                href="https://github.com/doctadg/lotus"
+                className="p-2 hover:bg-accent rounded-lg transition-colors"
+                target="_blank"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 0C5.374 0 0 5.373 0 12 0 17.302 3.438 21.8 8.207 23.387c.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
+                </svg>
+              </Link>
+            </div>
+          </div>
+        </header>
+
+        {/* Main Chat Interface */}
+        <main className="flex-1 flex flex-col">
+          {!showChat ? (
+            /* Welcome Screen */
+            <div className="flex-1 flex items-center justify-center p-8">
+              <div className="max-w-4xl mx-auto text-center">
+                <div className="w-20 h-20 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-8">
+                  <span className="text-primary-foreground font-bold text-3xl">L</span>
+                </div>
+                
+                <h1 className="text-4xl md:text-6xl font-bold mb-6 leading-tight">
+                  AI Chat with
+                  <span className="text-gradient"> Streaming</span>
+                </h1>
+                
+                <p className="text-xl text-muted-foreground mb-12 max-w-2xl mx-auto leading-relaxed">
+                  Experience the next generation of AI conversations with real-time streaming responses, 
+                  powered by LangChain and OpenRouter.
+                </p>
+
+                <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
+                  <button 
+                    onClick={() => setShowChat(true)}
+                    className="bg-primary text-primary-foreground px-8 py-4 rounded-xl font-semibold text-lg hover:opacity-90 transition-all duration-300 flex items-center gap-2"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    Start Chatting
+                  </button>
+                  
+                  <button 
+                    onClick={() => window.open('exp://192.168.1.100:8081', '_blank')}
+                    className="border border-border text-foreground px-8 py-4 rounded-xl font-semibold text-lg hover:bg-accent transition-all duration-300 flex items-center gap-2"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    Mobile App
+                  </button>
+                </div>
+
+                {/* Features Grid */}
+                <div className="grid md:grid-cols-3 gap-8 mt-20">
+                  <div className="glass rounded-2xl p-8 hover:bg-accent/50 transition-all duration-300 animate-fade-in">
+                    <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center mb-6 mx-auto">
+                      <svg className="w-6 h-6 text-primary-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-semibold mb-4">Real-time Streaming</h3>
+                    <p className="text-muted-foreground">Watch AI responses appear in real-time with smooth streaming technology</p>
+                  </div>
+
+                  <div className="glass rounded-2xl p-8 hover:bg-accent/50 transition-all duration-300 animate-fade-in" style={{animationDelay: '0.1s'}}>
+                    <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center mb-6 mx-auto">
+                      <svg className="w-6 h-6 text-primary-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-semibold mb-4">Advanced AI Agent</h3>
+                    <p className="text-muted-foreground">Powered by LangChain with function calling and tool integration</p>
+                  </div>
+
+                  <div className="glass rounded-2xl p-8 hover:bg-accent/50 transition-all duration-300 animate-fade-in" style={{animationDelay: '0.2s'}}>
+                    <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center mb-6 mx-auto">
+                      <svg className="w-6 h-6 text-primary-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-semibold mb-4">Cross-Platform</h3>
+                    <p className="text-muted-foreground">React Native mobile app with web support and responsive design</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+
+            /* Chat Interface */
+            <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full">
+              <div className="flex-1 flex flex-col glass rounded-2xl m-4 overflow-hidden">
                 {/* Chat Header */}
-                <div className="bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border-b border-white/10 p-4">
-                  <h3 className="text-xl font-semibold text-white flex items-center">
-                    <span className="mr-2">🤖</span>
-                    Test OpenRouter Integration
-                  </h3>
-                  <p className="text-gray-400 text-sm mt-1">Live test of the AI agent with streaming responses</p>
+                <div className="bg-muted/50 border-b border-border p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold flex items-center gap-2">
+                        <div className="w-6 h-6 bg-primary rounded-lg flex items-center justify-center">
+                          <span className="text-primary-foreground text-xs font-bold">AI</span>
+                        </div>
+                        OpenRouter Integration
+                      </h3>
+                      <p className="text-muted-foreground text-sm mt-1">Live AI conversation with streaming responses</p>
+                    </div>
+                    <button
+                      onClick={() => setShowChat(false)}
+                      className="p-2 hover:bg-accent rounded-lg transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Messages */}
-                <div className="h-96 overflow-y-auto p-4 space-y-4">
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
                   {messages.length === 0 && (
-                    <div className="text-center text-gray-400 mt-8">
-                      <p>👋 Start a conversation to test the AI integration!</p>
-                      <p className="text-sm mt-2">Try asking: &quot;What can you help me with?&quot;</p>
+                    <div className="flex-1 flex items-center justify-center text-center">
+                      <div className="max-w-md">
+                        <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center mx-auto mb-4">
+                          <svg className="w-8 h-8 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                          </svg>
+                        </div>
+                        <p className="text-muted-foreground mb-2">Start a conversation to test the AI integration!</p>
+                        <p className="text-sm text-muted-foreground">Try asking: &quot;What can you help me with?&quot;</p>
+                      </div>
                     </div>
                   )}
                   
                   {messages.map((message) => (
-                    <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                    <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-slide-in`}>
+                      <div className={`max-w-xs lg:max-w-2xl px-4 py-3 rounded-2xl ${
                         message.role === 'user' 
-                          ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-white' 
-                          : 'bg-white/10 text-gray-200 border border-white/20'
+                          ? 'bg-primary text-primary-foreground' 
+                          : 'bg-muted border border-border'
                       }`}>
-                        <p className="whitespace-pre-wrap">{message.content}</p>
-                        <p className={`text-xs mt-1 ${message.role === 'user' ? 'text-emerald-100' : 'text-gray-400'}`}>
+                        <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
+                        <p className={`text-xs mt-2 opacity-70`}>
                           {message.timestamp.toLocaleTimeString()}
                         </p>
                       </div>
@@ -237,12 +418,12 @@ export default function Home() {
                   ))}
                   
                   {isLoading && (
-                    <div className="flex justify-start">
-                      <div className="bg-white/10 border border-white/20 rounded-lg px-4 py-2">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                    <div className="flex justify-start animate-slide-in">
+                      <div className="bg-muted border border-border rounded-2xl px-4 py-3">
+                        <div className="flex items-center space-x-1">
+                          <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse"></div>
+                          <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse" style={{animationDelay: '0.2s'}}></div>
+                          <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></div>
                         </div>
                       </div>
                     </div>
@@ -252,8 +433,8 @@ export default function Home() {
                 </div>
 
                 {/* Input */}
-                <div className="border-t border-white/10 p-4">
-                  <div className="flex space-x-2">
+                <div className="border-t border-border p-4">
+                  <div className="flex gap-2">
                     <input
                       type="text"
                       value={inputText}
@@ -261,14 +442,22 @@ export default function Home() {
                       onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
                       placeholder="Type your message..."
                       disabled={isLoading}
-                      className="flex-1 bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 disabled:opacity-50"
+                      className="flex-1 bg-input border border-border rounded-xl px-4 py-3 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent disabled:opacity-50 transition-all"
                     />
                     <button
                       onClick={sendMessage}
                       disabled={isLoading || !inputText.trim()}
-                      className="bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-6 py-2 rounded-lg font-medium hover:shadow-lg hover:shadow-emerald-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="bg-primary text-primary-foreground px-6 py-3 rounded-xl font-medium hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
-                      {isLoading ? '⏳' : '💬'}
+                      {isLoading ? (
+                        <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -276,80 +465,31 @@ export default function Home() {
             </div>
           )}
 
-          {/* Features Grid */}
-          <div className="grid md:grid-cols-3 gap-8 mt-20">
-            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all duration-300">
-              <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center mb-6 mx-auto">
-                <span className="text-2xl">⚡</span>
-              </div>
-              <h3 className="text-xl font-semibold text-white mb-4">Real-time Streaming</h3>
-              <p className="text-gray-400">Watch AI responses appear in real-time with smooth streaming technology</p>
-            </div>
+        </main>
 
-            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all duration-300">
-              <div className="w-12 h-12 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-xl flex items-center justify-center mb-6 mx-auto">
-                <span className="text-2xl">🧠</span>
+        {/* Footer */}
+        <footer className="border-t border-border bg-muted/30">
+          <div className="max-w-7xl mx-auto px-6 py-8">
+            <div className="flex flex-col md:flex-row justify-between items-center">
+              <div className="flex items-center space-x-3 mb-4 md:mb-0">
+                <div className="w-6 h-6 bg-primary rounded"></div>
+                <span className="text-muted-foreground">Built with Next.js, Prisma, and LangChain</span>
               </div>
-              <h3 className="text-xl font-semibold text-white mb-4">Advanced AI Agent</h3>
-              <p className="text-gray-400">Powered by LangChain with function calling and tool integration</p>
-            </div>
-
-            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all duration-300">
-              <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-xl flex items-center justify-center mb-6 mx-auto">
-                <span className="text-2xl">📱</span>
-              </div>
-              <h3 className="text-xl font-semibold text-white mb-4">Cross-Platform</h3>
-              <p className="text-gray-400">React Native mobile app with web support and responsive design</p>
-            </div>
-          </div>
-
-          {/* API Endpoints */}
-          <div className="mt-20 bg-black/20 backdrop-blur-sm border border-white/10 rounded-2xl p-8">
-            <h3 className="text-2xl font-semibold text-white mb-6">API Endpoints</h3>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-4">
-                <div className="text-emerald-400 font-mono">/api/health</div>
-                <div className="text-gray-400">Health check</div>
-              </div>
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-                <div className="text-blue-400 font-mono">/api/chat</div>
-                <div className="text-gray-400">Chat management</div>
-              </div>
-              <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-4">
-                <div className="text-purple-400 font-mono">/api/chat/[id]/stream</div>
-                <div className="text-gray-400">Streaming messages</div>
-              </div>
-              <div className="bg-pink-500/10 border border-pink-500/20 rounded-lg p-4">
-                <div className="text-pink-400 font-mono">/api/user/profile</div>
-                <div className="text-gray-400">User management</div>
+              
+              <div className="flex items-center space-x-6">
+                <Link href="https://github.com/doctadg/lotus" className="text-muted-foreground hover:text-foreground transition-colors">
+                  GitHub
+                </Link>
+                <Link href="/api/health" className="text-muted-foreground hover:text-foreground transition-colors">
+                  API Docs
+                </Link>
+                <span className="text-muted-foreground">•</span>
+                <span className="text-muted-foreground">Status: {stats.uptime}</span>
               </div>
             </div>
           </div>
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="relative z-10 border-t border-white/10 bg-black/20 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          <div className="flex flex-col md:flex-row justify-between items-center">
-            <div className="flex items-center space-x-3 mb-4 md:mb-0">
-              <div className="w-6 h-6 bg-gradient-to-r from-emerald-400 to-cyan-400 rounded"></div>
-              <span className="text-gray-400">Built with Next.js, Prisma, and LangChain</span>
-            </div>
-            
-            <div className="flex items-center space-x-6">
-              <a href="https://github.com/doctadg/lotus" className="text-gray-400 hover:text-white transition-colors">
-                GitHub
-              </a>
-              <a href="/api/health" className="text-gray-400 hover:text-white transition-colors">
-                API Docs
-              </a>
-              <span className="text-gray-500">•</span>
-              <span className="text-gray-500">Status: {stats.uptime}</span>
-            </div>
-          </div>
-        </div>
-      </footer>
+        </footer>
+      </div>
     </div>
   )
 }
