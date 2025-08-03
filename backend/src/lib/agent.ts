@@ -1,11 +1,12 @@
 import { config } from 'dotenv'
+import path from 'path'
 import { ChatOpenAI } from '@langchain/openai'
 import { AgentExecutor, createOpenAIFunctionsAgent } from 'langchain/agents'
 import { DynamicTool } from '@langchain/core/tools'
 import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts'
 import agentConfig from '../../config/agent-prompts.json'
 
-config()
+config({ path: path.join(process.cwd(), '.env') })
 // Web search functionality - can be extended with real APIs
 
 // Web search tool implementation
@@ -30,6 +31,12 @@ class AIAgent {
   private tools = [webSearchTool]
 
   constructor() {
+    console.log('Environment check:', {
+      OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY ? 'SET' : 'NOT SET',
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY ? 'SET' : 'NOT SET',
+      NODE_ENV: process.env.NODE_ENV
+    })
+    
     const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY
     if (!apiKey) {
       throw new Error('OpenRouter API key is required. Set OPENROUTER_API_KEY environment variable.')
