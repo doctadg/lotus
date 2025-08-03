@@ -33,38 +33,34 @@ class AIAgent {
       throw new Error('OpenRouter API key is required. Set OPENROUTER_API_KEY environment variable.')
     }
 
-    this.llm = new ChatOpenAI(
-      {
-        model: process.env.OPENROUTER_MODEL || 'qwen/qwen3-30b-a3b-instruct-2507',
-        temperature: agentConfig.modelConfig.temperature,
-        maxTokens: agentConfig.modelConfig.maxTokens,
-        apiKey: apiKey,
-      },
-      {
+    this.llm = new ChatOpenAI({
+      model: process.env.OPENROUTER_MODEL || 'qwen/qwen3-30b-a3b-instruct-2507',
+      temperature: agentConfig.modelConfig.temperature,
+      maxTokens: agentConfig.modelConfig.maxTokens,
+      apiKey: apiKey,
+      configuration: {
         baseURL: 'https://openrouter.ai/api/v1',
         defaultHeaders: {
           'HTTP-Referer': process.env.NEXTAUTH_URL || 'https://lotus-backend.vercel.app',
           'X-Title': 'AI Chat App',
         },
       },
-    )
+    })
 
-    this.streamingLLM = new ChatOpenAI(
-      {
-        model: process.env.OPENROUTER_MODEL || 'qwen/qwen3-30b-a3b-instruct-2507',
-        temperature: agentConfig.modelConfig.temperature,
-        maxTokens: agentConfig.modelConfig.maxTokens,
-        streaming: true,
-        apiKey: apiKey,
-      },
-      {
+    this.streamingLLM = new ChatOpenAI({
+      model: process.env.OPENROUTER_MODEL || 'qwen/qwen3-30b-a3b-instruct-2507',
+      temperature: agentConfig.modelConfig.temperature,
+      maxTokens: agentConfig.modelConfig.maxTokens,
+      streaming: true,
+      apiKey: apiKey,
+      configuration: {
         baseURL: 'https://openrouter.ai/api/v1',
         defaultHeaders: {
           'HTTP-Referer': process.env.NEXTAUTH_URL || 'https://lotus-backend.vercel.app',
           'X-Title': 'AI Chat App',
         },
       },
-    )
+    })
 
     this.initializeAgent()
   }
