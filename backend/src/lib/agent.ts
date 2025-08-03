@@ -27,15 +27,20 @@ class AIAgent {
   private tools = [webSearchTool]
 
   constructor() {
+    const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY
+    if (!apiKey) {
+      throw new Error('OpenRouter API key is required. Set OPENROUTER_API_KEY environment variable.')
+    }
+
     const baseConfig = {
-      openAIApiKey: process.env.OPENROUTER_API_KEY,
+      openAIApiKey: apiKey,
       modelName: process.env.OPENROUTER_MODEL || 'qwen/qwen3-30b-a3b-instruct-2507',
       temperature: agentConfig.modelConfig.temperature,
       maxTokens: agentConfig.modelConfig.maxTokens,
       configuration: {
         baseURL: 'https://openrouter.ai/api/v1',
         defaultHeaders: {
-          'HTTP-Referer': process.env.NEXTAUTH_URL || 'http://localhost:3000',
+          'HTTP-Referer': process.env.NEXTAUTH_URL || 'https://lotus-backend.vercel.app',
           'X-Title': 'AI Chat App'
         }
       }

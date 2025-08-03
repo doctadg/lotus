@@ -108,9 +108,9 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
           case 'ai_typing':
             setIsTyping(event.data.typing)
             if (event.data.typing && !currentAIMessage) {
-              // Create a temporary message for streaming
+              // Create a temporary message for streaming with unique ID
               currentAIMessage = {
-                id: 'temp-' + Date.now(),
+                id: 'temp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
                 chatId: currentChatId,
                 role: 'assistant',
                 content: '',
@@ -122,7 +122,9 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
 
           case 'ai_chunk':
             if (currentAIMessage) {
-              streamingContent += event.data.content
+              // Since we're now sending full content each time (not incremental), 
+              // we replace instead of accumulate
+              streamingContent = event.data.content
               setMessages(prev => 
                 prev.map(msg => 
                   msg.id === currentAIMessage!.id 
@@ -148,12 +150,19 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
 
           case 'complete':
             setIsSending(false)
+            setIsTyping(false)
             break
 
           case 'error':
-            Alert.alert('Error', event.data.message)
+            console.error('Streaming error:', event.data)
+            Alert.alert('Error', event.data.message || 'An error occurred')
             setInputText(messageText)
             setIsSending(false)
+            setIsTyping(false)
+            // Clean up temporary message if it exists
+            if (currentAIMessage) {
+              setMessages(prev => prev.filter(msg => msg.id !== currentAIMessage!.id))
+            }
             break
         }
         
@@ -164,9 +173,13 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
       }
     } catch (error) {
       console.error('Error sending message:', error)
-      Alert.alert('Error', 'Failed to send message')
+      // Only show alert if we haven't already shown one from the streaming events
+      if (!error.message?.includes('HTTP error')) {
+        Alert.alert('Error', 'Failed to send message')
+      }
       setInputText(messageText)
       setIsSending(false)
+      setIsTyping(false)
     }
   }
 
@@ -216,7 +229,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
             ref={flatListRef}
             data={messages}
             renderItem={renderMessage}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item, index) => item.id || `message-${index}`}
             style={styles.messagesList}
             contentContainerStyle={styles.messagesContainer}
             showsVerticalScrollIndicator={false}

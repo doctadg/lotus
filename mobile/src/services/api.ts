@@ -138,7 +138,9 @@ class ApiService {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'text/event-stream',
+        'Cache-Control': 'no-cache'
       },
       body: JSON.stringify(data)
     })
@@ -153,37 +155,54 @@ class ApiService {
       throw new Error(`HTTP error! status: ${response.status} - ${errorText}`)
     }
 
-    const reader = response.body?.getReader()
-    if (!reader) {
-      throw new Error('Response body is not readable')
-    }
-
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6))
-              yield data
-            } catch (error) {
-              console.error('Error parsing SSE data:', error)
-            }
-          }
+    // React Native has issues with streaming responses, so we'll read the entire response
+    console.log('Reading entire response...')
+    const responseText = await response.text()
+    console.log('Full response received, length:', responseText.length)
+    console.log('Response preview:', responseText.substring(0, 200))
+    
+    const lines = responseText.split('\n')
+    const events: any[] = []
+    
+    // Parse all events first
+    for (const line of lines) {
+      if (line.trim().startsWith('data: ')) {
+        try {
+          const eventData = JSON.parse(line.slice(6))
+          events.push(eventData)
+        } catch (error) {
+          console.error('Error parsing SSE data:', error, 'Line:', line)
         }
       }
-    } finally {
-      reader.releaseLock()
+    }
+    
+    // Yield events with appropriate delays to simulate streaming
+    for (const eventData of events) {
+      console.log('Yielding event:', eventData.type)
+      
+      if (eventData.type === 'ai_chunk') {
+        // Break down large AI chunks into smaller pieces for better streaming effect
+        const content = eventData.data.content || ''
+        const words = content.split(' ')
+        
+        for (let i = 0; i < words.length; i++) {
+          const chunk = words.slice(0, i + 1).join(' ')
+          yield {
+            type: 'ai_chunk',
+            data: { content: chunk }
+          }
+          await new Promise(resolve => setTimeout(resolve, 30))
+        }
+      } else {
+        yield eventData
+        
+        // Add delays between events to simulate streaming
+        if (eventData.type === 'user_message') {
+          await new Promise(resolve => setTimeout(resolve, 100))
+        } else if (eventData.type === 'ai_typing') {
+          await new Promise(resolve => setTimeout(resolve, 200))
+        }
+      }
     }
   }
 

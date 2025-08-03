@@ -134,3 +134,4 @@ android/app/release
 # Claude specific
 .claude/
 DEPLOYMENT.md
+VERCEL_ENV_SETUP.md
