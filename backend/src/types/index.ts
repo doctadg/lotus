@@ -20,7 +20,7 @@ export interface Message {
   chatId: string
   role: 'user' | 'assistant' | 'system'
   content: string
-  metadata?: any
+  metadata?: Record<string, unknown>
   createdAt: Date
 }
 
@@ -38,11 +38,11 @@ export interface AgentResponse {
   metadata?: {
     model: string
     tokens_used?: number
-    function_calls?: any[]
+    function_calls?: Record<string, unknown>[]
   }
 }
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean
   data?: T
   error?: string

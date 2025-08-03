@@ -5,9 +5,10 @@ import { aiAgent } from '@/lib/agent'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { chatId: string } }
+  { params }: { params: Promise<{ chatId: string }> }
 ) {
   try {
+    const { chatId } = await params
     const userId = await authenticateUser(request)
     
     if (!userId) {
@@ -23,7 +24,7 @@ export async function POST(
     // Verify chat ownership
     const chat = await prisma.chat.findFirst({
       where: {
-        id: params.chatId,
+        id: chatId,
         userId
       }
     })
@@ -35,7 +36,7 @@ export async function POST(
     // Save user message
     const userMessage = await prisma.message.create({
       data: {
-        chatId: params.chatId,
+        chatId: chatId,
         role: 'user',
         content
       }
@@ -43,7 +44,7 @@ export async function POST(
 
     // Get chat history for context
     const chatHistory = await prisma.message.findMany({
-      where: { chatId: params.chatId },
+      where: { chatId: chatId },
       orderBy: { createdAt: 'asc' },
       take: -20
     })
@@ -61,7 +62,11 @@ export async function POST(
         controller.enqueue(encoder.encode(`data: ${userMessageData}\n\n`))
         
         // Start AI processing
-        processAIResponse(controller, encoder, params.chatId, content, chatHistory)
+        processAIResponse(controller, encoder, chatId, content, chatHistory.map(msg => ({
+          role: msg.role,
+          content: msg.content,
+          createdAt: msg.createdAt.toISOString()
+        })))
       }
     })
 
@@ -86,7 +91,7 @@ async function processAIResponse(
   encoder: TextEncoder,
   chatId: string,
   content: string,
-  chatHistory: any[]
+  chatHistory: Array<{ role: string; content: string; createdAt: string }>
 ) {
   try {
     // Send typing indicator
@@ -126,10 +131,10 @@ async function processAIResponse(
         chatId: chatId,
         role: 'assistant',
         content: fullResponse,
-        metadata: {
+        metadata: JSON.parse(JSON.stringify({
           model: process.env.OPENROUTER_MODEL,
           streaming: true
-        }
+        }))
       }
     })
 

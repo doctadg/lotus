@@ -6,9 +6,10 @@ import { ApiResponse, SendMessageRequest } from '@/types'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { chatId: string } }
+  { params }: { params: Promise<{ chatId: string }> }
 ) {
   try {
+    const { chatId } = await params
     const userId = await authenticateUser(request)
     
     if (!userId) {
@@ -20,7 +21,7 @@ export async function GET(
 
     const chat = await prisma.chat.findFirst({
       where: {
-        id: params.chatId,
+        id: chatId,
         userId
       }
     })
@@ -33,7 +34,7 @@ export async function GET(
     }
 
     const messages = await prisma.message.findMany({
-      where: { chatId: params.chatId },
+      where: { chatId: chatId },
       orderBy: { createdAt: 'asc' }
     })
 
@@ -52,9 +53,10 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { chatId: string } }
+  { params }: { params: Promise<{ chatId: string }> }
 ) {
   try {
+    const { chatId } = await params
     const userId = await authenticateUser(request)
     
     if (!userId) {
@@ -76,7 +78,7 @@ export async function POST(
     // Verify chat ownership
     const chat = await prisma.chat.findFirst({
       where: {
-        id: params.chatId,
+        id: chatId,
         userId
       }
     })
@@ -91,7 +93,7 @@ export async function POST(
     // Save user message
     const userMessage = await prisma.message.create({
       data: {
-        chatId: params.chatId,
+        chatId: chatId,
         role,
         content
       }
@@ -99,7 +101,7 @@ export async function POST(
 
     // Get chat history for context
     const chatHistory = await prisma.message.findMany({
-      where: { chatId: params.chatId },
+      where: { chatId: chatId },
       orderBy: { createdAt: 'asc' },
       take: -20 // Last 20 messages
     })
@@ -116,16 +118,16 @@ export async function POST(
     // Save AI response
     const aiMessage = await prisma.message.create({
       data: {
-        chatId: params.chatId,
+        chatId: chatId,
         role: 'assistant',
         content: agentResponse.content,
-        metadata: agentResponse.metadata
+        metadata: agentResponse.metadata ? JSON.parse(JSON.stringify(agentResponse.metadata)) : null
       }
     })
 
     // Update chat's updatedAt timestamp
     await prisma.chat.update({
-      where: { id: params.chatId },
+      where: { id: chatId },
       data: { updatedAt: new Date() }
     })
 

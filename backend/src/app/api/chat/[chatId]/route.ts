@@ -5,9 +5,10 @@ import { ApiResponse } from '@/types'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { chatId: string } }
+  { params }: { params: Promise<{ chatId: string }> }
 ) {
   try {
+    const { chatId } = await params
     const userId = await authenticateUser(request)
     
     if (!userId) {
@@ -19,7 +20,7 @@ export async function GET(
 
     const chat = await prisma.chat.findFirst({
       where: {
-        id: params.chatId,
+        id: chatId,
         userId
       },
       include: {
@@ -51,9 +52,10 @@ export async function GET(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { chatId: string } }
+  { params }: { params: Promise<{ chatId: string }> }
 ) {
   try {
+    const { chatId } = await params
     const userId = await authenticateUser(request)
     
     if (!userId) {
@@ -65,7 +67,7 @@ export async function DELETE(
 
     const chat = await prisma.chat.findFirst({
       where: {
-        id: params.chatId,
+        id: chatId,
         userId
       }
     })
@@ -78,7 +80,7 @@ export async function DELETE(
     }
 
     await prisma.chat.delete({
-      where: { id: params.chatId }
+      where: { id: chatId }
     })
 
     return NextResponse.json<ApiResponse>({

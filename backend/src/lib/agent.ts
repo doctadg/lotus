@@ -3,7 +3,7 @@ import { AgentExecutor, createOpenAIFunctionsAgent } from 'langchain/agents'
 import { DynamicTool } from '@langchain/core/tools'
 import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts'
 import agentConfig from '../../config/agent-prompts.json'
-import axios from 'axios'
+// Web search functionality - can be extended with real APIs
 
 // Web search tool implementation
 const webSearchTool = new DynamicTool({
@@ -76,7 +76,7 @@ class AIAgent {
     chatHistory: Array<{ role: string; content: string }> = []
   ): Promise<{
     content: string
-    metadata?: any
+    metadata?: Record<string, unknown>
   }> {
     if (!this.agent) {
       await this.initializeAgent()
