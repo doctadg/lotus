@@ -31,14 +31,6 @@ class AIAgent {
   private tools = [webSearchTool]
 
   constructor() {
-    // Debug environment variables in production
-    console.log('Environment debug:', {
-      NODE_ENV: process.env.NODE_ENV,
-      OPENROUTER_API_KEY_EXISTS: !!process.env.OPENROUTER_API_KEY,
-      OPENAI_API_KEY_EXISTS: !!process.env.OPENAI_API_KEY,
-      OPENROUTER_MODEL: process.env.OPENROUTER_MODEL,
-      ALL_ENV_KEYS: Object.keys(process.env).filter(key => key.includes('OPENROUTER') || key.includes('OPENAI'))
-    })
     
     const apiKey = process.env.OPENROUTER_API_KEY
     
@@ -46,28 +38,25 @@ class AIAgent {
       throw new Error('OpenRouter API key is required. Set OPENROUTER_API_KEY environment variable.')
     }
 
-    const llmConfig = {
+    const baseConfig = {
       apiKey: apiKey,
       model: process.env.OPENROUTER_MODEL || 'qwen/qwen3-30b-a3b-instruct-2507',
       temperature: agentConfig.modelConfig.temperature,
       maxTokens: agentConfig.modelConfig.maxTokens,
-    }
-
-    const clientConfig = {
-      baseURL: 'https://openrouter.ai/api/v1',
-      defaultHeaders: {
-        'HTTP-Referer': process.env.NEXTAUTH_URL || 'https://lotus-backend.vercel.app',
-        'X-Title': 'AI Chat App'
+      configuration: {
+        baseURL: 'https://openrouter.ai/api/v1',
+        defaultHeaders: {
+          'HTTP-Referer': process.env.NEXTAUTH_URL || 'https://lotus-backend.vercel.app',
+          'X-Title': 'AI Chat App'
+        }
       }
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.llm = new (ChatOpenAI as any)(llmConfig, clientConfig)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.streamingLLM = new (ChatOpenAI as any)({
-      ...llmConfig,
+    this.llm = new ChatOpenAI(baseConfig)
+    this.streamingLLM = new ChatOpenAI({
+      ...baseConfig,
       streaming: true
-    }, clientConfig)
+    })
 
     this.initializeAgent()
   }
