@@ -1,7 +1,7 @@
 import { config } from 'dotenv'
 import path from 'path'
 import { ChatOpenAI } from '@langchain/openai'
-import { AgentExecutor, createOpenAIFunctionsAgent } from 'langchain/agents'
+import { AgentExecutor, createToolCallingAgent } from 'langchain/agents'
 import { DynamicTool } from '@langchain/core/tools'
 import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts'
 import agentConfig from '../../config/agent-prompts.json'
@@ -37,25 +37,26 @@ class AIAgent {
       throw new Error('OpenRouter API key is required. Set OPENROUTER_API_KEY environment variable.')
     }
 
-    const baseConfig = {
+    const llmConfig = {
       apiKey: apiKey,
       model: process.env.OPENROUTER_MODEL || 'qwen/qwen3-30b-a3b-instruct-2507',
       temperature: agentConfig.modelConfig.temperature,
       maxTokens: agentConfig.modelConfig.maxTokens,
-      configuration: {
-        baseURL: 'https://openrouter.ai/api/v1',
-        defaultHeaders: {
-          'HTTP-Referer': process.env.NEXTAUTH_URL || 'https://lotus-backend.vercel.app',
-          'X-Title': 'AI Chat App'
-        }
+    }
+
+    const clientConfig = {
+      baseURL: 'https://openrouter.ai/api/v1',
+      defaultHeaders: {
+        'HTTP-Referer': process.env.NEXTAUTH_URL || 'https://lotus-backend.vercel.app',
+        'X-Title': 'AI Chat App'
       }
     }
 
-    this.llm = new ChatOpenAI(baseConfig)
+    this.llm = new ChatOpenAI(llmConfig, clientConfig)
     this.streamingLLM = new ChatOpenAI({
-      ...baseConfig,
+      ...llmConfig,
       streaming: true
-    })
+    }, clientConfig)
 
     this.initializeAgent()
   }
@@ -68,7 +69,7 @@ class AIAgent {
       new MessagesPlaceholder('agent_scratchpad')
     ])
 
-    const agent = await createOpenAIFunctionsAgent({
+    const agent = await createToolCallingAgent({
       llm: this.llm,
       tools: this.tools,
       prompt
