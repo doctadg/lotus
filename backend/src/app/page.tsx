@@ -1,103 +1,162 @@
-import Image from "next/image";
+'use client'
+
+import { useState, useEffect } from 'react'
+import Link from "next/link"
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [stats, setStats] = useState({ uptime: '0ms', status: 'checking...' })
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  useEffect(() => {
+    // Check API health
+    fetch('/api/health')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setStats({ uptime: 'Online', status: 'All systems operational' })
+        }
+      })
+      .catch(() => {
+        setStats({ uptime: 'Offline', status: 'Service unavailable' })
+      })
+  }, [])
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+      {/* Background Pattern */}
+      <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-20"></div>
+      
+      {/* Navigation */}
+      <nav className="relative z-10 p-6">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-gradient-to-r from-emerald-400 to-cyan-400 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-sm">🤖</span>
+            </div>
+            <h1 className="text-2xl font-bold text-white">Lotus AI</h1>
+          </div>
+          
+          <div className="hidden md:flex items-center space-x-6">
+            <Link href="/api/health" className="text-gray-300 hover:text-white transition-colors">
+              API Status
+            </Link>
+            <Link href="https://github.com/doctadg/lotus" className="text-gray-300 hover:text-white transition-colors">
+              GitHub
+            </Link>
+          </div>
+        </div>
+      </nav>
+
+      {/* Hero Section */}
+      <main className="relative z-10 max-w-7xl mx-auto px-6 pt-20 pb-32">
+        <div className="text-center">
+          {/* Status Badge */}
+          <div className="inline-flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-4 py-2 mb-8">
+            <div className={`w-2 h-2 rounded-full ${stats.uptime === 'Online' ? 'bg-emerald-400' : 'bg-red-400'} animate-pulse`}></div>
+            <span className="text-emerald-300 text-sm font-medium">{stats.status}</span>
+          </div>
+
+          {/* Main Heading */}
+          <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
+            AI Chat with
+            <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent"> Streaming</span>
+          </h1>
+          
+          <p className="text-xl md:text-2xl text-gray-300 mb-12 max-w-3xl mx-auto leading-relaxed">
+            Experience the next generation of AI conversations with real-time streaming responses, 
+            powered by LangChain and OpenRouter.
+          </p>
+
+          {/* CTA Buttons */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
+            <button 
+              onClick={() => window.open('exp://192.168.1.100:8081', '_blank')}
+              className="bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:shadow-lg hover:shadow-emerald-500/25 transition-all duration-300 transform hover:scale-105"
+            >
+              🚀 Launch Mobile App
+            </button>
+            
+            <Link 
+              href="/api/health"
+              className="border border-gray-600 text-gray-300 px-8 py-4 rounded-xl font-semibold text-lg hover:bg-gray-800 hover:border-gray-500 transition-all duration-300"
+            >
+              📊 View API Status
+            </Link>
+          </div>
+
+          {/* Features Grid */}
+          <div className="grid md:grid-cols-3 gap-8 mt-20">
+            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all duration-300">
+              <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center mb-6 mx-auto">
+                <span className="text-2xl">⚡</span>
+              </div>
+              <h3 className="text-xl font-semibold text-white mb-4">Real-time Streaming</h3>
+              <p className="text-gray-400">Watch AI responses appear in real-time with smooth streaming technology</p>
+            </div>
+
+            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all duration-300">
+              <div className="w-12 h-12 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-xl flex items-center justify-center mb-6 mx-auto">
+                <span className="text-2xl">🧠</span>
+              </div>
+              <h3 className="text-xl font-semibold text-white mb-4">Advanced AI Agent</h3>
+              <p className="text-gray-400">Powered by LangChain with function calling and tool integration</p>
+            </div>
+
+            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all duration-300">
+              <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-xl flex items-center justify-center mb-6 mx-auto">
+                <span className="text-2xl">📱</span>
+              </div>
+              <h3 className="text-xl font-semibold text-white mb-4">Cross-Platform</h3>
+              <p className="text-gray-400">React Native mobile app with web support and responsive design</p>
+            </div>
+          </div>
+
+          {/* API Endpoints */}
+          <div className="mt-20 bg-black/20 backdrop-blur-sm border border-white/10 rounded-2xl p-8">
+            <h3 className="text-2xl font-semibold text-white mb-6">API Endpoints</h3>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-4">
+                <div className="text-emerald-400 font-mono">/api/health</div>
+                <div className="text-gray-400">Health check</div>
+              </div>
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+                <div className="text-blue-400 font-mono">/api/chat</div>
+                <div className="text-gray-400">Chat management</div>
+              </div>
+              <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-4">
+                <div className="text-purple-400 font-mono">/api/chat/[id]/stream</div>
+                <div className="text-gray-400">Streaming messages</div>
+              </div>
+              <div className="bg-pink-500/10 border border-pink-500/20 rounded-lg p-4">
+                <div className="text-pink-400 font-mono">/api/user/profile</div>
+                <div className="text-gray-400">User management</div>
+              </div>
+            </div>
+          </div>
         </div>
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+
+      {/* Footer */}
+      <footer className="relative z-10 border-t border-white/10 bg-black/20 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <div className="flex flex-col md:flex-row justify-between items-center">
+            <div className="flex items-center space-x-3 mb-4 md:mb-0">
+              <div className="w-6 h-6 bg-gradient-to-r from-emerald-400 to-cyan-400 rounded"></div>
+              <span className="text-gray-400">Built with Next.js, Prisma, and LangChain</span>
+            </div>
+            
+            <div className="flex items-center space-x-6">
+              <a href="https://github.com/doctadg/lotus" className="text-gray-400 hover:text-white transition-colors">
+                GitHub
+              </a>
+              <a href="/api/health" className="text-gray-400 hover:text-white transition-colors">
+                API Docs
+              </a>
+              <span className="text-gray-500">•</span>
+              <span className="text-gray-500">Status: {stats.uptime}</span>
+            </div>
+          </div>
+        </div>
       </footer>
     </div>
-  );
+  )
 }

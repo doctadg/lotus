@@ -4,7 +4,7 @@ import { ApiResponse, Chat, Message, User, SendMessageRequest, CreateChatRequest
 
 class ApiService {
   private api: AxiosInstance
-  private baseURL = 'http://localhost:3000/api' // Change to your backend URL
+  private baseURL = 'https://lotus-backend.vercel.app/api' // Production backend URL
 
   constructor() {
     this.api = axios.create({
