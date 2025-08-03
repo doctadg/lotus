@@ -33,6 +33,7 @@ export interface ApiResponse<T = any> {
 export interface SendMessageRequest {
   content: string
   role?: 'user'
+  deepResearchMode?: boolean
 }
 
 export interface CreateChatRequest {

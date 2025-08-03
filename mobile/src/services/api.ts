@@ -4,7 +4,7 @@ import { ApiResponse, Chat, Message, User, SendMessageRequest, CreateChatRequest
 
 class ApiService {
   private api: AxiosInstance
-  private baseURL = 'https://lotus-backend.vercel.app/api' // Production backend URL
+  private baseURL = 'http://192.168.1.42:3000/api' // Local development backend URL
 
   constructor() {
     this.api = axios.create({
@@ -155,46 +155,42 @@ class ApiService {
       return
     }
 
-    const reader = response.body?.getReader()
-    if (!reader) {
-      yield { type: 'error', data: { message: 'No response stream available' } }
-      return
-    }
-
-    let buffer = ''
+    // React Native has limited ReadableStream support, so we'll use a different approach
+    const responseText = await response.text()
+    console.log('Full response received, length:', responseText.length)
+    console.log('Response preview:', responseText.substring(0, 200))
     
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        const chunk = new TextDecoder().decode(value)
-        buffer += chunk
-        const lines = buffer.split('\n')
+    const lines = responseText.split('\n')
+    const events: any[] = []
+    
+    // Parse all events first
+    for (const line of lines) {
+      if (line.trim().startsWith('data: ')) {
+        const data = line.slice(6).trim()
+        if (!data) continue
         
-        // Keep the last line in buffer (might be incomplete)
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6).trim()
-            if (!data) continue
-            
-            try {
-              const eventData = JSON.parse(data)
-              console.log('Received event:', eventData.type)
-              yield eventData
-            } catch (error) {
-              console.error('Error parsing SSE data:', error, 'Line:', line)
-            }
-          }
+        try {
+          const eventData = JSON.parse(data)
+          events.push(eventData)
+        } catch (error) {
+          console.error('Error parsing SSE data:', error, 'Line:', line)
         }
       }
-    } catch (error) {
-      console.error('Streaming error:', error)
-      yield { type: 'error', data: { message: error.message || 'Streaming failed' } }
-    } finally {
-      reader.releaseLock()
+    }
+    
+    // Yield events with appropriate delays to simulate real-time streaming
+    for (const eventData of events) {
+      console.log('Yielding event:', eventData.type)
+      yield eventData
+      
+      // Add delays between events to simulate streaming
+      if (eventData.type === 'user_message') {
+        await new Promise(resolve => setTimeout(resolve, 100))
+      } else if (eventData.type === 'ai_typing') {
+        await new Promise(resolve => setTimeout(resolve, 200))
+      } else if (eventData.type === 'ai_chunk') {
+        await new Promise(resolve => setTimeout(resolve, 50))
+      }
     }
   }
 
