@@ -33,7 +33,24 @@ A modern, ChatGPT-like chat application with streaming support, built with Next.
 ### Prerequisites
 - Node.js 18+ 
 - npm or yarn
+- Git
+- GitHub account (for deployment)
+- Vercel account (for hosting)
 - Expo CLI (for mobile development)
+
+### Quick Start
+
+1. **Clone and install**:
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/ai-chat-app.git
+   cd ai-chat-app
+   npm run install:all
+   ```
+
+2. **Start development**:
+   ```bash
+   npm run dev  # Starts both backend and mobile
+   ```
 
 ### Backend Setup
 
@@ -165,6 +182,29 @@ for await (const event of apiService.sendMessageStream(chatId, { content })) {
 }
 ```
 
+## 🚀 Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions.
+
+### Quick Deployment Steps
+
+1. **Create GitHub Repository**:
+   ```bash
+   # Run the setup script
+   ./setup-github.sh
+   ```
+
+2. **Deploy to Vercel**:
+   - Go to [vercel.com](https://vercel.com)
+   - Import your GitHub repository
+   - Set root directory to `backend`
+   - Add environment variables from DEPLOYMENT.md
+   - Deploy!
+
+3. **Update Mobile App**:
+   - Update API URL in `mobile/src/services/api.ts`
+   - Test with production backend
+
 ## 🛠 Development
 
 ### Backend Development
@@ -192,18 +232,6 @@ npx prisma generate    # Generate Prisma client
 npx prisma db push     # Push schema changes
 npx prisma studio      # Open Prisma studio
 ```
-
-## 🌐 Deployment
-
-### Backend (Vercel)
-1. Connect your repository to Vercel
-2. Environment variables are already configured
-3. Deploy with automatic builds
-
-### Mobile (Expo)
-1. Build for production: `expo build`
-2. Submit to app stores: `expo submit`
-3. Or use Expo Go for development
 
 ## 🔑 Environment Variables
 
