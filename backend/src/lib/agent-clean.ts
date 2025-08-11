@@ -34,7 +34,7 @@ class AIAgent {
     }
 
     this.llm = new ChatOpenAI({
-      model: process.env.OPENROUTER_MODEL || 'qwen/qwen3-30b-a3b-instruct-2507',
+      model: process.env.OPENROUTER_MODEL || 'openai/gpt-oss-20b',
       temperature: agentConfig.modelConfig.temperature,
       maxTokens: agentConfig.modelConfig.maxTokens,
       apiKey: apiKey,
@@ -48,7 +48,7 @@ class AIAgent {
     })
 
     this.streamingLLM = new ChatOpenAI({
-      model: process.env.OPENROUTER_MODEL || 'qwen/qwen3-30b-a3b-instruct-2507',
+      model: process.env.OPENROUTER_MODEL || 'openai/gpt-oss-20b',
       temperature: agentConfig.modelConfig.temperature,
       maxTokens: agentConfig.modelConfig.maxTokens,
       streaming: true,

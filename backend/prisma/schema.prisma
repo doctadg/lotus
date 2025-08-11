@@ -14,12 +14,16 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  chats     Chat[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String        @id @default(cuid())
+  email         String        @unique
+  password      String?       // Made optional for migration
+  name          String?
+  chats         Chat[]
+  memories      UserMemory[]
+  contexts      UserContext[]
+  embeddings    UserEmbedding[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   @@map("users")
 }
@@ -46,4 +50,52 @@ model Message {
   createdAt DateTime @default(now())
 
   @@map("messages")
+}
+
+model UserMemory {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String   // 'preference', 'fact', 'context', 'skill'
+  category    String?  // 'personal', 'professional', 'interests', etc.
+  key         String   // e.g., 'favorite_color', 'job_title'
+  value       String   // the actual memory content
+  confidence  Float    @default(1.0) // confidence score 0-1
+  source      String   // 'conversation', 'explicit', 'inferred'
+  messageId   String?  // reference to the message where this was learned
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, key])
+  @@map("user_memories")
+}
+
+model UserContext {
+  id            String   @id @default(cuid())
+  userId        String
+  conversationPattern String // JSON string of conversation patterns
+  communicationStyle  String? // 'formal', 'casual', 'technical', etc.
+  topicsOfInterest    String[] // array of topics the user is interested in
+  expertiseAreas      String[] // areas where user has shown expertise
+  preferredResponseStyle String? // 'detailed', 'concise', 'examples', etc.
+  timezone            String?
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("user_contexts")
+}
+
+model UserEmbedding {
+  id               String   @id @default(cuid())
+  userId           String   @map("user_id")
+  content          String   // the original text that was embedded
+  embedding        Float[]  // vector embedding (fallback for Prisma compatibility)
+  vectorEmbedding  String?  @map("vector_embedding") // pgvector column (managed via raw SQL)
+  type             String   // 'memory', 'message', 'preference'
+  metadata         Json?    // additional context
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@map("user_embeddings")
 }

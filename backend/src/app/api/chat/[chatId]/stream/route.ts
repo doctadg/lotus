@@ -3,64 +3,6 @@ import { prisma } from '@/lib/prisma'
 import { authenticateUser } from '@/lib/auth'
 import { aiAgent } from '@/lib/agent'
 
-// Query analysis function (duplicated from agent.ts for now)
-function analyzeQueryForSearch(query: string): boolean {
-  const lowerQuery = query.toLowerCase()
-  
-  // Temporal keywords that ALWAYS require search
-  const temporalKeywords = [
-    'latest', 'recent', 'current', 'now', 'today', 'this year', '2024', '2025',
-    'what\'s new', 'what\'s happening', 'breaking', 'update', 'news',
-    'trending', 'popular', 'hot', 'viral'
-  ]
-  
-  // Factual data keywords that ALWAYS require search
-  const factualKeywords = [
-    'price', 'cost', 'stock', 'market', 'exchange rate', 'worth',
-    'earnings', 'revenue', 'profit', 'financial',
-    'specs', 'specifications', 'availability', 'release',
-    'review', 'rating', 'comparison', 'vs', 'versus',
-    'statistics', 'stats', 'data', 'research findings'
-  ]
-  
-  // Events and people keywords
-  const eventKeywords = [
-    'election', 'vote', 'politics', 'politician',
-    'celebrity', 'public figure', 'famous person',
-    'sports', 'score', 'result', 'schedule', 'standings',
-    'weather', 'disaster', 'emergency'
-  ]
-  
-  // Technology and business keywords
-  const techKeywords = [
-    'software update', 'new feature', 'release',
-    'startup', 'ipo', 'acquisition', 'merger',
-    'ai development', 'new tool', 'platform',
-    'crypto', 'bitcoin', 'ethereum', 'nft', 'blockchain'
-  ]
-  
-  const allKeywords = [...temporalKeywords, ...factualKeywords, ...eventKeywords, ...techKeywords]
-  
-  // Check if query contains any search-triggering keywords
-  const hasSearchKeywords = allKeywords.some(keyword => lowerQuery.includes(keyword))
-  
-  // Additional patterns that suggest need for current information
-  const questionPatterns = [
-    /how much (does|is|are)/i,
-    /what (is|are) the (price|cost)/i,
-    /when (did|will|is)/i,
-    /who (is|are|won|lost)/i,
-    /where (is|are|can)/i,
-    /which (company|product|service)/i
-  ]
-  
-  const hasQuestionPattern = questionPatterns.some(pattern => pattern.test(query))
-  
-  // Check for numerical queries that might need current data
-  const hasNumbers = /\d{4}/.test(query) || /\$\d+/.test(query) || /\b\d+%\b/.test(query)
-  
-  return hasSearchKeywords || hasQuestionPattern || hasNumbers
-}
 
 // Add OPTIONS handler for CORS preflight
 export async function OPTIONS() {
@@ -141,7 +83,7 @@ export async function POST(
           role: msg.role,
           content: msg.content,
           createdAt: msg.createdAt.toISOString()
-        })), deepResearchMode)
+        })), deepResearchMode, userId)
       }
     })
 
@@ -167,7 +109,8 @@ async function processAIResponse(
   chatId: string,
   content: string,
   chatHistory: Array<{ role: string; content: string; createdAt: string }>,
-  deepResearchMode = false
+  deepResearchMode = false,
+  userId?: string
 ) {
   try {
     // Send typing indicator
@@ -178,75 +121,223 @@ async function processAIResponse(
 
     let fullResponse = ''
 
-    // Import search analysis function
-    const needsSearch = analyzeQueryForSearch(content)
-    
-    // Add current date and time to the content
-    const now = new Date()
-    const currentDateTime = now.toISOString()
-    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-    const localDateTime = now.toLocaleString('en-US', {
-      timeZone: userTimezone,
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      timeZoneName: 'short'
-    })
-
-    // Prepare message for processing
-    let processedContent = `[CURRENT DATE & TIME: ${currentDateTime} (${localDateTime})] ${content}`
-    
-    if (deepResearchMode) {
-      processedContent = `[CURRENT DATE & TIME: ${currentDateTime} (${localDateTime})] [DEEP RESEARCH MODE] Please use the deep_research tool for comprehensive analysis: ${content}`
-    } else if (needsSearch) {
-      processedContent = `[CURRENT DATE & TIME: ${currentDateTime} (${localDateTime})] [SEARCH REQUIRED] You MUST use swift_search before responding. Query: ${content}`
-    }
-
-    // Stream the AI response
-    for await (const chunk of aiAgent.streamMessage(
-      processedContent,
+    // Stream the AI response with enhanced phases
+    for await (const event of aiAgent.streamMessage(
+      content, // Use original content, not processed
       chatHistory.map(msg => ({
         role: msg.role,
         content: msg.content
-      }))
+      })),
+      userId,
+      deepResearchMode
     )) {
-      fullResponse += chunk
-      
-      // Send each chunk as it arrives
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-        type: 'ai_chunk',
-        data: { content: chunk }
-      })}\n\n`))
+      switch (event.type) {
+        case 'thinking_stream':
+          // Send continuous thinking updates
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'thinking_stream',
+            data: {
+              content: event.content,
+              metadata: event.metadata
+            }
+          })}\n\n`))
+          break
+          
+        case 'memory_access':
+          // Send memory access events
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'memory_access',
+            data: {
+              content: event.content,
+              metadata: event.metadata
+            }
+          })}\n\n`))
+          break
+          
+        case 'context_analysis':
+          // Send context analysis events
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'context_analysis',
+            data: {
+              content: event.content,
+              metadata: event.metadata
+            }
+          })}\n\n`))
+          break
+          
+        case 'search_planning':
+          // Send search planning events
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'search_planning',
+            data: {
+              content: event.content,
+              metadata: event.metadata
+            }
+          })}\n\n`))
+          break
+          
+        case 'search_start':
+          // Send search start events
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'search_start',
+            data: {
+              content: event.content,
+              metadata: event.metadata
+            }
+          })}\n\n`))
+          break
+          
+        case 'search_progress':
+          // Send search progress updates
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'search_progress',
+            data: {
+              content: event.content,
+              metadata: event.metadata
+            }
+          })}\n\n`))
+          break
+          
+        case 'search_result_analysis':
+          // Send search result analysis
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'search_result_analysis',
+            data: {
+              content: event.content,
+              metadata: event.metadata
+            }
+          })}\n\n`))
+          break
+          
+        case 'context_synthesis':
+          // Send context synthesis events
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'context_synthesis',
+            data: {
+              content: event.content,
+              metadata: event.metadata
+            }
+          })}\n\n`))
+          break
+          
+        case 'response_planning':
+          // Send response planning events
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'response_planning',
+            data: {
+              content: event.content,
+              metadata: event.metadata
+            }
+          })}\n\n`))
+          break
+          
+        case 'agent_thought':
+          // Send agent reasoning step (backwards compatibility)
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'agent_thought',
+            data: { 
+              content: event.content,
+              metadata: event.metadata
+            }
+          })}\n\n`))
+          break
+          
+        case 'tool_call':
+          // Send enhanced tool call notification
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'tool_call',
+            data: { 
+              tool: event.content,
+              metadata: {
+                ...event.metadata,
+                enhanced: true
+              }
+            }
+          })}\n\n`))
+          break
+          
+        case 'tool_result':
+          // Send enhanced tool result
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'tool_result',
+            data: {
+              content: event.content,
+              metadata: {
+                ...event.metadata,
+                enhanced: true
+              }
+            }
+          })}\n\n`))
+          break
+          
+        case 'agent_processing':
+          // Send processing status
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'agent_processing',
+            data: {
+              content: event.content,
+              metadata: event.metadata
+            }
+          })}\n\n`))
+          break
+          
+        case 'content':
+          // Stream content chunks
+          fullResponse += event.content || ''
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'ai_chunk',
+            data: { content: event.content }
+          })}\n\n`))
+          break
+          
+        case 'complete':
+          // Handle completion with metadata - store metadata for later use
+          if (event.metadata) {
+            // Metadata will be saved with the message
+          }
+          break
+          
+        case 'error':
+          // Handle error
+          fullResponse = event.content || 'An error occurred'
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'error',
+            data: { 
+              message: event.content,
+              metadata: event.metadata
+            }
+          })}\n\n`))
+          break
+          
+        // Backwards compatibility
+        case 'thinking':
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'ai_thinking',
+            data: { content: event.content }
+          })}\n\n`))
+          break
+          
+        case 'tool_use':
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'ai_tool_use',
+            data: { content: event.content, metadata: event.metadata }
+          })}\n\n`))
+          break
+      }
     }
 
-    // Stop typing indicator
-    controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-      type: 'ai_typing',
-      data: { typing: false }
-    })}\n\n`))
-
-    // Save AI response
+    // Save AI response (but don't send it again to avoid duplication)
     const aiMessage = await prisma.message.create({
       data: {
         chatId: chatId,
         role: 'assistant',
         content: fullResponse,
         metadata: JSON.parse(JSON.stringify({
-          model: process.env.OPENROUTER_MODEL,
+          model: process.env.OPENROUTER_MODEL || 'openai/gpt-oss-20b',
           streaming: true
         }))
       }
     })
-
-    // Send final AI message
-    const aiMessageData = JSON.stringify({
-      type: 'ai_message_complete',
-      data: aiMessage
-    })
-    controller.enqueue(encoder.encode(`data: ${aiMessageData}\n\n`))
 
     // Update chat timestamp
     await prisma.chat.update({

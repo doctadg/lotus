@@ -112,7 +112,9 @@ export async function POST(
       chatHistory.map(msg => ({
         role: msg.role,
         content: msg.content
-      }))
+      })),
+      false, // deepResearchMode
+      userId // pass userId for personalization
     )
 
     // Save AI response

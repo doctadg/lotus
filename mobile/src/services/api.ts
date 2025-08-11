@@ -121,9 +121,12 @@ class ApiService {
     throw new Error(response.data.error || 'Failed to send message')
   }
 
-  // Real-time streaming message support (matching landing page approach)
+  // Real-time streaming message support with event-source-polyfill for React Native
   async *sendMessageStream(chatId: string, data: SendMessageRequest): AsyncGenerator<{
-    type: 'user_message' | 'ai_typing' | 'ai_chunk' | 'ai_message_complete' | 'complete' | 'error'
+    type: 'user_message' | 'ai_typing' | 'ai_chunk' | 'ai_message_complete' | 'complete' | 'error' | 
+          'agent_thought' | 'tool_call' | 'tool_result' | 'agent_processing' | 'ai_tool_use' |
+          'thinking_stream' | 'memory_access' | 'context_analysis' | 'search_planning' | 
+          'search_start' | 'search_progress' | 'search_result_analysis' | 'context_synthesis' | 'response_planning'
     data: any
   }, void, unknown> {
     const token = await AsyncStorage.getItem('userToken')
@@ -134,62 +137,151 @@ class ApiService {
     console.log('Sending request to:', `${this.baseURL}/chat/${chatId}/stream`)
     console.log('Request data:', data)
     
-    const response = await fetch(`${this.baseURL}/chat/${chatId}/stream`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'text/event-stream',
-        'Cache-Control': 'no-cache'
-      },
-      body: JSON.stringify(data)
-    })
-
-    console.log('Response status:', response.status)
-    console.log('Response headers:', response.headers)
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('Response error text:', errorText)
-      yield { type: 'error', data: { message: `HTTP error! status: ${response.status} - ${errorText}` } }
-      return
-    }
-
-    // React Native has limited ReadableStream support, so we'll use a different approach
-    const responseText = await response.text()
-    console.log('Full response received, length:', responseText.length)
-    console.log('Response preview:', responseText.substring(0, 200))
+    // Create an async generator that properly handles streaming
+    const eventQueue: any[] = []
+    let resolveNext: ((value: any) => void) | null = null
+    let rejectNext: ((error: any) => void) | null = null
+    let done = false
+    let hasErrored = false
     
-    const lines = responseText.split('\n')
-    const events: any[] = []
+    // Start the request
+    const xhr = new XMLHttpRequest()
+    let buffer = ''
+    let lastProcessedIndex = 0
     
-    // Parse all events first
-    for (const line of lines) {
-      if (line.trim().startsWith('data: ')) {
-        const data = line.slice(6).trim()
-        if (!data) continue
+    xhr.open('POST', `${this.baseURL}/chat/${chatId}/stream`)
+    xhr.setRequestHeader('Content-Type', 'application/json')
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    xhr.setRequestHeader('Accept', 'text/event-stream')
+    xhr.setRequestHeader('Cache-Control', 'no-cache')
+    
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState === 3 || xhr.readyState === 4) {
+        // Get new data since last process
+        const currentResponse = xhr.responseText
+        const newData = currentResponse.substring(lastProcessedIndex)
+        lastProcessedIndex = currentResponse.length
         
-        try {
-          const eventData = JSON.parse(data)
-          events.push(eventData)
-        } catch (error) {
-          console.error('Error parsing SSE data:', error, 'Line:', line)
+        // Add new data to buffer
+        buffer += newData
+        
+        // Process complete lines
+        const lines = buffer.split('\n')
+        // Keep the last line in buffer if it's incomplete
+        buffer = lines[lines.length - 1]
+        
+        // Process all complete lines
+        for (let i = 0; i < lines.length - 1; i++) {
+          const line = lines[i]
+          if (line.trim().startsWith('data: ')) {
+            const data = line.slice(6).trim()
+            if (data) {
+              try {
+                const eventData = JSON.parse(data)
+                console.log('Parsed event:', eventData.type)
+                
+                if (resolveNext) {
+                  resolveNext(eventData)
+                  resolveNext = null
+                } else {
+                  eventQueue.push(eventData)
+                }
+              } catch (error) {
+                console.error('Error parsing SSE data:', error, 'Line:', line)
+              }
+            }
+          }
+        }
+        
+        // Handle completion
+        if (xhr.readyState === 4) {
+          done = true
+          if (xhr.status !== 200) {
+            hasErrored = true
+            const errorEvent = {
+              type: 'error',
+              data: { message: `HTTP error! status: ${xhr.status} - ${xhr.responseText}` }
+            }
+            if (resolveNext) {
+              resolveNext(errorEvent)
+              resolveNext = null
+            } else {
+              eventQueue.push(errorEvent)
+            }
+          }
+          
+          // Process any remaining buffer
+          if (buffer.trim().startsWith('data: ')) {
+            const data = buffer.slice(6).trim()
+            if (data) {
+              try {
+                const eventData = JSON.parse(data)
+                if (resolveNext) {
+                  resolveNext(eventData)
+                  resolveNext = null
+                } else {
+                  eventQueue.push(eventData)
+                }
+              } catch (error) {
+                console.error('Error parsing final SSE data:', error)
+              }
+            }
+          }
+          
+          // Resolve any waiting promise
+          if (resolveNext) {
+            resolveNext(null)
+            resolveNext = null
+          }
         }
       }
     }
     
-    // Yield events with appropriate delays to simulate real-time streaming
-    for (const eventData of events) {
-      console.log('Yielding event:', eventData.type)
-      yield eventData
-      
-      // Add delays between events to simulate streaming
-      if (eventData.type === 'user_message') {
-        await new Promise(resolve => setTimeout(resolve, 100))
-      } else if (eventData.type === 'ai_typing') {
-        await new Promise(resolve => setTimeout(resolve, 200))
-      } else if (eventData.type === 'ai_chunk') {
-        await new Promise(resolve => setTimeout(resolve, 50))
+    xhr.onerror = () => {
+      done = true
+      hasErrored = true
+      const errorEvent = {
+        type: 'error',
+        data: { message: 'Network error' }
+      }
+      if (resolveNext) {
+        resolveNext(errorEvent)
+        resolveNext = null
+      } else {
+        eventQueue.push(errorEvent)
+      }
+    }
+    
+    // Send the request
+    xhr.send(JSON.stringify(data))
+    
+    // Yield events as they arrive
+    while (!done || eventQueue.length > 0) {
+      if (eventQueue.length > 0) {
+        const event = eventQueue.shift()
+        if (event) {
+          yield event
+          
+          // Only continue if not an error or complete event
+          if (event.type === 'error' || event.type === 'complete') {
+            break
+          }
+        }
+      } else if (!done) {
+        // Wait for next event
+        const nextEvent = await new Promise<any>((resolve, reject) => {
+          resolveNext = resolve
+          rejectNext = reject
+        })
+        
+        if (nextEvent) {
+          yield nextEvent
+          
+          // Only continue if not an error or complete event  
+          if (nextEvent.type === 'error' || nextEvent.type === 'complete') {
+            break
+          }
+        }
       }
     }
   }

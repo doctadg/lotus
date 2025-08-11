@@ -1,5 +1,15 @@
 import { NextRequest } from 'next/server'
+import { verify } from 'jsonwebtoken'
+import { hash } from 'bcryptjs'
 import { prisma } from './prisma'
+import { traceable } from 'langsmith/traceable'
+
+interface JWTPayload {
+  userId: string
+  email: string
+  iat: number
+  exp: number
+}
 
 export async function authenticateUser(request: NextRequest): Promise<string | null> {
   const authHeader = request.headers.get('authorization')
@@ -10,11 +20,16 @@ export async function authenticateUser(request: NextRequest): Promise<string | n
 
   const token = authHeader.substring(7)
   
-  // For now, we'll use a simple email-based authentication
-  // In production, implement proper JWT or session-based auth
   try {
-    const user = await prisma.user.findFirst({
-      where: { email: token } // Using email as token for simplicity
+    // Verify JWT token
+    const decoded = verify(
+      token, 
+      process.env.JWT_SECRET || 'fallback-secret-key'
+    ) as JWTPayload
+    
+    // Verify user still exists
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId }
     })
     
     return user?.id || null
@@ -24,7 +39,8 @@ export async function authenticateUser(request: NextRequest): Promise<string | n
   }
 }
 
-export async function createOrGetUser(email: string, name?: string): Promise<string> {
+// Legacy function - kept for backwards compatibility but updated
+export async function createOrGetUser(email: string, name?: string, password?: string): Promise<string> {
   const existingUser = await prisma.user.findUnique({
     where: { email }
   })
@@ -33,12 +49,60 @@ export async function createOrGetUser(email: string, name?: string): Promise<str
     return existingUser.id
   }
 
+  // For legacy compatibility, create a user with a default password if none provided
+  const defaultPassword = password || 'temp-password-' + Date.now()
+  const hashedPassword = await hash(defaultPassword, 12)
+
   const newUser = await prisma.user.create({
     data: {
       email,
-      name
+      name,
+      password: hashedPassword
     }
   })
 
   return newUser.id
 }
+
+// New helper functions for user management
+export async function getUserById(userId: string) {
+  return await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  })
+}
+
+export const getUserWithMemories = traceable(async (userId: string) => {
+  console.log(`👤 [AUTH TRACE] Fetching user with memories for userId: ${userId}`)
+  
+  const result = await prisma.user.findUnique({
+    where: { id: userId },
+    include: {
+      memories: {
+        orderBy: { updatedAt: 'desc' },
+        take: 50 // Latest 50 memories
+      },
+      contexts: {
+        orderBy: { updatedAt: 'desc' },
+        take: 1 // Latest context
+      }
+    }
+  })
+  
+  console.log(`📊 [AUTH TRACE] User found: ${result ? 'Yes' : 'No'}, Memories: ${result?.memories?.length || 0}, Contexts: ${result?.contexts?.length || 0}`)
+  
+  return result
+}, {
+  name: "getUserWithMemories",
+  tags: ["auth", "user", "memory", "lotus"],
+  metadata: { 
+    operation: "user_context_retrieval",
+    service: "auth_service" 
+  }
+})

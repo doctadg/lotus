@@ -18,9 +18,16 @@ import Animated, {
 } from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { ChatMessage } from '../components/ChatMessage'
+import { EnhancedChatMessage } from '../components/EnhancedChatMessage'
 import { TypingIndicator } from '../components/TypingIndicator'
+import { AgentReasoningCard, AgentStep } from '../components/AgentReasoningCard'
+import { ToolUseBadge, ToolType, ToolStatus, ToolPhase } from '../components/ToolUseBadge'
+import { AgentStatusMessage } from '../components/AgentStatusMessage'
+import { SearchProgressCard } from '../components/SearchProgressCard'
+import { ThinkingStreamComponent } from '../components/ThinkingStreamComponent'
 import { apiService } from '../services/api'
 import { Message, Chat } from '../types'
+import { Microscope } from 'lucide-react-native'
 
 interface ChatScreenProps {
   chatId: string | null
@@ -36,12 +43,26 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
   const [isTyping, setIsTyping] = useState(false)
   const [chat, setChat] = useState<Chat | null>(null)
   const [deepResearchMode, setDeepResearchMode] = useState(false)
+  const [agentSteps, setAgentSteps] = useState<AgentStep[]>([])
+  const [currentTools, setCurrentTools] = useState<Array<{ tool: ToolType; status: ToolStatus; phase?: ToolPhase; progress?: number; url?: string; quality?: string; resultSize?: number; duration?: number }>>([])
+  const [thinkingSteps, setThinkingSteps] = useState<Array<{ id: string; type: 'thinking_stream' | 'memory_access' | 'context_analysis' | 'search_planning' | 'search_result_analysis' | 'context_synthesis' | 'response_planning'; content: string; phase?: string; timestamp: number; metadata?: any }>>([])
+  const [searchSteps, setSearchSteps] = useState<Array<{ id: string; type: 'planning' | 'start' | 'progress' | 'analysis' | 'complete'; tool: string; content: string; url?: string; progress?: number; quality?: string; timestamp: number; metadata?: any }>>([])
+  const [showReasoningCard, setShowReasoningCard] = useState(false)
+  const [reasoningCardExpanded, setReasoningCardExpanded] = useState(false)
+  const [showThinkingStream, setShowThinkingStream] = useState(true)
+  const [showSearchProgress, setShowSearchProgress] = useState(false)
+  const [agentStartTime, setAgentStartTime] = useState(0)
+  const [agentComplete, setAgentComplete] = useState(false)
   const flatListRef = useRef<FlatList>(null)
   const streamingContentRef = useRef('')
   const lastUpdateTimeRef = useRef(0)
-  const pendingUpdateRef = useRef<NodeJS.Timeout | null>(null)
+  const pendingUpdateRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const thinkingBatchRef = useRef<Array<any>>([])
+  const thinkingBatchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchBatchRef = useRef<Array<any>>([])
+  const searchBatchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   
-  const inputHeight = useSharedValue(50)
+  const inputHeight = useSharedValue(45)
 
   useEffect(() => {
     if (chatId) {
@@ -53,11 +74,17 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
     }
   }, [chatId])
 
-  // Cleanup effect
+  // Cleanup effect with enhanced cleanup
   useEffect(() => {
     return () => {
       if (pendingUpdateRef.current) {
         clearTimeout(pendingUpdateRef.current)
+      }
+      if (thinkingBatchTimeout.current) {
+        clearTimeout(thinkingBatchTimeout.current)
+      }
+      if (searchBatchTimeout.current) {
+        clearTimeout(searchBatchTimeout.current)
       }
     }
   }, [])
@@ -117,13 +144,27 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
       }
       setMessages(prev => [...prev, userMessage])
 
+      // Reset agent state for new message
+      setAgentSteps([])
+      setCurrentTools([])
+      setThinkingSteps([])
+      setSearchSteps([])
+      setShowReasoningCard(false)
+      setReasoningCardExpanded(false)
+      setShowThinkingStream(true)
+      setShowSearchProgress(false)
+      setAgentStartTime(Date.now())
+      setAgentComplete(false)
+
       let currentAIMessage: Message | null = null
       let streamingContent = ''
+      let localAgentSteps: AgentStep[] = []
 
       for await (const event of apiService.sendMessageStream(currentChatId, {
         content: messageText,
         deepResearchMode
       })) {
+        console.log('Received event:', event.type, event.data)
         switch (event.type) {
           case 'user_message':
             // Replace temporary user message with real one from backend
@@ -132,6 +173,207 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
                 ? event.data 
                 : msg
             ))
+            break
+            
+          case 'thinking_stream':
+            // Batch thinking steps for better performance
+            const thinkingStep = {
+              id: `thinking-${Date.now()}-${Math.random()}`,
+              type: event.type,
+              content: event.data.content,
+              phase: event.data.metadata?.phase,
+              timestamp: Date.now(),
+              metadata: event.data.metadata
+            }
+            
+            thinkingBatchRef.current.push(thinkingStep)
+            
+            // Clear existing timeout
+            if (thinkingBatchTimeout.current) {
+              clearTimeout(thinkingBatchTimeout.current)
+            }
+            
+            // Set new timeout to batch updates
+            thinkingBatchTimeout.current = setTimeout(() => {
+              if (thinkingBatchRef.current.length > 0) {
+                setThinkingSteps(prev => [...prev, ...thinkingBatchRef.current])
+                thinkingBatchRef.current = []
+              }
+            }, 50) // 50ms batching for thinking steps
+            break
+            
+          case 'memory_access':
+          case 'context_analysis':
+          case 'search_result_analysis':
+          case 'context_synthesis':
+          case 'response_planning':
+            // Add enhanced thinking steps
+            const enhancedThinkingStep = {
+              id: `${event.type}-${Date.now()}-${Math.random()}`,
+              type: event.type,
+              content: event.data.content,
+              phase: event.data.metadata?.phase,
+              timestamp: Date.now(),
+              metadata: event.data.metadata
+            }
+            setThinkingSteps(prev => [...prev, enhancedThinkingStep])
+            break
+            
+          case 'search_planning':
+            // Start search progress tracking with batching
+            const planningStep = {
+              id: `search-planning-${Date.now()}`,
+              type: 'planning',
+              tool: event.data.metadata?.tool || 'web_search',
+              content: event.data.content,
+              timestamp: Date.now(),
+              metadata: event.data.metadata
+            }
+            searchBatchRef.current.push(planningStep)
+            setShowSearchProgress(true)
+            
+            // Immediate update for search start
+            setSearchSteps(prev => [...prev, planningStep])
+            break
+            
+          case 'search_start':
+            // Add search start step
+            const startStep = {
+              id: `search-start-${Date.now()}`,
+              type: 'start',
+              tool: event.data.metadata?.tool || 'web_search',
+              content: event.data.content,
+              timestamp: Date.now(),
+              metadata: event.data.metadata
+            }
+            searchBatchRef.current.push(startStep)
+            
+            // Immediate update for visibility
+            setSearchSteps(prev => [...prev, startStep])
+            break
+            
+          case 'search_progress':
+            // Batch search progress updates
+            const progressStep = {
+              id: `search-progress-${Date.now()}`,
+              type: 'progress',
+              tool: event.data.metadata?.tool || 'web_search',
+              content: event.data.content,
+              progress: event.data.metadata?.progress,
+              timestamp: Date.now(),
+              metadata: event.data.metadata
+            }
+            
+            searchBatchRef.current.push(progressStep)
+            
+            // Clear existing timeout
+            if (searchBatchTimeout.current) {
+              clearTimeout(searchBatchTimeout.current)
+            }
+            
+            // Set timeout for batch update
+            searchBatchTimeout.current = setTimeout(() => {
+              if (searchBatchRef.current.length > 0) {
+                setSearchSteps(prev => [...prev, ...searchBatchRef.current])
+                searchBatchRef.current = []
+              }
+            }, 100) // 100ms batching for search progress
+            break
+
+          case 'agent_thought':
+            // Add agent reasoning step
+            const thoughtStep: AgentStep = {
+              type: 'thought',
+              content: event.data.content,
+              timestamp: Date.now(),
+              metadata: event.data.metadata
+            }
+            localAgentSteps.push(thoughtStep)
+            setAgentSteps([...localAgentSteps])
+            setShowReasoningCard(true)
+            break
+
+          case 'tool_call':
+            // Add tool call step and enhanced badge
+            const toolStep: AgentStep = {
+              type: 'tool_call',
+              content: event.data.metadata?.description || 'Using tool',
+              tool: event.data.tool,
+              timestamp: Date.now(),
+              metadata: event.data.metadata
+            }
+            localAgentSteps.push(toolStep)
+            setAgentSteps([...localAgentSteps])
+            
+            // Update enhanced tool badges
+            setCurrentTools(prev => [
+              ...prev.map(t => ({ 
+                ...t, 
+                status: t.status !== 'complete' ? 'complete' as ToolStatus : t.status,
+                duration: t.status === 'active' ? Date.now() - agentStartTime : t.duration
+              })),
+              { 
+                tool: event.data.tool as ToolType, 
+                status: event.data.metadata?.status || 'active' as ToolStatus,
+                phase: event.data.metadata?.phase as ToolPhase,
+                progress: event.data.metadata?.progress,
+                url: event.data.metadata?.url,
+                quality: event.data.metadata?.quality
+              }
+            ])
+            break
+
+          case 'tool_result':
+            // Add tool result step
+            const resultStep: AgentStep = {
+              type: 'tool_result',
+              content: event.data.content,
+              timestamp: Date.now(),
+              metadata: event.data.metadata
+            }
+            localAgentSteps.push(resultStep)
+            setAgentSteps([...localAgentSteps])
+            
+            // Update tool status to complete with enhanced data
+            setCurrentTools(prev => 
+              prev.map(t => 
+                t.tool === event.data.metadata?.tool 
+                  ? { 
+                      ...t, 
+                      status: 'complete' as ToolStatus,
+                      quality: event.data.metadata?.quality || t.quality,
+                      resultSize: event.data.metadata?.result_size,
+                      duration: Date.now() - agentStartTime
+                    }
+                  : t
+              )
+            )
+            
+            // Add search completion step
+            if (event.data.metadata?.tool) {
+              const completeStep = {
+                id: `search-complete-${Date.now()}`,
+                type: 'complete',
+                tool: event.data.metadata.tool,
+                content: 'Search completed successfully',
+                quality: event.data.metadata.quality,
+                timestamp: Date.now(),
+                metadata: event.data.metadata
+              }
+              setSearchSteps(prev => [...prev, completeStep])
+            }
+            break
+
+          case 'agent_processing':
+            // Add processing step
+            const processingStep: AgentStep = {
+              type: 'processing',
+              content: event.data.content,
+              timestamp: Date.now(),
+              metadata: event.data.metadata
+            }
+            localAgentSteps.push(processingStep)
+            setAgentSteps([...localAgentSteps])
             break
 
           case 'ai_typing':
@@ -150,14 +392,29 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
             break
 
           case 'ai_chunk':
+            // Ensure AI message exists before streaming content
+            if (!currentAIMessage) {
+              currentAIMessage = {
+                id: 'temp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+                chatId: currentChatId,
+                role: 'assistant',
+                content: '',
+                createdAt: new Date().toISOString()
+              }
+              setMessages(prev => [...prev, currentAIMessage!])
+            }
+            
             if (currentAIMessage) {
               // Accumulate chunks in ref for better performance
               streamingContent += event.data.content
               streamingContentRef.current = streamingContent
               
-              // Debounce updates to reduce lag (update max every 100ms)
+              // Optimized debounce updates with different intervals based on content length
               const now = Date.now()
-              if (now - lastUpdateTimeRef.current > 100) {
+              const contentLength = streamingContentRef.current.length
+              const debounceInterval = contentLength < 500 ? 50 : contentLength < 1500 ? 100 : 150
+              
+              if (now - lastUpdateTimeRef.current > debounceInterval) {
                 setMessages(prev => 
                   prev.map(msg => 
                     msg.id === currentAIMessage!.id 
@@ -180,7 +437,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
                     )
                   )
                   lastUpdateTimeRef.current = Date.now()
-                }, 100)
+                }, debounceInterval)
               }
             }
             break
@@ -210,6 +467,61 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
               clearTimeout(pendingUpdateRef.current)
               pendingUpdateRef.current = null
             }
+            
+            // Mark all tools as complete with final data
+            setCurrentTools(prev => 
+              prev.map(t => ({ 
+                ...t, 
+                status: 'complete' as ToolStatus,
+                duration: t.duration || Date.now() - agentStartTime
+              }))
+            )
+            
+            // Calculate total duration
+            const totalDuration = Date.now() - agentStartTime
+            
+            // Add final thinking step
+            const finalThinkingStep = {
+              id: `final-thinking-${Date.now()}`,
+              type: 'thinking_stream',
+              content: 'Response generation complete',
+              phase: 'completion',
+              timestamp: Date.now(),
+              metadata: { duration: totalDuration, completion: true }
+            }
+            setThinkingSteps(prev => [...prev, finalThinkingStep])
+            
+            // Add a synthesis step if we had reasoning
+            if (localAgentSteps.length > 0) {
+              const synthesisStep: AgentStep = {
+                type: 'synthesis',
+                content: 'Response formulated',
+                timestamp: Date.now(),
+                metadata: { duration: totalDuration }
+              }
+              localAgentSteps.push(synthesisStep)
+              setAgentSteps([...localAgentSteps])
+            }
+            
+            // Mark agent as complete and schedule cleanup
+            setAgentComplete(true)
+            
+            // Flush any remaining batched updates
+            if (thinkingBatchRef.current.length > 0) {
+              setThinkingSteps(prev => [...prev, ...thinkingBatchRef.current])
+              thinkingBatchRef.current = []
+            }
+            if (searchBatchRef.current.length > 0) {
+              setSearchSteps(prev => [...prev, ...searchBatchRef.current])
+              searchBatchRef.current = []
+            }
+            
+            // Hide progress components after delay
+            setTimeout(() => {
+              setShowSearchProgress(false)
+              setShowThinkingStream(false)
+            }, 3000) // Keep visible for 3 seconds after completion
+            
             setIsSending(false)
             setIsTyping(false)
             streamingContentRef.current = ''
@@ -221,6 +533,23 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
             setInputText(messageText)
             setIsSending(false)
             setIsTyping(false)
+            
+            // Mark tools as error state
+            setCurrentTools(prev => 
+              prev.map(t => ({ ...t, status: 'error' as ToolStatus }))
+            )
+            
+            // Add error thinking step
+            const errorThinkingStep = {
+              id: `error-thinking-${Date.now()}`,
+              type: 'thinking_stream',
+              content: 'An error occurred during processing',
+              phase: 'error',
+              timestamp: Date.now(),
+              metadata: { error: true, message: event.data.message }
+            }
+            setThinkingSteps(prev => [...prev, errorThinkingStep])
+            
             // Clean up temporary message and pending updates
             if (pendingUpdateRef.current) {
               clearTimeout(pendingUpdateRef.current)
@@ -233,11 +562,15 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
             break
         }
         
-        // Throttled auto-scroll during streaming (less frequent for better performance)
-        if (event.type === 'ai_chunk' && Date.now() - lastUpdateTimeRef.current > 200) {
-          setTimeout(() => {
-            flatListRef.current?.scrollToEnd({ animated: false }) // Non-animated for better performance
-          }, 50)
+        // Optimized auto-scroll with adaptive throttling
+        if (event.type === 'ai_chunk' && !agentComplete) {
+          const shouldScroll = Date.now() - lastUpdateTimeRef.current > 300
+          if (shouldScroll) {
+            // Use requestAnimationFrame for smoother scrolling
+            requestAnimationFrame(() => {
+              flatListRef.current?.scrollToEnd({ animated: false })
+            })
+          }
         }
       }
     } catch (error) {
@@ -249,7 +582,8 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
       }
       streamingContentRef.current = ''
       // Only show alert if we haven't already shown one from the streaming events
-      if (!error.message?.includes('HTTP error')) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      if (!errorMessage.includes('HTTP error')) {
         Alert.alert('Error', 'Failed to send message')
       }
       setInputText(messageText)
@@ -259,17 +593,64 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
   }
 
   const animatedInputStyle = useAnimatedStyle(() => ({
-    height: inputHeight.value
+    minHeight: 45
   }))
 
   // Memoize message rendering for better performance
-  const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => (
-    <ChatMessage message={item} index={index} />
-  ), [])
+  const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
+    // Check if this is the current AI message being streamed
+    const isCurrentAIMessage = item.role === 'assistant' && 
+      index === messages.length - 1 && 
+      (currentTools.length > 0 || agentSteps.length > 0 || thinkingSteps.length > 0)
+    
+    return (
+      <>
+        {/* Show enhanced agent status before the AI message if it's the current one */}
+        {isCurrentAIMessage && (
+          <>
+            {/* Thinking Stream - shown during active processing */}
+            {showThinkingStream && thinkingSteps.length > 0 && !agentComplete && (
+              <ThinkingStreamComponent
+                steps={thinkingSteps}
+                isActive={!agentComplete}
+                maxHeight={200}
+                autoScroll={true}
+                showTimestamps={false}
+                collapsible={true}
+              />
+            )}
+            
+            {/* Search Progress - shown during search operations */}
+            {showSearchProgress && searchSteps.length > 0 && (
+              <SearchProgressCard
+                steps={searchSteps}
+                isActive={!agentComplete}
+                onComplete={() => setShowSearchProgress(false)}
+              />
+            )}
+            
+            {/* Traditional Agent Status - shown for tool badges and reasoning */}
+            <AgentStatusMessage
+              steps={agentSteps}
+              tools={currentTools}
+              showReasoningCard={showReasoningCard}
+              reasoningExpanded={reasoningCardExpanded}
+              onToggleReasoning={() => setReasoningCardExpanded(!reasoningCardExpanded)}
+              duration={Date.now() - agentStartTime}
+              isComplete={agentComplete}
+            />
+          </>
+        )}
+        <EnhancedChatMessage message={item} index={index} />
+      </>
+    )
+  }, [messages.length, currentTools.length, agentSteps.length, thinkingSteps.length, searchSteps.length, showReasoningCard, reasoningCardExpanded, showThinkingStream, showSearchProgress, agentComplete])
   
-  // Memoize key extractor
-  const keyExtractor = useCallback((item: Message, index: number) => 
-    `${item.id || 'msg'}-${index}-${item.role}`, [])
+  // Optimized key extractor with stable keys
+  const keyExtractor = useCallback((item: Message, index: number) => {
+    // Use item.id if available, fallback to index-based key
+    return item.id || `msg-${index}-${item.role}-${item.createdAt}`
+  }, [])
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
@@ -314,10 +695,12 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
             contentContainerStyle={styles.messagesContainer}
             showsVerticalScrollIndicator={false}
             removeClippedSubviews={true}
-            maxToRenderPerBatch={10}
-            windowSize={10}
-            initialNumToRender={10}
+            maxToRenderPerBatch={8}
+            windowSize={8}
+            initialNumToRender={8}
+            updateCellsBatchingPeriod={50}
             getItemLayout={undefined}
+            onEndReachedThreshold={0.5}
             ListFooterComponent={isTyping ? <TypingIndicator /> : null}
           />
         )}
@@ -339,12 +722,11 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
               ]}
               onPress={() => setDeepResearchMode(!deepResearchMode)}
             >
-              <Text style={[
-                styles.deepResearchIcon,
-                deepResearchMode && styles.deepResearchIconActive
-              ]}>
-                🔬
-              </Text>
+              <Microscope 
+                size={14} 
+                color={deepResearchMode ? '#1d4ed8' : '#6b7280'} 
+                style={{ marginRight: 6 }}
+              />
               <Text style={[
                 styles.deepResearchText,
                 deepResearchMode && styles.deepResearchTextActive
@@ -362,13 +744,12 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
                 onChangeText={setInputText}
                 placeholder={deepResearchMode ? "Ask for comprehensive research..." : "Message ChatGPT..."}
                 placeholderTextColor="#9ca3af"
-                multiline
+                multiline={true}
+                numberOfLines={1}
                 maxLength={1000}
                 editable={!isSending}
-                onContentSizeChange={(event) => {
-                  const height = Math.min(Math.max(50, event.nativeEvent.contentSize.height + 20), 120)
-                  inputHeight.value = withTiming(height, { duration: 200 })
-                }}
+                textAlignVertical="center"
+                scrollEnabled={false}
               />
               <TouchableOpacity
                 style={[
@@ -487,13 +868,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#dbeafe',
     borderColor: '#3b82f6'
   },
-  deepResearchIcon: {
-    fontSize: 14,
-    marginRight: 6
-  },
-  deepResearchIconActive: {
-    fontSize: 14
-  },
   deepResearchText: {
     fontSize: 12,
     color: '#6b7280',
@@ -511,16 +885,21 @@ const styles = StyleSheet.create({
   },
   inputWrapper: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8
+    paddingVertical: 10,
+    minHeight: 45
   },
   textInput: {
     flex: 1,
     fontSize: 16,
     color: '#374151',
-    maxHeight: 100,
-    marginRight: 12
+    marginRight: 12,
+    paddingTop: 0,
+    paddingBottom: 0,
+    paddingHorizontal: 0,
+    minHeight: 24,
+    maxHeight: 80
   },
   sendButton: {
     width: 32,

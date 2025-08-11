@@ -5,48 +5,64 @@ config({ path: path.join(process.cwd(), '.env') })
 
 export interface SwiftSearchOptions {
   query: string
-  auto_scrape_top?: number
   max_results?: number
+  auto_scrape_top?: number
   include_contacts?: boolean
   include_social?: boolean
+  country?: string
+  language?: string
+  time_range?: string
+  safe_search?: string
+  result_type?: string
 }
 
 export interface ScrapeForgeOptions {
   url: string
-  follow_internal_links?: boolean
-  max_depth?: number
-  max_pages?: number
-  include_contacts?: boolean
-  extract_options?: string[]
+  render_js?: boolean
+  wait_for?: string
+  wait_time?: number
+  extract_links?: boolean
+  extract_images?: boolean
+  extract_schema?: boolean
+  extract_meta?: boolean
+  screenshot?: boolean
+  proxy_type?: string
+  proxy_country?: string
+  custom_headers?: Record<string, string>
+  cookies?: Record<string, string>
 }
 
-export interface DeepDiveOptions {
-  topic: string
-  max_sources?: number
-  generate_summary?: boolean
-  include_social_mentions?: boolean
-}
 
 export interface SearchResult {
   title: string
   link: string
   snippet: string
   position: number
+  date?: string
 }
 
 export interface ScrapedContent {
   url: string
   title: string
-  text: string
+  text?: string
+  content?: string
+  text_content?: string
   error: string | null
-  links?: Array<{ href: string; text: string }>
-  images?: string[]
-  metadata?: Record<string, unknown>
+  links?: Array<{ href: string; text: string; title?: string }>
+  images?: Array<{ src: string; alt?: string; width?: number; height?: number }>
+  schema_data?: Record<string, unknown>[]
+  meta_data?: Record<string, unknown>
+  screenshot_url?: string
+  load_time?: number
+  status_code?: number
+  final_url?: string
 }
 
 export interface ContactInfo {
   type: string
   value: string
+  name?: string
+  company?: string
   source_url: string
 }
 
@@ -66,38 +82,24 @@ export interface SwiftSearchResponse {
   remaining_credits: number
   results_count: number
   scraped_count: number
+  request_id: string
 }
 
 export interface ScrapeForgeResponse {
   url: string
   primary_content: ScrapedContent
-  discovered_links: ScrapedContent[]
-  contacts: ContactInfo[]
+  discovered_links?: ScrapedContent[]
+  contacts?: ContactInfo[]
   credits_used: number
   remaining_credits: number
   success: boolean
+  request_id?: string
 }
 
-export interface DeepDiveResponse {
-  topic: string
-  search_results: SearchResult[]
-  scraped_content: ScrapedContent[]
-  sources_analyzed: number
-  ai_summary?: string
-  social_mentions?: Array<{
-    platform: string
-    mentions: number
-    sentiment: string
-    recent_posts: unknown[]
-  }>
-  credits_used: number
-  remaining_credits: number
-  research_depth: string
-}
 
 export class SearchHiveClient {
   private apiKey: string
-  private baseUrl: string = 'https://api.searchhive.com/api/v1'
+  private baseUrl: string = 'https://www.searchhive.dev/api/v1'
 
   constructor() {
     const apiKey = process.env.SEARCHHIVE_API_KEY
@@ -113,7 +115,7 @@ export class SearchHiveClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': this.apiKey,
+          'Authorization': `Bearer ${this.apiKey}`,
         },
         body: JSON.stringify(data),
       })
@@ -133,40 +135,46 @@ export class SearchHiveClient {
   }
 
   async swiftSearch(options: SwiftSearchOptions): Promise<SwiftSearchResponse> {
-    const params = {
+    const params: Record<string, unknown> = {
       query: options.query,
-      auto_scrape_top: options.auto_scrape_top || 3,
       max_results: options.max_results || 10,
+      auto_scrape_top: options.auto_scrape_top || 3,
       include_contacts: options.include_contacts || false,
       include_social: options.include_social || false,
     }
+
+    // Add optional parameters if provided
+    if (options.country) params.country = options.country
+    if (options.language) params.language = options.language
+    if (options.time_range) params.time_range = options.time_range
+    if (options.safe_search) params.safe_search = options.safe_search
+    if (options.result_type) params.result_type = options.result_type
 
     return this.makeRequest<SwiftSearchResponse>('/swiftsearch', params)
   }
 
   async scrapeForge(options: ScrapeForgeOptions): Promise<ScrapeForgeResponse> {
-    const params = {
+    const params: Record<string, unknown> = {
       url: options.url,
-      follow_internal_links: options.follow_internal_links || false,
-      max_depth: options.max_depth || 1,
-      max_pages: options.max_pages || 10,
-      include_contacts: options.include_contacts || false,
-      extract_options: options.extract_options || ['title', 'text'],
+      render_js: options.render_js || false,
+      extract_meta: options.extract_meta !== false, // default true
     }
+
+    // Add optional parameters if provided
+    if (options.wait_for) params.wait_for = options.wait_for
+    if (options.wait_time) params.wait_time = options.wait_time
+    if (options.extract_links) params.extract_links = options.extract_links
+    if (options.extract_images) params.extract_images = options.extract_images
+    if (options.extract_schema) params.extract_schema = options.extract_schema
+    if (options.screenshot) params.screenshot = options.screenshot
+    if (options.proxy_type) params.proxy_type = options.proxy_type
+    if (options.proxy_country) params.proxy_country = options.proxy_country
+    if (options.custom_headers) params.custom_headers = options.custom_headers
+    if (options.cookies) params.cookies = options.cookies
 
     return this.makeRequest<ScrapeForgeResponse>('/scrapeforge', params)
   }
 
-  async deepDive(options: DeepDiveOptions): Promise<DeepDiveResponse> {
-    const params = {
-      topic: options.topic,
-      max_sources: options.max_sources || 5,
-      generate_summary: options.generate_summary || false,
-      include_social_mentions: options.include_social_mentions || false,
-    }
-
-    return this.makeRequest<DeepDiveResponse>('/deepdive', params)
-  }
 }
 
 export class SearchHiveService {
@@ -176,124 +184,136 @@ export class SearchHiveService {
     this.client = new SearchHiveClient()
   }
 
-  async performSwiftSearch(query: string, includeContacts = false): Promise<string> {
+  async performSearchAndScrape(query: string, maxResults = 5, scrapeTop = 3): Promise<string> {
     try {
-      const result = await this.client.swiftSearch({
+      console.log(`🔍 Searching for: ${query}`)
+      
+      // First, do a basic search without auto-scraping
+      const searchResult = await this.client.swiftSearch({
         query,
-        auto_scrape_top: 3,
-        max_results: 8,
-        include_contacts: includeContacts,
+        auto_scrape_top: 0, // Don't auto-scrape, we'll do it manually for better control
+        max_results: maxResults,
+        include_contacts: false,
         include_social: false,
       })
 
-      return this.formatSwiftSearchResults(result)
-    } catch (error) {
-      console.error('SwiftSearch error:', error)
-      return `Error performing search: ${error instanceof Error ? error.message : 'Unknown error'}`
-    }
-  }
+      if (!searchResult.search_results || searchResult.search_results.length === 0) {
+        return `No search results found for: ${query}`
+      }
 
-  async performDeepResearch(topic: string, includeSummary = true): Promise<string> {
-    try {
-      const result = await this.client.deepDive({
-        topic,
-        max_sources: 8,
-        generate_summary: includeSummary,
-        include_social_mentions: false,
-      })
-
-      return this.formatDeepDiveResults(result)
-    } catch (error) {
-      console.error('DeepDive error:', error)
-      return `Error performing deep research: ${error instanceof Error ? error.message : 'Unknown error'}`
-    }
-  }
-
-  private formatSwiftSearchResults(result: SwiftSearchResponse): string {
-    let output = `Search Results for "${result.query}":\n\n`
-
-    // Add search results
-    if (result.search_results.length > 0) {
-      output += `📊 Found ${result.results_count} search results:\n`
-      result.search_results.slice(0, 5).forEach((item, index) => {
-        output += `${index + 1}. **${item.title}**\n   ${item.snippet}\n   🔗 ${item.link}\n\n`
-      })
-    }
-
-    // Add scraped content summaries
-    if (result.scraped_content.length > 0) {
-      output += `📄 Content from ${result.scraped_count} top sources:\n\n`
-      result.scraped_content.forEach((content) => {
-        if (content.error) {
-          output += `❌ ${content.url}: ${content.error}\n`
-        } else {
-          const summary = content.text.length > 300 
-            ? content.text.substring(0, 300) + '...' 
-            : content.text
-          output += `**${content.title}**\n${summary}\n🔗 ${content.url}\n\n`
+      console.log(`📄 Found ${searchResult.search_results.length} results, scraping top ${Math.min(scrapeTop, searchResult.search_results.length)}...`)
+      
+      // Scrape the top results for full content
+      const scrapedContent: Array<{url: string; title: string; content: string; error?: string}> = []
+      const urlsToScrape = searchResult.search_results.slice(0, scrapeTop)
+      
+      for (const result of urlsToScrape) {
+        try {
+          console.log(`🌐 Scraping: ${result.link}`)
+          const scrapeResult = await this.client.scrapeForge({
+            url: result.link,
+            render_js: false, // Start with basic scraping
+            extract_meta: true,
+            extract_links: false,
+            extract_images: false
+          })
+          
+          if (scrapeResult.success && scrapeResult.primary_content) {
+            const content = scrapeResult.primary_content
+            scrapedContent.push({
+              url: result.link,
+              title: content.title || result.title,
+              content: content.text || content.text_content || 'No content extracted',
+              error: content.error || undefined
+            })
+          } else {
+            scrapedContent.push({
+              url: result.link,
+              title: result.title,
+              content: result.snippet,
+              error: 'Failed to scrape full content'
+            })
+          }
+        } catch (scrapeError) {
+          console.error(`Error scraping ${result.link}:`, scrapeError)
+          scrapedContent.push({
+            url: result.link,
+            title: result.title,
+            content: result.snippet,
+            error: scrapeError instanceof Error ? scrapeError.message : 'Scraping failed'
+          })
         }
+        
+        // Small delay between scrapes to be respectful
+        await new Promise(resolve => setTimeout(resolve, 500))
+      }
+
+      return this.formatSearchAndScrapeResults({
+        query,
+        searchResults: searchResult.search_results,
+        scrapedContent,
+        totalResults: searchResult.results_count,
+        creditsUsed: searchResult.credits_used + scrapedContent.length * 3 // Estimate credits
+      })
+    } catch (error) {
+      console.error('Search and scrape error:', error)
+      return `Error performing search and scrape: ${error instanceof Error ? error.message : 'Unknown error'}`
+    }
+  }
+
+  async performComprehensiveSearch(topic: string): Promise<string> {
+    console.log(`🔍 Starting comprehensive search for: ${topic}`)
+    
+    // Use search and scrape with more results for comprehensive coverage
+    return this.performSearchAndScrape(`comprehensive analysis: ${topic}`, 8, 5)
+  }
+
+  private formatSearchAndScrapeResults(data: {
+    query: string;
+    searchResults: SearchResult[];
+    scrapedContent: Array<{url: string; title: string; content: string; error?: string}>;
+    totalResults: number;
+    creditsUsed: number;
+  }): string {
+    let output = `Search Results for "${data.query}":\n\n`
+
+    // Add search overview
+    output += `Found ${data.totalResults} results, scraped ${data.scrapedContent.length} pages for full content:\n\n`
+
+    // Add full scraped content
+    data.scrapedContent.forEach((content, index) => {
+      output += `## ${index + 1}. ${content.title}\n`
+      
+      if (content.error && content.error !== 'No content extracted') {
+        output += `⚠️ Scraping issue: ${content.error}\n`
+      }
+      
+      // Truncate very long content but keep more than before for better context
+      const contentText = content.content || 'No content available'
+      const summary = contentText.length > 800 
+        ? contentText.substring(0, 800) + '...\n\n[Content truncated - full article available at source]' 
+        : contentText
+      
+      output += `${summary}\n\n**Source:** ${content.url}\n\n`
+      output += `---\n\n`
+    })
+
+    // Add remaining search results that weren't scraped
+    const remainingResults = data.searchResults.slice(data.scrapedContent.length)
+    if (remainingResults.length > 0) {
+      output += `## Additional Search Results:\n\n`
+      remainingResults.forEach((result, index) => {
+        output += `${data.scrapedContent.length + index + 1}. **${result.title}**\n`
+        output += `   ${result.snippet}\n`
+        output += `   Link: ${result.link}\n\n`
       })
     }
 
-    // Add contact information if found
-    if (result.contacts.length > 0) {
-      output += `📞 Contact Information:\n`
-      result.contacts.forEach((contact) => {
-        output += `- ${contact.type}: ${contact.value} (from ${contact.source_url})\n`
-      })
-      output += '\n'
-    }
-
-    output += `\n💳 Credits used: ${result.credits_used} | Remaining: ${result.remaining_credits}`
-    output += `\n🔍 Powered by SearchHive`
+    output += `\n📊 Credits used: ~${data.creditsUsed} | Powered by SearchHive`
 
     return output
   }
 
-  private formatDeepDiveResults(result: DeepDiveResponse): string {
-    let output = `🔬 Deep Research on "${result.topic}":\n\n`
-
-    // Add AI summary if available
-    if (result.ai_summary) {
-      output += `📋 **Executive Summary:**\n${result.ai_summary}\n\n`
-    }
-
-    // Add key sources
-    if (result.search_results.length > 0) {
-      output += `📚 **Key Sources (${result.sources_analyzed} analyzed):**\n`
-      result.search_results.slice(0, 3).forEach((item, index) => {
-        output += `${index + 1}. **${item.title}**\n   ${item.snippet}\n   🔗 ${item.link}\n\n`
-      })
-    }
-
-    // Add detailed content from top sources
-    if (result.scraped_content.length > 0) {
-      output += `📖 **Detailed Findings:**\n\n`
-      result.scraped_content.slice(0, 3).forEach((content) => {
-        if (!content.error) {
-          const summary = content.text.length > 400 
-            ? content.text.substring(0, 400) + '...' 
-            : content.text
-          output += `**${content.title}**\n${summary}\n🔗 ${content.url}\n\n`
-        }
-      })
-    }
-
-    // Add social mentions if available
-    if (result.social_mentions && result.social_mentions.length > 0) {
-      output += `📱 **Social Media Insights:**\n`
-      result.social_mentions.forEach((mention) => {
-        output += `- ${mention.platform}: ${mention.mentions} mentions (${mention.sentiment} sentiment)\n`
-      })
-      output += '\n'
-    }
-
-    output += `\n💳 Credits used: ${result.credits_used} | Remaining: ${result.remaining_credits}`
-    output += `\n🔬 Research depth: ${result.research_depth}`
-    output += `\n🔍 Powered by SearchHive`
-
-    return output
-  }
 
   needsCurrentInfo(query: string): boolean {
     const currentInfoKeywords = [
@@ -308,8 +328,8 @@ export class SearchHiveService {
     return currentInfoKeywords.some(keyword => lowerQuery.includes(keyword))
   }
 
-  isResearchQuery(query: string): boolean {
-    const researchKeywords = [
+  isComprehensiveQuery(query: string): boolean {
+    const comprehensiveKeywords = [
       'research', 'study', 'analysis', 'report', 'survey', 'findings',
       'comprehensive', 'detailed', 'in-depth', 'thorough', 'complete',
       'how to', 'guide', 'tutorial', 'explain', 'understand',
@@ -318,7 +338,7 @@ export class SearchHiveService {
     ]
 
     const lowerQuery = query.toLowerCase()
-    return researchKeywords.some(keyword => lowerQuery.includes(keyword)) || query.length > 50
+    return comprehensiveKeywords.some(keyword => lowerQuery.includes(keyword)) || query.length > 50
   }
 }
 
