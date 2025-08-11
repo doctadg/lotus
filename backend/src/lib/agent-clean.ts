@@ -2,7 +2,7 @@ import { config } from 'dotenv'
 import path from 'path'
 import { ChatOpenAI } from '@langchain/openai'
 import { AgentExecutor, createToolCallingAgent } from 'langchain/agents'
-import { DynamicTool } from 'langchain/tools'
+import { DynamicTool } from '@langchain/core/tools'
 import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts'
 import agentConfig from '../../config/agent-prompts.json'
 

@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@langchain/core':
+        specifier: ^0.3.68
+        version: 0.3.68(openai@4.104.0(zod@3.25.76))
       '@langchain/openai':
         specifier: ^0.6.3
         version: 0.6.7(@langchain/core@0.3.68(openai@4.104.0(zod@3.25.76)))
