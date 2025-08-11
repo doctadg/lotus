@@ -135,3 +135,8 @@ android/app/release
 .claude/
 DEPLOYMENT.md
 VERCEL_ENV_SETUP.md
+
+# Test files that might contain secrets
+test-*.js
+backend/test-*.js
+**/test-*.js
