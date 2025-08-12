@@ -10,6 +10,7 @@ import agentConfig from '../../config/agent-prompts.json'
 import { searchHiveService } from './searchhive'
 import { getRelevantMemories, processMessageForMemories } from './memory-extractor'
 import { getUserWithMemories } from './auth'
+import { StreamingCallbackHandler, StreamingEvent } from './streaming-callback'
 
 config({ path: path.join(process.cwd(), '.env') })
 
@@ -32,7 +33,7 @@ const addTraceMetadata = (metadata: Record<string, any>) => {
 }
 
 // SearchHive web search and scrape tool for comprehensive information
-const webSearchTool = new DynamicTool({
+const createWebSearchTool = (eventCallback?: (event: any) => void) => new DynamicTool({
   name: 'web_search',
   description: 'Search the web and scrape top results for comprehensive, current information. Use this for recent events, current prices, latest news, product reviews, or any query requiring up-to-date information with full content.',
   func: traceable(async (query: string) => {
@@ -45,7 +46,7 @@ const webSearchTool = new DynamicTool({
       const maxResults = isComprehensive ? 8 : 5
       const scrapeCount = isComprehensive ? 5 : 3
       
-      const result = await searchHiveService.performSearchAndScrape(query, maxResults, scrapeCount)
+      const result = await searchHiveService.performSearchAndScrape(query, maxResults, scrapeCount, eventCallback)
       const duration = Date.now() - startTime
       
       console.log(`✅ [TRACE] Web Search completed in ${duration}ms, result length: ${result.length} chars`)
@@ -61,15 +62,17 @@ const webSearchTool = new DynamicTool({
   })
 })
 
+const webSearchTool = createWebSearchTool()
+
 // SearchHive comprehensive research tool for in-depth analysis
-const comprehensiveSearchTool = new DynamicTool({
+const createComprehensiveSearchTool = (eventCallback?: (event: any) => void) => new DynamicTool({
   name: 'comprehensive_search',
   description: 'Perform comprehensive web search with extensive scraping for in-depth research. Use this for complex topics requiring thorough investigation, detailed analysis, or when you need comprehensive understanding of a subject.',
   func: traceable(async (topic: string) => {
     try {
       console.log(`🔬 [TRACE] Comprehensive Search Tool called with topic: "${topic}"`)
       const startTime = Date.now()
-      const result = await searchHiveService.performComprehensiveSearch(topic)
+      const result = await searchHiveService.performComprehensiveSearch(topic, eventCallback)
       const duration = Date.now() - startTime
       
       console.log(`✅ [TRACE] Comprehensive Search completed in ${duration}ms, result length: ${result.length} chars`)
@@ -85,10 +88,13 @@ const comprehensiveSearchTool = new DynamicTool({
   })
 })
 
+const comprehensiveSearchTool = createComprehensiveSearchTool()
+
 class AIAgent {
   private llm: ChatOpenAI
   private streamingLLM: ChatOpenAI
   private agent: AgentExecutor | null = null
+  private streamingAgent: AgentExecutor | null = null
   private tools = [webSearchTool, comprehensiveSearchTool]
 
   constructor() {
@@ -164,6 +170,20 @@ class AIAgent {
       agent,
       tools: this.tools,
       verbose: process.env.NODE_ENV === 'development'
+    })
+
+    // Create streaming agent with callback handler
+    const streamingAgent = await createToolCallingAgent({
+      llm: this.streamingLLM,
+      tools: this.tools,
+      prompt
+    })
+
+    this.streamingAgent = new AgentExecutor({
+      agent: streamingAgent,
+      tools: this.tools,
+      verbose: process.env.NODE_ENV === 'development',
+      returnIntermediateSteps: true
     })
   }
 
@@ -319,6 +339,7 @@ class AIAgent {
     deepResearchMode: boolean = false
   ): AsyncGenerator<{ type: string; content?: string; metadata?: any }, void, unknown> {
     try {
+      console.log('🤖 [AGENT] Starting streamMessage for query:', message.substring(0, 100))
       // Initial thinking stream
       yield {
         type: 'thinking_stream',
@@ -483,148 +504,131 @@ class AIAgent {
       console.log(`🤖 [TRACE] Invoking agent with ${formattedHistory.length} history messages`)
       const agentStartTime = Date.now()
       
-      // Create a custom agent executor that exposes intermediate steps
-      if (!this.agent) {
+      // Initialize agents if needed
+      if (!this.streamingAgent) {
         await this.initializeAgent()
       }
       
-      // We'll handle tool event generation within the main loop after execution
-      // since we need to be in the generator context to yield events
+      // Create event queue for real-time streaming
+      const eventQueue: StreamingEvent[] = []
+      let eventQueueResolver: ((value: StreamingEvent | null) => void) | null = null
+      let agentExecutionComplete = false
       
-      // Execute agent and capture intermediate steps
-      const result = await this.agent!.invoke({
-        input: processedMessage,
-        chat_history: formattedHistory
+      // Create streaming callback handler
+      const callbackHandler = new StreamingCallbackHandler()
+      
+      // Create tools with search progress callbacks
+      const toolEventCallback = (event: any) => {
+        console.log('🔧 [TOOL] Search progress event:', event.type)
+        if (eventQueueResolver) {
+          eventQueueResolver(event)
+          eventQueueResolver = null
+        } else {
+          eventQueue.push(event)
+        }
+      }
+      
+      const streamingTools = [
+        createWebSearchTool(toolEventCallback),
+        createComprehensiveSearchTool(toolEventCallback)
+      ]
+      
+      // Set up callback to push events to queue
+      callbackHandler.setEventCallback((event: StreamingEvent) => {
+        console.log('📨 [STREAM] Received callback event:', event.type)
+        if (eventQueueResolver) {
+          // If there's a waiting consumer, resolve immediately
+          eventQueueResolver(event)
+          eventQueueResolver = null
+        } else {
+          // Otherwise queue the event
+          eventQueue.push(event)
+        }
+      })
+      
+      // Create a temporary streaming agent with custom tools for this request
+      const prompt = ChatPromptTemplate.fromMessages([
+        ['system', agentConfig.systemPrompt],
+        new MessagesPlaceholder('chat_history'),
+        ['human', '{input}'],
+        new MessagesPlaceholder('agent_scratchpad')
+      ])
+
+      const tempStreamingAgent = await createToolCallingAgent({
+        llm: this.streamingLLM,
+        tools: streamingTools,
+        prompt
       })
 
-      const agentDuration = Date.now() - agentStartTime
-      console.log(`⚡ [TRACE] Agent execution completed in ${agentDuration}ms`)
-      console.log(`🔧 [TRACE] Tools used: ${result.intermediateSteps?.length > 0 ? 'Yes' : 'No'} (${result.intermediateSteps?.length || 0} steps)`)
+      const tempAgentExecutor = new AgentExecutor({
+        agent: tempStreamingAgent,
+        tools: streamingTools,
+        verbose: process.env.NODE_ENV === 'development',
+        returnIntermediateSteps: true
+      })
 
-      // Process and yield intermediate steps if any
+      // Start agent execution in background
+      console.log('🤖 [AGENT] Starting async agent execution with callbacks')
+      const agentPromise = tempAgentExecutor.invoke({
+        input: processedMessage,
+        chat_history: formattedHistory,
+        callbacks: [callbackHandler]
+      }).then(result => {
+        console.log(`⚡ [TRACE] Agent execution completed in ${Date.now() - agentStartTime}ms`)
+        console.log(`🔧 [TRACE] Tools used: ${result.intermediateSteps?.length > 0 ? 'Yes' : 'No'} (${result.intermediateSteps?.length || 0} steps)`)
+        agentExecutionComplete = true
+        // Signal completion
+        if (eventQueueResolver) {
+          eventQueueResolver(null)
+        }
+        return result
+      }).catch(error => {
+        console.error('❌ [AGENT] Execution error:', error)
+        agentExecutionComplete = true
+        if (eventQueueResolver) {
+          eventQueueResolver(null)
+        }
+        throw error
+      })
+      
+      // Helper function to get next event from queue or wait for one
+      const getNextEvent = (): Promise<StreamingEvent | null> => {
+        return new Promise((resolve) => {
+          if (eventQueue.length > 0) {
+            resolve(eventQueue.shift()!)
+          } else if (agentExecutionComplete) {
+            resolve(null)
+          } else {
+            eventQueueResolver = resolve
+          }
+        })
+      }
+      
+      // Stream events in real-time while agent is executing
+      let event: StreamingEvent | null
+      while ((event = await getNextEvent()) !== null) {
+        console.log('🚀 [AGENT] Yielding real-time event:', event.type, event.metadata)
+        // Yield the event immediately
+        yield event
+        
+        // Add small delay to prevent overwhelming the stream
+        await new Promise(resolve => setTimeout(resolve, 10))
+      }
+      
+      // Wait for agent to complete and get result
+      const result = await agentPromise
+      
+      console.log('🤖 [AGENT] Agent execution complete, processing final result')
+      console.log('🤖 [AGENT] Result keys:', Object.keys(result))
+      console.log('🤖 [AGENT] Result output length:', result.output?.length || 0)
+
+      // The events have already been streamed in real-time via callbacks
+      // Just add final synthesis events if tools were used
       if (result.intermediateSteps && result.intermediateSteps.length > 0) {
-        // Agent decided to use tools
-        yield {
-          type: 'thinking_stream',
-          content: 'Determined that external information sources are needed to provide a comprehensive answer',
-          metadata: {
-            phase: 'tool_decision',
-            toolCount: result.intermediateSteps.length,
-            timestamp: Date.now()
-          }
-        }
-        
-        for (const [index, step] of result.intermediateSteps.entries()) {
-          // Extract tool information from the step
-          const action = step.action
-          const observation = step.observation
-          
-          if (action && action.tool) {
-            // Pre-tool thinking
-            yield {
-              type: 'thinking_stream',
-              content: `Planning to use ${action.tool} tool with query: "${action.toolInput?.substring(0, 100)}${(action.toolInput?.length || 0) > 100 ? '...' : ''}"`,
-              metadata: { phase: 'tool_planning', tool: action.tool, timestamp: Date.now() }
-            }
-            
-            yield {
-              type: 'search_planning',
-              content: `Preparing search strategy for: ${action.toolInput}`,
-              metadata: {
-                tool: action.tool,
-                query: action.toolInput,
-                strategy: action.tool === 'comprehensive_search' ? 'deep_research' : 'targeted_search',
-                timestamp: Date.now()
-              }
-            }
-            
-            // Start search event
-            yield {
-              type: 'search_start',
-              content: `Beginning ${action.tool} search`,
-              metadata: {
-                tool: action.tool,
-                query: action.toolInput,
-                phase: 'initializing',
-                timestamp: Date.now()
-              }
-            }
-            
-            // Enhanced tool call with detailed metadata
-            yield {
-              type: 'tool_call',
-              content: action.tool,
-              metadata: {
-                tool: action.tool,
-                status: 'executing',
-                description: `Executing ${action.tool} search`,
-                query: action.toolInput,
-                step: index + 1,
-                totalSteps: result.intermediateSteps.length,
-                timestamp: Date.now()
-              }
-            }
-            
-            // Search progress simulation
-            yield {
-              type: 'search_progress',
-              content: `Processing search results...`,
-              metadata: {
-                tool: action.tool,
-                phase: 'processing',
-                progress: 50,
-                timestamp: Date.now()
-              }
-            }
-            
-            // Search result analysis
-            yield {
-              type: 'search_result_analysis',
-              content: `Analyzing retrieved information quality and relevance`,
-              metadata: {
-                tool: action.tool,
-                resultSize: observation?.length || 0,
-                quality: (observation?.length || 0) > 1000 ? 'comprehensive' : (observation?.length || 0) > 500 ? 'moderate' : 'basic',
-                timestamp: Date.now()
-              }
-            }
-            
-            yield {
-              type: 'thinking_stream',
-              content: `Successfully gathered ${(observation?.length || 0) > 1000 ? 'comprehensive' : 'relevant'} information, now analyzing content for key insights...`,
-              metadata: { phase: 'result_processing', tool: action.tool, timestamp: Date.now() }
-            }
-            
-            // Enhanced tool result with analysis
-            yield {
-              type: 'tool_result',
-              content: `Analysis complete - retrieved ${(observation?.length || 0) > 1000 ? 'comprehensive' : 'targeted'} information`,
-              metadata: {
-                tool: action.tool,
-                step: index + 1,
-                status: 'complete',
-                result_size: observation?.length || 0,
-                quality_score: Math.min(100, Math.floor((observation?.length || 0) / 50)),
-                information_density: (observation?.length || 0) > 1000 ? 'high' : 'moderate',
-                timestamp: Date.now()
-              }
-            }
-            
-            // Inter-step processing
-            if (index < result.intermediateSteps.length - 1) {
-              yield {
-                type: 'thinking_stream',
-                content: 'Integrating information from multiple sources for comprehensive analysis...',
-                metadata: { phase: 'multi_source_integration', step: index + 1, timestamp: Date.now() }
-              }
-            }
-          }
-        }
-        
-        // Enhanced synthesis step
+        // Enhanced synthesis step (this happens after all tools complete)
         yield {
           type: 'context_synthesis',
-          content: 'Synthesizing information from all sources to create comprehensive response',
+          content: 'Synthesizing all gathered information to create comprehensive response',
           metadata: {
             sourcesUsed: result.intermediateSteps.length,
             totalInformation: result.intermediateSteps.reduce((acc: number, step: any) => acc + (step.observation?.length || 0), 0),
@@ -635,25 +639,19 @@ class AIAgent {
         
         yield {
           type: 'thinking_stream',
-          content: 'Crafting response structure and ensuring all key points are addressed...',
+          content: 'Crafting final response structure...',
           metadata: { phase: 'response_structuring', timestamp: Date.now() }
         }
       } else {
         // No tools used - agent is using its knowledge
         yield {
           type: 'thinking_stream',
-          content: 'Query can be answered using existing knowledge - no external research needed',
+          content: 'Query answered using existing knowledge',
           metadata: {
             phase: 'knowledge_based_response',
             reasoning: 'sufficient_internal_knowledge',
             timestamp: Date.now()
           }
-        }
-        
-        yield {
-          type: 'thinking_stream',
-          content: 'Structuring response based on internal knowledge and user context...',
-          metadata: { phase: 'internal_synthesis', timestamp: Date.now() }
         }
       }
       
@@ -670,27 +668,40 @@ class AIAgent {
       
       // Stream the response in chunks for smooth display
       const chunkSize = 20
-      const content = result.output
+      const content = result.output || ''
       
-      for (let i = 0; i < content.length; i += chunkSize) {
-        const chunk = content.slice(i, Math.min(i + chunkSize, content.length))
-        yield { 
-          type: 'content', 
-          content: chunk,
-          metadata: {
-            progress: Math.floor((i / content.length) * 100),
-            chunkIndex: Math.floor(i / chunkSize),
-            totalChunks: Math.ceil(content.length / chunkSize)
+      console.log('📝 [AGENT] Streaming response content, length:', content.length)
+      
+      if (content.length > 0) {
+        for (let i = 0; i < content.length; i += chunkSize) {
+          const chunk = content.slice(i, Math.min(i + chunkSize, content.length))
+          console.log(`📝 [AGENT] Streaming chunk ${Math.floor(i / chunkSize) + 1}/${Math.ceil(content.length / chunkSize)}:`, chunk.substring(0, 50))
+          yield { 
+            type: 'content', 
+            content: chunk,
+            metadata: {
+              progress: Math.floor((i / content.length) * 100),
+              chunkIndex: Math.floor(i / chunkSize),
+              totalChunks: Math.ceil(content.length / chunkSize)
+            }
+          }
+          
+          // Very small delay for smooth streaming
+          if (i < content.length - chunkSize) {
+            await new Promise(resolve => setTimeout(resolve, 5))
           }
         }
-        
-        // Very small delay for smooth streaming
-        if (i < content.length - chunkSize) {
-          await new Promise(resolve => setTimeout(resolve, 5))
+      } else {
+        console.error('❌ [AGENT] No content to stream! Result:', result)
+        yield {
+          type: 'content',
+          content: 'I apologize, but I encountered an issue generating a response. Please try again.',
+          metadata: { error: 'no_content' }
         }
       }
       
       // Enhanced completion with comprehensive metadata
+      const agentDuration = Date.now() - agentStartTime
       yield { 
         type: 'complete', 
         metadata: {

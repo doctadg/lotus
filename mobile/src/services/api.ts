@@ -4,7 +4,7 @@ import { ApiResponse, Chat, Message, User, SendMessageRequest, CreateChatRequest
 
 class ApiService {
   private api: AxiosInstance
-  private baseURL = 'http://192.168.1.42:3000/api' // Local development backend URL
+  private baseURL = process.env.EXPO_PUBLIC_API_URL || 'https://lotus-backend.vercel.app/api' // Deployed backend URL
 
   constructor() {
     this.api = axios.create({
@@ -134,8 +134,10 @@ class ApiService {
       throw new Error('No authentication token')
     }
 
-    console.log('Sending request to:', `${this.baseURL}/chat/${chatId}/stream`)
-    console.log('Request data:', data)
+    console.log('📡 [API] Starting SSE stream')
+    console.log('📡 [API] URL:', `${this.baseURL}/chat/${chatId}/stream`)
+    console.log('📡 [API] Request data:', data)
+    console.log('📡 [API] Deep research mode:', data.deepResearchMode)
     
     // Create an async generator that properly handles streaming
     const eventQueue: any[] = []
@@ -156,11 +158,17 @@ class ApiService {
     xhr.setRequestHeader('Cache-Control', 'no-cache')
     
     xhr.onreadystatechange = () => {
+      console.log('📡 [API] XHR state changed:', xhr.readyState, 'Status:', xhr.status)
+      
       if (xhr.readyState === 3 || xhr.readyState === 4) {
         // Get new data since last process
         const currentResponse = xhr.responseText
         const newData = currentResponse.substring(lastProcessedIndex)
         lastProcessedIndex = currentResponse.length
+        
+        if (newData.length > 0) {
+          console.log('📡 [API] New data received:', newData.length, 'bytes')
+        }
         
         // Add new data to buffer
         buffer += newData
@@ -178,7 +186,12 @@ class ApiService {
             if (data) {
               try {
                 const eventData = JSON.parse(data)
-                console.log('Parsed event:', eventData.type)
+                console.log('📱 [MOBILE] SSE Event received:', {
+                  type: eventData.type,
+                  hasData: !!eventData.data,
+                  dataContent: eventData.data?.content ? eventData.data.content.substring(0, 50) + '...' : 'no content',
+                  metadata: eventData.data?.metadata
+                })
                 
                 if (resolveNext) {
                   resolveNext(eventData)
@@ -253,7 +266,9 @@ class ApiService {
     }
     
     // Send the request
+    console.log('📡 [API] Sending XHR request with body:', JSON.stringify(data))
     xhr.send(JSON.stringify(data))
+    console.log('📡 [API] XHR request sent')
     
     // Yield events as they arrive
     while (!done || eventQueue.length > 0) {

@@ -122,6 +122,8 @@ async function processAIResponse(
     let fullResponse = ''
 
     // Stream the AI response with enhanced phases
+    console.log('📤 [STREAM] Starting to stream AI response')
+    let eventCount = 0
     for await (const event of aiAgent.streamMessage(
       content, // Use original content, not processed
       chatHistory.map(msg => ({
@@ -131,6 +133,8 @@ async function processAIResponse(
       userId,
       deepResearchMode
     )) {
+      eventCount++
+      console.log(`📬 [STREAM] Processing event #${eventCount}:`, event.type, event.metadata?.phase || '')
       switch (event.type) {
         case 'thinking_stream':
           // Send continuous thinking updates
@@ -198,6 +202,28 @@ async function processAIResponse(
           })}\n\n`))
           break
           
+        case 'search_detailed':
+          // Send detailed search events
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'search_detailed',
+            data: {
+              content: event.content,
+              metadata: event.metadata
+            }
+          })}\n\n`))
+          break
+          
+        case 'website_scraping':
+          // Send website scraping events
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'website_scraping',
+            data: {
+              content: event.content,
+              metadata: event.metadata
+            }
+          })}\n\n`))
+          break
+          
         case 'search_result_analysis':
           // Send search result analysis
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({
@@ -240,10 +266,20 @@ async function processAIResponse(
               metadata: event.metadata
             }
           })}\n\n`))
+          
+          // Also send as thinking_stream for better UI display
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'thinking_stream',
+            data: {
+              content: event.content,
+              metadata: event.metadata || { phase: 'agent_reasoning' }
+            }
+          })}\n\n`))
           break
           
         case 'tool_call':
           // Send enhanced tool call notification
+          console.log('📡 [STREAM] Sending tool_call event:', event.content, event.metadata)
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({
             type: 'tool_call',
             data: { 

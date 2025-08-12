@@ -863,7 +863,7 @@ function ChatPageContent() {
                       />
                         </div>
                       </div>
-                    </div>
+                      </div>
                     )}
                   </React.Fragment>
                 )

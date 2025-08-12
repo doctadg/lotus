@@ -160,11 +160,20 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
       let streamingContent = ''
       let localAgentSteps: AgentStep[] = []
 
+      console.log('🚀 [CHAT] Starting message stream for:', messageText)
+      let streamEventCount = 0
+      
       for await (const event of apiService.sendMessageStream(currentChatId, {
         content: messageText,
         deepResearchMode
       })) {
-        console.log('Received event:', event.type, event.data)
+        streamEventCount++
+        console.log(`🔥 [CHAT] Event #${streamEventCount}:`, {
+          type: event.type,
+          hasData: !!event.data,
+          dataKeys: event.data ? Object.keys(event.data) : [],
+          content: event.data?.content ? event.data.content.substring(0, 50) + '...' : undefined
+        })
         switch (event.type) {
           case 'user_message':
             // Replace temporary user message with real one from backend
@@ -176,6 +185,12 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
             break
             
           case 'thinking_stream':
+            console.log('💭 [CHAT] Thinking stream event:', {
+              content: event.data?.content,
+              phase: event.data?.metadata?.phase,
+              metadata: event.data?.metadata
+            })
+            
             // Batch thinking steps for better performance
             const thinkingStep = {
               id: `thinking-${Date.now()}-${Math.random()}`,
@@ -187,6 +202,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
             }
             
             thinkingBatchRef.current.push(thinkingStep)
+            console.log('💭 [CHAT] Added to batch, current batch size:', thinkingBatchRef.current.length)
             
             // Clear existing timeout
             if (thinkingBatchTimeout.current) {
@@ -196,7 +212,12 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
             // Set new timeout to batch updates
             thinkingBatchTimeout.current = setTimeout(() => {
               if (thinkingBatchRef.current.length > 0) {
-                setThinkingSteps(prev => [...prev, ...thinkingBatchRef.current])
+                console.log('💭 [CHAT] Flushing batch of', thinkingBatchRef.current.length, 'thinking steps')
+                setThinkingSteps(prev => {
+                  const newSteps = [...prev, ...thinkingBatchRef.current]
+                  console.log('💭 [CHAT] Total thinking steps now:', newSteps.length)
+                  return newSteps
+                })
                 thinkingBatchRef.current = []
               }
             }, 50) // 50ms batching for thinking steps
@@ -603,6 +624,19 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
       index === messages.length - 1 && 
       (currentTools.length > 0 || agentSteps.length > 0 || thinkingSteps.length > 0)
     
+    if (isCurrentAIMessage) {
+      console.log('🎯 [CHAT] Current AI message state:', {
+        thinkingSteps: thinkingSteps.length,
+        searchSteps: searchSteps.length,
+        agentSteps: agentSteps.length,
+        currentTools: currentTools.length,
+        showThinkingStream,
+        showSearchProgress,
+        agentComplete,
+        messageIndex: index
+      })
+    }
+    
     return (
       <>
         {/* Show enhanced agent status before the AI message if it's the current one */}
@@ -610,14 +644,17 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
           <>
             {/* Thinking Stream - shown during active processing */}
             {showThinkingStream && thinkingSteps.length > 0 && !agentComplete && (
-              <ThinkingStreamComponent
-                steps={thinkingSteps}
-                isActive={!agentComplete}
-                maxHeight={200}
-                autoScroll={true}
-                showTimestamps={false}
-                collapsible={true}
-              />
+              <>
+                {console.log('🎨 [CHAT] Rendering ThinkingStreamComponent with', thinkingSteps.length, 'steps')}
+                <ThinkingStreamComponent
+                  steps={thinkingSteps}
+                  isActive={!agentComplete}
+                  maxHeight={200}
+                  autoScroll={true}
+                  showTimestamps={false}
+                  collapsible={true}
+                />
+              </>
             )}
             
             {/* Search Progress - shown during search operations */}

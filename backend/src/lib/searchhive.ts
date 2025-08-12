@@ -184,9 +184,22 @@ export class SearchHiveService {
     this.client = new SearchHiveClient()
   }
 
-  async performSearchAndScrape(query: string, maxResults = 5, scrapeTop = 3): Promise<string> {
+  async performSearchAndScrape(
+    query: string, 
+    maxResults = 5, 
+    scrapeTop = 3, 
+    progressCallback?: (event: { type: string; content: string; metadata?: any }) => void
+  ): Promise<string> {
     try {
       console.log(`🔍 Searching for: ${query}`)
+      
+      // Emit search initiation
+      console.log('🔄 [SEARCHHIVE] Emitting search_detailed event: search_start')
+      progressCallback?.({
+        type: 'search_detailed',
+        content: `Searching Google for: "${query}"`,
+        metadata: { phase: 'search_start', query, maxResults, scrapeTop }
+      })
       
       // First, do a basic search without auto-scraping
       const searchResult = await this.client.swiftSearch({
@@ -198,18 +211,51 @@ export class SearchHiveService {
       })
 
       if (!searchResult.search_results || searchResult.search_results.length === 0) {
+        progressCallback?.({
+          type: 'search_detailed',
+          content: 'No search results found',
+          metadata: { phase: 'search_failed', query }
+        })
         return `No search results found for: ${query}`
       }
 
       console.log(`📄 Found ${searchResult.search_results.length} results, scraping top ${Math.min(scrapeTop, searchResult.search_results.length)}...`)
       
+      // Emit results found
+      progressCallback?.({
+        type: 'search_detailed',
+        content: `Found ${searchResult.search_results.length} results, extracting content from top ${Math.min(scrapeTop, searchResult.search_results.length)} websites`,
+        metadata: { 
+          phase: 'results_found', 
+          totalResults: searchResult.search_results.length,
+          willScrape: Math.min(scrapeTop, searchResult.search_results.length),
+          websites: searchResult.search_results.slice(0, scrapeTop).map(r => ({ title: r.title, url: r.link }))
+        }
+      })
+      
       // Scrape the top results for full content
       const scrapedContent: Array<{url: string; title: string; content: string; error?: string}> = []
       const urlsToScrape = searchResult.search_results.slice(0, scrapeTop)
       
-      for (const result of urlsToScrape) {
+      for (const [index, result] of urlsToScrape.entries()) {
         try {
           console.log(`🌐 Scraping: ${result.link}`)
+          
+          // Emit start scraping this specific site
+          console.log('🔄 [SEARCHHIVE] Emitting website_scraping event: scraping_start', result.link)
+          progressCallback?.({
+            type: 'website_scraping',
+            content: `Extracting content from ${new URL(result.link).hostname}`,
+            metadata: { 
+              phase: 'scraping_start',
+              url: result.link,
+              title: result.title,
+              siteIndex: index + 1,
+              totalSites: urlsToScrape.length
+            }
+          })
+          
+          const scrapeStartTime = Date.now()
           const scrapeResult = await this.client.scrapeForge({
             url: result.link,
             render_js: false, // Start with basic scraping
@@ -218,13 +264,32 @@ export class SearchHiveService {
             extract_images: false
           })
           
+          const scrapeDuration = Date.now() - scrapeStartTime
+          
           if (scrapeResult.success && scrapeResult.primary_content) {
             const content = scrapeResult.primary_content
+            const extractedText = content.text || content.text_content || 'No content extracted'
+            
             scrapedContent.push({
               url: result.link,
               title: content.title || result.title,
-              content: content.text || content.text_content || 'No content extracted',
+              content: extractedText,
               error: content.error || undefined
+            })
+            
+            // Emit successful scraping
+            progressCallback?.({
+              type: 'website_scraping',
+              content: `✅ ${new URL(result.link).hostname} - ${(extractedText.length / 1000).toFixed(1)}k characters extracted`,
+              metadata: { 
+                phase: 'scraping_success',
+                url: result.link,
+                title: content.title || result.title,
+                contentLength: extractedText.length,
+                duration: scrapeDuration,
+                siteIndex: index + 1,
+                totalSites: urlsToScrape.length
+              }
             })
           } else {
             scrapedContent.push({
@@ -233,9 +298,39 @@ export class SearchHiveService {
               content: result.snippet,
               error: 'Failed to scrape full content'
             })
+            
+            // Emit scraping failure
+            progressCallback?.({
+              type: 'website_scraping',
+              content: `⚠️ ${new URL(result.link).hostname} - using search snippet only`,
+              metadata: { 
+                phase: 'scraping_fallback',
+                url: result.link,
+                title: result.title,
+                duration: scrapeDuration,
+                siteIndex: index + 1,
+                totalSites: urlsToScrape.length,
+                reason: 'Could not extract full content'
+              }
+            })
           }
         } catch (scrapeError) {
           console.error(`Error scraping ${result.link}:`, scrapeError)
+          
+          // Emit scraping error
+          progressCallback?.({
+            type: 'website_scraping',
+            content: `❌ ${new URL(result.link).hostname} - scraping failed`,
+            metadata: { 
+              phase: 'scraping_error',
+              url: result.link,
+              title: result.title,
+              siteIndex: index + 1,
+              totalSites: urlsToScrape.length,
+              error: scrapeError instanceof Error ? scrapeError.message : 'Unknown error'
+            }
+          })
+          
           scrapedContent.push({
             url: result.link,
             title: result.title,
@@ -247,6 +342,18 @@ export class SearchHiveService {
         // Small delay between scrapes to be respectful
         await new Promise(resolve => setTimeout(resolve, 500))
       }
+
+      // Emit completion event
+      progressCallback?.({
+        type: 'search_detailed',
+        content: `Search completed - extracted ${scrapedContent.length} sources`,
+        metadata: { 
+          phase: 'search_complete',
+          totalSources: scrapedContent.length,
+          successfulScrapes: scrapedContent.filter(c => !c.error || c.error === 'No content extracted').length,
+          failedScrapes: scrapedContent.filter(c => c.error && c.error !== 'No content extracted').length
+        }
+      })
 
       return this.formatSearchAndScrapeResults({
         query,
@@ -261,11 +368,14 @@ export class SearchHiveService {
     }
   }
 
-  async performComprehensiveSearch(topic: string): Promise<string> {
+  async performComprehensiveSearch(
+    topic: string,
+    progressCallback?: (event: { type: string; content: string; metadata?: any }) => void
+  ): Promise<string> {
     console.log(`🔍 Starting comprehensive search for: ${topic}`)
     
     // Use search and scrape with more results for comprehensive coverage
-    return this.performSearchAndScrape(`comprehensive analysis: ${topic}`, 8, 5)
+    return this.performSearchAndScrape(`comprehensive analysis: ${topic}`, 8, 5, progressCallback)
   }
 
   private formatSearchAndScrapeResults(data: {
