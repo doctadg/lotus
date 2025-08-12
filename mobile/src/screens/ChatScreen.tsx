@@ -27,7 +27,7 @@ import { SearchProgressCard } from '../components/SearchProgressCard'
 import { ThinkingStreamComponent } from '../components/ThinkingStreamComponent'
 import { apiService } from '../services/api'
 import { Message, Chat } from '../types'
-import { Microscope } from 'lucide-react-native'
+import { Search, Sparkles, Send, Menu, X, MessageCircle, Trash2 } from 'lucide-react-native'
 
 interface ChatScreenProps {
   chatId: string | null
@@ -42,7 +42,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
   const [isSending, setIsSending] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
   const [chat, setChat] = useState<Chat | null>(null)
-  const [deepResearchMode, setDeepResearchMode] = useState(false)
+  const [searchMode, setSearchMode] = useState<'simple' | 'deep'>('simple')
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([])
   const [currentTools, setCurrentTools] = useState<Array<{ tool: ToolType; status: ToolStatus; phase?: ToolPhase; progress?: number; url?: string; quality?: string; resultSize?: number; duration?: number }>>([])
   const [thinkingSteps, setThinkingSteps] = useState<Array<{ id: string; type: 'thinking_stream' | 'memory_access' | 'context_analysis' | 'search_planning' | 'search_result_analysis' | 'context_synthesis' | 'response_planning'; content: string; phase?: string; timestamp: number; metadata?: any }>>([])
@@ -160,15 +160,15 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
       let streamingContent = ''
       let localAgentSteps: AgentStep[] = []
 
-      console.log('🚀 [CHAT] Starting message stream for:', messageText)
+      console.log('[CHAT] Starting message stream for:', messageText)
       let streamEventCount = 0
       
       for await (const event of apiService.sendMessageStream(currentChatId, {
         content: messageText,
-        deepResearchMode
+        deepResearchMode: searchMode === 'deep'
       })) {
         streamEventCount++
-        console.log(`🔥 [CHAT] Event #${streamEventCount}:`, {
+        console.log(`[CHAT] Event #${streamEventCount}:`, {
           type: event.type,
           hasData: !!event.data,
           dataKeys: event.data ? Object.keys(event.data) : [],
@@ -185,7 +185,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
             break
             
           case 'thinking_stream':
-            console.log('💭 [CHAT] Thinking stream event:', {
+            console.log('[CHAT] Thinking stream event:', {
               content: event.data?.content,
               phase: event.data?.metadata?.phase,
               metadata: event.data?.metadata
@@ -202,7 +202,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
             }
             
             thinkingBatchRef.current.push(thinkingStep)
-            console.log('💭 [CHAT] Added to batch, current batch size:', thinkingBatchRef.current.length)
+            console.log('[CHAT] Added to batch, current batch size:', thinkingBatchRef.current.length)
             
             // Clear existing timeout
             if (thinkingBatchTimeout.current) {
@@ -212,10 +212,10 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
             // Set new timeout to batch updates
             thinkingBatchTimeout.current = setTimeout(() => {
               if (thinkingBatchRef.current.length > 0) {
-                console.log('💭 [CHAT] Flushing batch of', thinkingBatchRef.current.length, 'thinking steps')
+                console.log('[CHAT] Flushing batch of', thinkingBatchRef.current.length, 'thinking steps')
                 setThinkingSteps(prev => {
                   const newSteps = [...prev, ...thinkingBatchRef.current]
-                  console.log('💭 [CHAT] Total thinking steps now:', newSteps.length)
+                  console.log('[CHAT] Total thinking steps now:', newSteps.length)
                   return newSteps
                 })
                 thinkingBatchRef.current = []
@@ -625,7 +625,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
       (currentTools.length > 0 || agentSteps.length > 0 || thinkingSteps.length > 0)
     
     if (isCurrentAIMessage) {
-      console.log('🎯 [CHAT] Current AI message state:', {
+      console.log('[CHAT] Current AI message state:', {
         thinkingSteps: thinkingSteps.length,
         searchSteps: searchSteps.length,
         agentSteps: agentSteps.length,
@@ -645,7 +645,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
             {/* Thinking Stream - shown during active processing */}
             {showThinkingStream && thinkingSteps.length > 0 && !agentComplete && (
               <>
-                {console.log('🎨 [CHAT] Rendering ThinkingStreamComponent with', thinkingSteps.length, 'steps')}
+                {console.log('[CHAT] Rendering ThinkingStreamComponent with', thinkingSteps.length, 'steps')}
                 <ThinkingStreamComponent
                   steps={thinkingSteps}
                   isActive={!agentComplete}
@@ -750,27 +750,38 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
 
         {/* Input Area */}
         <View style={styles.inputArea}>
-          {/* Deep Research Toggle */}
+          {/* Search Mode Toggle */}
           <View style={styles.toggleContainer}>
-            <TouchableOpacity
-              style={[
-                styles.deepResearchButton,
-                deepResearchMode && styles.deepResearchButtonActive
-              ]}
-              onPress={() => setDeepResearchMode(!deepResearchMode)}
-            >
-              <Microscope 
-                size={14} 
-                color={deepResearchMode ? '#1d4ed8' : '#6b7280'} 
-                style={{ marginRight: 6 }}
-              />
-              <Text style={[
-                styles.deepResearchText,
-                deepResearchMode && styles.deepResearchTextActive
-              ]}>
-                Deep Research
-              </Text>
-            </TouchableOpacity>
+            <View style={styles.searchModeToggle}>
+              <TouchableOpacity
+                style={[
+                  styles.modeButton,
+                  searchMode === 'simple' && styles.modeButtonActive
+                ]}
+                onPress={() => setSearchMode('simple')}
+              >
+                <View style={styles.modeButtonContent}>
+                  <Search size={12} color={searchMode === 'simple' ? '#3b82f6' : '#6b7280'} />
+                  <Text style={[styles.modeButtonText, searchMode === 'simple' && styles.modeButtonTextActive]}>
+                    Quick
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modeButton,
+                  searchMode === 'deep' && styles.modeButtonActive
+                ]}
+                onPress={() => setSearchMode('deep')}
+              >
+                <View style={styles.modeButtonContent}>
+                  <Sparkles size={12} color={searchMode === 'deep' ? '#8b5cf6' : '#6b7280'} />
+                  <Text style={[styles.modeButtonText, searchMode === 'deep' && styles.modeButtonTextActive]}>
+                    Deep
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
           </View>
           
           <View style={styles.inputContainer}>
@@ -791,7 +802,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
               <TouchableOpacity
                 style={[
                   styles.sendButton,
-                  deepResearchMode && styles.sendButtonResearch,
+                  searchMode === 'deep' && styles.sendButtonResearch,
                   (!inputText.trim() || isSending) && styles.sendButtonDisabled
                 ]}
                 onPress={sendMessage}
@@ -800,7 +811,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
                 {isSending ? (
                   <ActivityIndicator size="small" color="white" />
                 ) : (
-                  <Text style={styles.sendIcon}>→</Text>
+                  <Send size={16} color="white" />
                 )}
               </TouchableOpacity>
             </Animated.View>
@@ -814,7 +825,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, onMenuPress, onC
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'white'
+    backgroundColor: '#000000'
   },
   header: {
     flexDirection: 'row',
@@ -822,7 +833,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb'
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)'
   },
   menuButton: {
     padding: 8,
@@ -842,7 +854,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: '600',
-    color: '#374151',
+    color: '#ffffff',
     textAlign: 'center'
   },
   headerSpacer: {
@@ -862,13 +874,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 32,
-    fontWeight: '600',
-    color: '#374151',
+    fontWeight: '300',
+    color: '#ffffff',
     marginBottom: 8
   },
   emptySubtitle: {
     fontSize: 16,
-    color: '#6b7280',
+    color: 'rgba(255, 255, 255, 0.6)',
     textAlign: 'center'
   },
   messagesList: {
@@ -890,6 +902,41 @@ const styles = StyleSheet.create({
   toggleContainer: {
     marginBottom: 8,
     alignItems: 'flex-start'
+  },
+  searchModeToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 20,
+    padding: 3,
+    gap: 4
+  },
+  modeButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: 'transparent'
+  },
+  modeButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6
+  },
+  modeButtonActive: {
+    backgroundColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2
+  },
+  modeButtonText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#6b7280'
+  },
+  modeButtonTextActive: {
+    color: '#3b82f6',
+    fontWeight: '600'
   },
   deepResearchButton: {
     flexDirection: 'row',
@@ -915,10 +962,12 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
   inputContainer: {
-    backgroundColor: '#f9fafb',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 25,
     paddingHorizontal: 4,
-    paddingVertical: 4
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)'
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -930,7 +979,7 @@ const styles = StyleSheet.create({
   textInput: {
     flex: 1,
     fontSize: 16,
-    color: '#374151',
+    color: '#ffffff',
     marginRight: 12,
     paddingTop: 0,
     paddingBottom: 0,
@@ -942,15 +991,15 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#10a37f',
+    backgroundColor: '#3b82f6',
     justifyContent: 'center',
     alignItems: 'center'
   },
   sendButtonResearch: {
-    backgroundColor: '#3b82f6'
+    backgroundColor: '#8b5cf6'
   },
   sendButtonDisabled: {
-    backgroundColor: '#d1d5db'
+    backgroundColor: 'rgba(255, 255, 255, 0.2)'
   },
   sendIcon: {
     color: 'white',

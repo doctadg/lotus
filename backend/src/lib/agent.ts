@@ -8,6 +8,8 @@ import { traceable } from 'langsmith/traceable'
 import { Client } from 'langsmith'
 import agentConfig from '../../config/agent-prompts.json'
 import { searchHiveService } from './searchhive'
+import { intelligentSearch } from './intelligent-search'
+import { adaptiveMemory } from './adaptive-memory'
 import { getRelevantMemories, processMessageForMemories } from './memory-extractor'
 import { getUserWithMemories } from './auth'
 import { StreamingCallbackHandler, StreamingEvent } from './streaming-callback'
@@ -32,59 +34,75 @@ const addTraceMetadata = (metadata: Record<string, any>) => {
   }
 }
 
-// SearchHive web search and scrape tool for comprehensive information
+// Intelligent web search tool with query classification and caching
 const createWebSearchTool = (eventCallback?: (event: any) => void) => new DynamicTool({
   name: 'web_search',
-  description: 'Search the web and scrape top results for comprehensive, current information. Use this for recent events, current prices, latest news, product reviews, or any query requiring up-to-date information with full content.',
+  description: 'Intelligently search the web with automatic query analysis, caching, and optimized search strategies. Uses ML-driven query classification to determine optimal search depth and sources needed.',
   func: traceable(async (query: string) => {
     try {
-      console.log(`🔍 [TRACE] Web Search Tool called with query: "${query}"`)
+      console.log(`🧠 [TRACE] Intelligent Web Search called with query: "${query}"`)
       const startTime = Date.now()
       
-      // Determine if this needs comprehensive coverage
-      const isComprehensive = searchHiveService.isComprehensiveQuery(query)
-      const maxResults = isComprehensive ? 8 : 5
-      const scrapeCount = isComprehensive ? 5 : 3
+      // Use intelligent search system
+      const searchResult = await intelligentSearch.search(query, {
+        progressCallback: eventCallback
+      })
       
-      const result = await searchHiveService.performSearchAndScrape(query, maxResults, scrapeCount, eventCallback)
       const duration = Date.now() - startTime
       
-      console.log(`✅ [TRACE] Web Search completed in ${duration}ms, result length: ${result.length} chars`)
-      return result
+      console.log(`✅ [TRACE] Intelligent Search completed in ${duration}ms`, {
+        fromCache: searchResult.fromCache,
+        searchExecuted: searchResult.searchStrategy.executed,
+        intensity: searchResult.searchStrategy.analysis.searchIntensity,
+        sources: searchResult.searchStrategy.actualSources,
+        resultLength: searchResult.content.length
+      })
+      
+      return searchResult.content
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      console.error(`❌ [TRACE] Web Search failed: ${errorMessage}`)
-      return `Error performing web search: ${errorMessage}`
+      console.error(`❌ [TRACE] Intelligent Web Search failed: ${errorMessage}`)
+      return `Error performing intelligent web search: ${errorMessage}`
     }
   }, { 
-    name: "web_search_tool",
-    ...addTraceMetadata({ tool_type: "web_search", search_type: "search_and_scrape" })
+    name: "intelligent_web_search_tool",
+    ...addTraceMetadata({ tool_type: "intelligent_search", search_type: "adaptive" })
   })
 })
 
 const webSearchTool = createWebSearchTool()
 
-// SearchHive comprehensive research tool for in-depth analysis
+// Progressive comprehensive research tool with quality assessment
 const createComprehensiveSearchTool = (eventCallback?: (event: any) => void) => new DynamicTool({
   name: 'comprehensive_search',
-  description: 'Perform comprehensive web search with extensive scraping for in-depth research. Use this for complex topics requiring thorough investigation, detailed analysis, or when you need comprehensive understanding of a subject.',
+  description: 'Perform progressive comprehensive research with quality assessment. Starts with moderate search and escalates to deep research if needed. Automatically determines optimal search strategy.',
   func: traceable(async (topic: string) => {
     try {
-      console.log(`🔬 [TRACE] Comprehensive Search Tool called with topic: "${topic}"`)
+      console.log(`🔬 [TRACE] Progressive Search Tool called with topic: "${topic}"`)
       const startTime = Date.now()
-      const result = await searchHiveService.performComprehensiveSearch(topic, eventCallback)
+      
+      // Use progressive search strategy
+      const searchResult = await intelligentSearch.progressiveSearch(topic, {
+        progressCallback: eventCallback
+      }, 0.7) // Quality threshold of 70%
+      
       const duration = Date.now() - startTime
       
-      console.log(`✅ [TRACE] Comprehensive Search completed in ${duration}ms, result length: ${result.length} chars`)
-      return result
+      console.log(`✅ [TRACE] Progressive Search completed in ${duration}ms`, {
+        intensity: searchResult.searchStrategy.analysis.searchIntensity,
+        sources: searchResult.searchStrategy.actualSources,
+        resultLength: searchResult.content.length
+      })
+      
+      return searchResult.content
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      console.error(`❌ [TRACE] Comprehensive Search failed: ${errorMessage}`)
-      return `Error performing comprehensive search: ${errorMessage}`
+      console.error(`❌ [TRACE] Progressive Search failed: ${errorMessage}`)
+      return `Error performing progressive search: ${errorMessage}`
     }
   }, { 
-    name: "comprehensive_search_tool",
-    ...addTraceMetadata({ tool_type: "web_search", search_type: "comprehensive" })
+    name: "progressive_search_tool",
+    ...addTraceMetadata({ tool_type: "intelligent_search", search_type: "progressive" })
   })
 })
 
@@ -169,7 +187,8 @@ class AIAgent {
     this.agent = new AgentExecutor({
       agent,
       tools: this.tools,
-      verbose: process.env.NODE_ENV === 'development'
+      verbose: process.env.NODE_ENV === 'development',
+      maxIterations: 75
     })
 
     // Create streaming agent with callback handler
@@ -183,7 +202,8 @@ class AIAgent {
       agent: streamingAgent,
       tools: this.tools,
       verbose: process.env.NODE_ENV === 'development',
-      returnIntermediateSteps: true
+      returnIntermediateSteps: true,
+      maxIterations: 75
     })
   }
 
@@ -201,62 +221,64 @@ class AIAgent {
     }
 
     try {
-      // Get user memories if userId is provided
+      // Parallel operations: analyze query while retrieving memories
+      const parallelStartTime = Date.now()
       let userMemoriesContext = ''
-      let userProfile: any = null
+      let memoryResult: any = null
+      
+      // Run query analysis and memory retrieval in parallel if userId is provided
+      const operations = []
       
       if (userId) {
-        try {
-          console.log(`🧠 [TRACE] Retrieving memories for user: ${userId}`)
-          const memoryStartTime = Date.now()
-          
-          // Get relevant memories for this query
-          const relevantMemories = await getRelevantMemories(userId, message, 5)
-          console.log(`📚 [TRACE] Found ${relevantMemories.length} relevant memories`)
-          
-          // Get user profile with context
-          userProfile = await getUserWithMemories(userId)
-          console.log(`👤 [TRACE] User profile loaded with ${userProfile?.memories?.length || 0} total memories`)
-          
-          const memoryDuration = Date.now() - memoryStartTime
-          console.log(`⏱️ [TRACE] Memory retrieval completed in ${memoryDuration}ms`)
-          
-          if (relevantMemories.length > 0 || (userProfile?.memories?.length && userProfile.memories.length > 0)) {
-            userMemoriesContext = '\n\n=== USER CONTEXT & MEMORIES ===\n'
-            
-            if (userProfile?.contexts?.[0]) {
-              const context = userProfile.contexts[0]
-              userMemoriesContext += `Communication Style: ${context.communicationStyle || 'Not specified'}\n`
-              userMemoriesContext += `Preferred Response Style: ${context.preferredResponseStyle || 'Not specified'}\n`
-              if (context.topicsOfInterest?.length > 0) {
-                userMemoriesContext += `Topics of Interest: ${context.topicsOfInterest.join(', ')}\n`
-              }
-              if (context.expertiseAreas?.length > 0) {
-                userMemoriesContext += `Expertise Areas: ${context.expertiseAreas.join(', ')}\n`
-              }
-            }
-            
-            if (relevantMemories.length > 0) {
-              userMemoriesContext += '\nRelevant User Memories:\n'
-              relevantMemories.forEach(memory => {
-                userMemoriesContext += `- ${memory.key}: ${memory.value} (confidence: ${(memory.confidence * 100).toFixed(0)}%)\n`
-              })
-            }
-            
-            if (userProfile?.memories?.length > 0) {
-              userMemoriesContext += '\nOther User Preferences:\n'
-              userProfile.memories.slice(0, 3).forEach((memory: any) => {
-                userMemoriesContext += `- ${memory.key}: ${memory.value}\n`
-              })
-            }
-            
-            userMemoriesContext += '\nPlease use this context to personalize your response appropriately.\n=== END USER CONTEXT ===\n\n'
-          }
-        } catch (memoryError) {
-          console.error('❌ [TRACE] Error fetching user memories:', memoryError)
-          // Continue without memories if there's an error
-        }
+        console.log(`🧠 [TRACE] Starting parallel memory retrieval for user: ${userId}`)
+        operations.push(
+          adaptiveMemory.retrieveAdaptiveMemories(userId, message)
+            .then(result => ({ type: 'memory', data: result }))
+            .catch(error => {
+              console.error('❌ [TRACE] Memory retrieval error:', error)
+              return { type: 'memory', data: null, error }
+            })
+        )
       }
+      
+      // Execute parallel operations
+      const results = await Promise.all(operations)
+      const parallelDuration = Date.now() - parallelStartTime
+      
+      // Process memory results
+      const memoryOperation = results.find(r => r.type === 'memory')
+      if (memoryOperation?.data) {
+        memoryResult = memoryOperation.data
+        console.log(`📚 [TRACE] Adaptive memory retrieval completed:`, {
+          memoryCount: memoryResult.memories.length,
+          strategy: memoryResult.strategy.reasoning,
+          retrievalTime: memoryResult.performance.retrievalTime,
+          totalAvailable: memoryResult.metadata.totalAvailableMemories
+        })
+        
+        // Only add personalization context if we have meaningful memories
+        if (memoryResult.memories.length > 0) {
+          userMemoriesContext = '\n\n=== USER CONTEXT ===\n'
+          
+          // Add only highly relevant memories
+          userMemoriesContext += `Relevant Information:\n`
+          memoryResult.memories.forEach((memory: any) => {
+            // Only include high-relevance memories
+            if (!memory.relevanceScore || memory.relevanceScore > 0.7) {
+              userMemoriesContext += `- ${memory.key}: ${memory.value}\n`
+            }
+          })
+          
+          userMemoriesContext += '\nUse this context naturally where relevant.\n=== END CONTEXT ===\n\n'
+        } else if (memoryResult.context?.communicationStyle) {
+          // For greetings or minimal personalization, only add style preference
+          userMemoriesContext = `\n[User prefers ${memoryResult.context.communicationStyle} communication]\n`
+        }
+      } else if (userId) {
+        console.log(`📭 [TRACE] No memories retrieved or retrieval failed`)
+      }
+      
+      console.log(`⚡ [TRACE] Parallel operations completed in ${parallelDuration}ms`)
 
       const formattedHistory = chatHistory
         .slice(-agentConfig.conversationSettings.maxHistoryLength)
@@ -309,7 +331,7 @@ class AIAgent {
           tools_used: result.intermediateSteps?.length > 0 ? true : false,
           user_memories_used: userMemoriesContext.length > 0 ? true : false,
           execution_time_ms: agentDuration,
-          memory_count: userProfile?.memories?.length || 0,
+          memory_count: memoryResult?.memories?.length || 0,
           relevant_memories_count: userMemoriesContext.length > 0 ? "yes" : "no"
         }
       }
@@ -349,7 +371,7 @@ class AIAgent {
       
       // Get user memories if userId is provided
       let userMemoriesContext = ''
-      let userProfile: any = null
+      const userProfile: any = null
       
       if (userId) {
         yield {
@@ -359,74 +381,65 @@ class AIAgent {
         }
         
         try {
-          console.log(`🧠 [TRACE] Retrieving memories for user: ${userId}`)
+          console.log(`🧠 [TRACE] Starting adaptive memory retrieval for user: ${userId}`)
           const memoryStartTime = Date.now()
           
           yield {
             type: 'memory_access',
-            content: 'Searching relevant memories',
-            metadata: { phase: 'searching', userId, timestamp: Date.now() }
+            content: 'Analyzing query and retrieving personalized context...',
+            metadata: { phase: 'adaptive_searching', userId, timestamp: Date.now() }
           }
           
-          // Get relevant memories for this query
-          const relevantMemories = await getRelevantMemories(userId, message, 5)
-          console.log(`📚 [TRACE] Found ${relevantMemories.length} relevant memories`)
-          
-          // Get user profile with context
-          userProfile = await getUserWithMemories(userId)
-          console.log(`👤 [TRACE] User profile loaded with ${userProfile?.memories?.length || 0} total memories`)
+          // Use adaptive memory retrieval
+          const memoryResult = await adaptiveMemory.retrieveAdaptiveMemories(userId, message)
+          console.log(`📚 [TRACE] Adaptive memory completed:`, {
+            memoryCount: memoryResult.memories.length,
+            strategy: memoryResult.strategy.reasoning,
+            totalAvailable: memoryResult.metadata.totalAvailableMemories
+          })
           
           const memoryDuration = Date.now() - memoryStartTime
-          console.log(`⏱️ [TRACE] Memory retrieval completed in ${memoryDuration}ms`)
           
           yield {
             type: 'memory_access',
-            content: `Found ${relevantMemories.length} relevant memories and user context`,
+            content: `Applied ${memoryResult.strategy.reasoning.toLowerCase()} - found ${memoryResult.memories.length} relevant insights`,
             metadata: {
               phase: 'complete',
-              relevantCount: relevantMemories.length,
-              totalMemories: userProfile?.memories?.length || 0,
+              relevantCount: memoryResult.memories.length,
+              totalMemories: memoryResult.metadata.totalAvailableMemories,
+              strategy: memoryResult.strategy.reasoning,
               duration: memoryDuration,
               timestamp: Date.now()
             }
           }
           
-          if (relevantMemories.length > 0 || (userProfile?.memories?.length && userProfile.memories.length > 0)) {
-            userMemoriesContext = '\n\n=== USER CONTEXT & MEMORIES ===\n'
+          // Only add personalization context if we have meaningful memories
+          if (memoryResult.memories.length > 0) {
+            userMemoriesContext = '\n\n=== USER CONTEXT ===\n'
             
             yield {
               type: 'thinking_stream',
-              content: 'Integrating your personal context into my analysis...',
-              metadata: { phase: 'context_integration', timestamp: Date.now() }
-            }
-            
-            if (userProfile?.contexts?.[0]) {
-              const context = userProfile.contexts[0]
-              userMemoriesContext += `Communication Style: ${context.communicationStyle || 'Not specified'}\n`
-              userMemoriesContext += `Preferred Response Style: ${context.preferredResponseStyle || 'Not specified'}\n`
-              if (context.topicsOfInterest?.length > 0) {
-                userMemoriesContext += `Topics of Interest: ${context.topicsOfInterest.join(', ')}\n`
-              }
-              if (context.expertiseAreas?.length > 0) {
-                userMemoriesContext += `Expertise Areas: ${context.expertiseAreas.join(', ')}\n`
+              content: 'Applying relevant user context...',
+              metadata: { 
+                phase: 'context_integration', 
+                strategy: memoryResult.strategy.reasoning,
+                timestamp: Date.now() 
               }
             }
             
-            if (relevantMemories.length > 0) {
-              userMemoriesContext += '\nRelevant User Memories:\n'
-              relevantMemories.forEach(memory => {
-                userMemoriesContext += `- ${memory.key}: ${memory.value} (confidence: ${(memory.confidence * 100).toFixed(0)}%)\n`
-              })
-            }
-            
-            if (userProfile?.memories?.length > 0) {
-              userMemoriesContext += '\nOther User Preferences:\n'
-              userProfile.memories.slice(0, 3).forEach((memory: any) => {
+            // Add only highly relevant memories
+            userMemoriesContext += `Relevant Information:\n`
+            memoryResult.memories.forEach((memory: any) => {
+              // Only include high-relevance memories
+              if (!memory.relevanceScore || memory.relevanceScore > 0.7) {
                 userMemoriesContext += `- ${memory.key}: ${memory.value}\n`
-              })
-            }
+              }
+            })
             
-            userMemoriesContext += '\nPlease use this context to personalize your response appropriately.\n=== END USER CONTEXT ===\n\n'
+            userMemoriesContext += '\nUse this context naturally where relevant.\n=== END CONTEXT ===\n\n'
+          } else if (memoryResult.context?.communicationStyle) {
+            // For greetings or minimal personalization, only add style preference
+            userMemoriesContext = `\n[User prefers ${memoryResult.context.communicationStyle} communication]\n`
           }
         } catch (memoryError) {
           console.error('❌ [TRACE] Error fetching user memories:', memoryError)
@@ -564,7 +577,8 @@ class AIAgent {
         agent: tempStreamingAgent,
         tools: streamingTools,
         verbose: process.env.NODE_ENV === 'development',
-        returnIntermediateSteps: true
+        returnIntermediateSteps: true,
+        maxIterations: 75
       })
 
       // Start agent execution in background
@@ -666,8 +680,8 @@ class AIAgent {
         }
       }
       
-      // Stream the response in chunks for smooth display
-      const chunkSize = 20
+      // Stream the response in optimized chunks for faster display
+      const chunkSize = 15 // Smaller chunks for faster streaming
       const content = result.output || ''
       
       console.log('📝 [AGENT] Streaming response content, length:', content.length)
@@ -686,9 +700,9 @@ class AIAgent {
             }
           }
           
-          // Very small delay for smooth streaming
+          // Minimal delay for optimal streaming performance
           if (i < content.length - chunkSize) {
-            await new Promise(resolve => setTimeout(resolve, 5))
+            await new Promise(resolve => setTimeout(resolve, 2))
           }
         }
       } else {

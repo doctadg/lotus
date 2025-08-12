@@ -40,8 +40,8 @@ export class StreamingCallbackHandler extends BaseCallbackHandler {
   }
 
   // Chain lifecycle
-  async handleChainStart(chain: { name: string }, inputs: ChainValues) {
-    console.log('🔗 [CALLBACK] Chain start:', chain.name)
+  async handleChainStart(chain: any, inputs: ChainValues, runId: string, parentRunId?: string) {
+    console.log('🔗 [CALLBACK] Chain start:', chain.name || 'Unknown')
     this.emitEvent({
       type: 'thinking_stream',
       content: 'Analyzing your query and determining the best approach...',
@@ -67,9 +67,9 @@ export class StreamingCallbackHandler extends BaseCallbackHandler {
 
   // LLM lifecycle
   async handleLLMStart(
-    llm: { name: string },
+    llm: any,
     prompts: string[],
-    runId?: string,
+    runId: string,
     parentRunId?: string,
     extraParams?: Record<string, unknown>
   ) {
@@ -124,14 +124,15 @@ export class StreamingCallbackHandler extends BaseCallbackHandler {
     let reasoning = ''
     let strategy = ''
     
+    // Analyze why this search might be needed
+    const needsCurrentInfo = query.includes('latest') || query.includes('recent') || query.includes('current') || 
+                            query.includes('2024') || query.includes('2025') || query.includes('today')
+    const needsFactualData = query.includes('price') || query.includes('cost') || query.includes('stats') ||
+                            query.includes('data') || query.includes('numbers')
+    const needsComparison = query.includes('vs') || query.includes('compare') || query.includes('versus') ||
+                           query.includes('better') || query.includes('best')
+    
     if (isWebSearch || isComprehensive) {
-      // Analyze why this search is needed
-      const needsCurrentInfo = query.includes('latest') || query.includes('recent') || query.includes('current') || 
-                              query.includes('2024') || query.includes('2025') || query.includes('today')
-      const needsFactualData = query.includes('price') || query.includes('cost') || query.includes('stats') ||
-                              query.includes('data') || query.includes('numbers')
-      const needsComparison = query.includes('vs') || query.includes('compare') || query.includes('versus') ||
-                             query.includes('better') || query.includes('best')
       
       if (needsCurrentInfo) {
         reasoning = 'This query requires current, up-to-date information that may have changed since my training data cutoff'
@@ -208,9 +209,9 @@ export class StreamingCallbackHandler extends BaseCallbackHandler {
 
   // Tool lifecycle
   async handleToolStart(
-    tool: { name: string },
+    tool: any,
     input: string,
-    runId?: string,
+    runId: string,
     parentRunId?: string
   ) {
     console.log('🔧 [CALLBACK] Tool start:', tool.name, input)
@@ -244,7 +245,7 @@ export class StreamingCallbackHandler extends BaseCallbackHandler {
 
     // Emit search progress
     if (tool.name === 'web_search' || tool.name === 'comprehensive_search') {
-      // Simulate progress updates
+      // Fast progress updates for better responsiveness
       setTimeout(() => {
         this.emitEvent({
           type: 'search_progress',
@@ -256,7 +257,7 @@ export class StreamingCallbackHandler extends BaseCallbackHandler {
             timestamp: Date.now()
           }
         })
-      }, 100)
+      }, 50)
 
       setTimeout(() => {
         this.emitEvent({
@@ -269,7 +270,7 @@ export class StreamingCallbackHandler extends BaseCallbackHandler {
             timestamp: Date.now()
           }
         })
-      }, 200)
+      }, 100)
     }
   }
 
@@ -349,9 +350,9 @@ export class StreamingCallbackHandler extends BaseCallbackHandler {
 
   // Retriever lifecycle (for memory access)
   async handleRetrieverStart(
-    retriever: { name: string },
+    retriever: any,
     query: string,
-    runId?: string,
+    runId: string,
     parentRunId?: string
   ) {
     console.log('🔍 [CALLBACK] Retriever start:', retriever.name)

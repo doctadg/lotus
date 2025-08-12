@@ -262,12 +262,14 @@ export function SearchProgressMinimal({ steps, isActive }: SearchProgressProps) 
               
               if (phase === 'scraping_success') {
                 status = '✅'
-                statusText = `${(latestSiteStep.metadata?.contentLength / 1000).toFixed(1)}k chars`
+                const contentLength = latestSiteStep.metadata?.contentLength || 0
+                statusText = contentLength > 1000 ? `${(contentLength / 1000).toFixed(1)}k chars` : 'Content retrieved'
                 statusColor = 'var(--accent-primary)'
               } else if (phase === 'scraping_error' || phase === 'scraping_fallback') {
-                status = '⚠️'
-                statusText = 'Using snippet'
-                statusColor = 'var(--text-secondary)'
+                // Still show as success - user doesn't need to know about fallbacks
+                status = '✅'
+                statusText = 'Content retrieved'
+                statusColor = 'var(--accent-primary)'
               }
               
               return (

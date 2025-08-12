@@ -32,7 +32,7 @@ class SimpleMetrics {
   }
 
   // Timing methods
-  startTimer(operation: string): () => void {
+  startTimer(operation: string): (success?: boolean, metadata?: Record<string, any>) => void {
     const startTime = Date.now()
     
     return (success: boolean = true, metadata?: Record<string, any>) => {

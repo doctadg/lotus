@@ -16,14 +16,14 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXTAUTH_URL || 'http://localhost:3000'),
   title: {
-    default: "Lotus AI - Intelligent Chat Assistant with Real-time Streaming",
-    template: "%s | Lotus AI"
+    default: "FlowBuilder - Build Internal Tools That Actually Flow",
+    template: "%s | FlowBuilder"
   },
-  description: "Experience the next generation of AI assistance with Lotus. Intelligent, contextual, and remarkably human conversations powered by advanced AI technology. Real-time streaming, memory system, and privacy-first design.",
-  keywords: ["AI chat", "artificial intelligence", "chat assistant", "AI conversation", "real-time streaming", "contextual AI", "privacy-first AI", "intelligent assistant", "AI technology", "conversational AI"],
-  authors: [{ name: "Lotus AI Team" }],
-  creator: "Lotus AI",
-  publisher: "Lotus AI",
+  description: "Design lightweight internal apps and workflows with zero friction. Fast to launch. Easy to evolve. Built to feel invisible.",
+  keywords: ["internal tools", "workflow builder", "app builder", "drag and drop", "low code", "no code", "workflow automation", "business tools", "team productivity"],
+  authors: [{ name: "FlowBuilder Team" }],
+  creator: "FlowBuilder",
+  publisher: "FlowBuilder",
   robots: {
     index: true,
     follow: true,
@@ -39,24 +39,24 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'en_US',
     url: '/',
-    siteName: 'Lotus AI',
-    title: 'Lotus AI - Intelligent Chat Assistant with Real-time Streaming',
-    description: 'Experience the next generation of AI assistance with Lotus. Intelligent, contextual, and remarkably human conversations powered by advanced AI technology.',
+    siteName: 'FlowBuilder',
+    title: 'FlowBuilder - Build Internal Tools That Actually Flow',
+    description: 'Design lightweight internal apps and workflows with zero friction. Fast to launch. Easy to evolve. Built to feel invisible.',
     images: [
       {
         url: '/lotus-white.png',
         width: 1200,
         height: 630,
-        alt: 'Lotus AI - Intelligent Chat Assistant',
+        alt: 'FlowBuilder - Build Internal Tools That Actually Flow',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Lotus AI - Intelligent Chat Assistant',
-    description: 'Experience the next generation of AI assistance with Lotus. Real-time streaming, contextual intelligence, and privacy-first design.',
+    title: 'FlowBuilder - Build Internal Tools That Actually Flow',
+    description: 'Design lightweight internal apps and workflows with zero friction. Fast to launch. Easy to evolve. Built to feel invisible.',
     images: ['/lotus-white.png'],
-    creator: '@lotus_ai',
+    creator: '@flowbuilder',
   },
   verification: {
     google: 'google-site-verification-code-here',
@@ -70,7 +70,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="scroll-smooth">
+    <html lang="en" className="dark scroll-smooth">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />

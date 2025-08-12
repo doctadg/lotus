@@ -82,7 +82,8 @@ class AIAgent {
     this.agent = new AgentExecutor({
       agent,
       tools: this.tools,
-      verbose: process.env.NODE_ENV === 'development'
+      verbose: process.env.NODE_ENV === 'development',
+      maxIterations: 75
     })
   }
 

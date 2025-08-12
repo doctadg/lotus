@@ -5,8 +5,9 @@ import Link from "next/link"
 import { useAuth, ProtectedRoute } from '../../lib/auth-context'
 import { MessageRenderer } from '../../components/chat/MessageRenderer'
 import { ThemeToggle } from '../../components/ui/ThemeToggle'
-import { AIProcessingMinimal } from '../../components/chat/AIProcessingMinimal'
-import { ToolUsageMinimal } from '../../components/chat/ToolUsageMinimal'
+import { AgentActivity } from '../../components/chat/AgentActivity'
+import Dither from '../../components/landing/Dither'
+import { Search, Sparkles, Send, Menu, X, LogOut, MessageCircle, Plus, Trash2 } from 'lucide-react'
 
 interface Message {
   id: string
@@ -66,6 +67,12 @@ function ChatPageContent() {
   const [currentTools, setCurrentTools] = useState<ToolCall[]>([])
   const [showAIProcessing, setShowAIProcessing] = useState(false)
   const [agentComplete, setAgentComplete] = useState(false)
+  const [searchMode, setSearchMode] = useState<'simple' | 'deep'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('searchMode') as 'simple' | 'deep') || 'simple'
+    }
+    return 'simple'
+  })
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const thinkingBatchRef = useRef<ThinkingStep[]>([])
@@ -84,6 +91,10 @@ function ChatPageContent() {
       inputRef.current.focus()
     }
   }, [currentChatId])
+
+  useEffect(() => {
+    localStorage.setItem('searchMode', searchMode)
+  }, [searchMode])
 
   // Auto-resize textarea
   useEffect(() => {
@@ -172,7 +183,7 @@ function ChatPageContent() {
         },
         body: JSON.stringify({
           content: messageText,
-          deepResearchMode: false
+          deepResearchMode: searchMode === 'deep'
         })
       })
 
@@ -230,11 +241,11 @@ function ChatPageContent() {
             try {
               const parsed = JSON.parse(data)
               eventCount++
-              console.log(`📨 [WEB] Event #${eventCount}:`, parsed.type, parsed.data)
+              console.log(`[WEB] Event #${eventCount}:`, parsed.type, parsed.data)
               
               switch (parsed.type) {
                 case 'thinking_stream':
-                  console.log('💭 [WEB] Thinking stream:', parsed.data)
+                  console.log('[WEB] Thinking stream:', parsed.data)
                   const thinkingStep: ThinkingStep = {
                     id: `thinking-${Date.now()}-${Math.random()}`,
                     type: 'thinking_stream',
@@ -315,7 +326,7 @@ function ChatPageContent() {
                   break
                   
                 case 'search_detailed':
-                  console.log('🔍 [WEB] Detailed search event:', parsed.data)
+                  console.log('[WEB] Detailed search event:', parsed.data)
                   setShowAIProcessing(true)
                   const detailedStep: SearchStep = {
                     id: `search-detailed-${Date.now()}`,
@@ -331,7 +342,7 @@ function ChatPageContent() {
                   break
                   
                 case 'website_scraping':
-                  console.log('🌐 [WEB] Website scraping event:', parsed.data)
+                  console.log('[WEB] Website scraping event:', parsed.data)
                   setShowAIProcessing(true)
                   const scrapingStep: SearchStep = {
                     id: `website-scraping-${Date.now()}`,
@@ -348,7 +359,7 @@ function ChatPageContent() {
                   break
                   
                 case 'tool_call':
-                  console.log('🔧 [WEB] Tool call:', parsed.data)
+                  console.log('[WEB] Tool call:', parsed.data)
                   setCurrentTools(prev => [
                     ...prev.map(t => ({ ...t, status: 'complete' as const })),
                     {
@@ -401,7 +412,7 @@ function ChatPageContent() {
                   setMessages(prev => {
                   const newMessages = prev.map(msg => 
                     msg.id === assistantMessage.id 
-                      ? { ...msg, content: '🔍 ' + (parsed.data?.content || 'Using tools...') }
+                      ? { ...msg, content: 'Using tools... ' + (parsed.data?.content || '') }
                       : msg
                   )
                   updatedMessages = newMessages
@@ -421,7 +432,7 @@ function ChatPageContent() {
                   let newMessages = prev
                   const currentMsg = prev.find(msg => msg.id === assistantMessage.id)
                   
-                  if (currentMsg && (currentMsg.content.startsWith('🤔') || currentMsg.content.startsWith('🔍'))) {
+                  if (currentMsg && (currentMsg.content.startsWith('Thinking...') || currentMsg.content.startsWith('Using tools...'))) {
                     // Clear the thinking/tool message, start fresh
                     newMessages = prev.map(msg => 
                       msg.id === assistantMessage.id 
@@ -443,7 +454,7 @@ function ChatPageContent() {
                   break
                   
                 case 'complete':
-                  console.log('✅ [WEB] Stream complete')
+                  console.log('[WEB] Stream complete')
                   setIsTyping(false)
                   setAgentComplete(true)
                   
@@ -459,7 +470,7 @@ function ChatPageContent() {
                   break
                   
                 default:
-                  console.log('❓ [WEB] Unknown event type:', parsed.type)
+                  console.log('[WEB] Unknown event type:', parsed.type)
               }
             } catch (parseError) {
               console.error('Error parsing stream data:', parseError, 'Line:', line)
@@ -609,157 +620,119 @@ function ChatPageContent() {
   }, [])
 
   return (
-    <div className="chat-container">
+    <div className="flex h-screen bg-black text-white relative overflow-hidden">
+      {/* Dither Background */}
+      <div className="absolute inset-0 z-0">
+        <Dither
+          waveColor={[0.1, 0.15, 0.3]}
+          disableAnimation={false}
+          enableMouseInteraction={true}
+          mouseRadius={0.8}
+          colorNum={6}
+          waveAmplitude={0.3}
+          waveFrequency={2.5}
+          waveSpeed={0.01}
+          pixelSize={3}
+        />
+        {/* Overlay to soften dither effect */}
+        <div className="absolute inset-0 bg-black/60" />
+      </div>
+
       {/* Sidebar */}
-      <div className={`sidebar ${!sidebarOpen ? 'collapsed' : ''}`}>
-        <div className="sidebar-header">
-          <Link href="/" className="sidebar-logo">
+      <div className={`${sidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 glass-card bg-black/20 border-r border-white/10 flex flex-col overflow-hidden relative z-10`}>
+        <div className="flex items-center justify-between p-4 border-b border-white/10">
+          <Link href="/" className="flex items-center">
             <img 
               src="/lotus-white.png" 
               alt="Lotus" 
-              style={{ height: '28px', width: 'auto' }}
+              className="h-7 w-auto opacity-90 hover:opacity-100 transition-opacity"
             />
           </Link>
           <button
             onClick={() => setSidebarOpen(false)}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--text-tertiary)',
-              cursor: 'pointer',
-              padding: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
+            className="p-2 text-text-tertiary hover:text-white transition-all duration-200 hover:bg-white/10 rounded-lg"
           >
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-            </svg>
+            <X size={16} />
           </button>
         </div>
 
         {/* User Profile Section */}
-        <div style={{ 
-          padding: '12px 16px', 
-          borderBottom: '1px solid var(--border)',
-          marginBottom: '12px'
-        }}>
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '8px',
-            marginBottom: '8px'
-          }}>
-            <div style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '50%',
-              backgroundColor: 'var(--accent-primary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              fontSize: '12px',
-              fontWeight: '600'
-            }}>
+        <div className="p-4 border-b border-white/10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-semibold shadow-lg">
               {user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ 
-                fontSize: '13px', 
-                fontWeight: '500',
-                color: 'var(--text-primary)',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
-              }}>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-white truncate">
                 {user?.name || 'User'}
               </div>
-              <div style={{ 
-                fontSize: '11px', 
-                color: 'var(--text-tertiary)',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
-              }}>
+              <div className="text-xs text-text-tertiary truncate">
                 {user?.email}
               </div>
             </div>
             <button
               onClick={logout}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-tertiary)',
-                cursor: 'pointer',
-                padding: '4px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: '4px'
-              }}
+              className="p-2 text-text-tertiary hover:text-white transition-all duration-200 hover:bg-white/10 rounded-lg"
               title="Logout"
             >
-              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
+              <LogOut size={16} />
             </button>
           </div>
         </div>
 
-        <button onClick={newChat} className="new-chat-button">
-          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
+        <button onClick={newChat} className="flex items-center gap-3 mx-4 mb-4 px-4 py-3 glass-card-hover bg-white/5 rounded-xl text-sm font-medium text-white group">
+          <Plus size={16} className="group-hover:rotate-90 transition-transform duration-200" />
           New chat
         </button>
 
-        <div className="chat-list">
+        <div className="flex-1 overflow-y-auto px-4 space-y-1">
           {chatSessions.map((chat) => (
             <div
               key={chat.id}
               onClick={() => selectChat(chat.id)}
-              className={`chat-item ${currentChatId === chat.id ? 'active' : ''}`}
+              className={`group flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-200 ${
+                currentChatId === chat.id 
+                  ? 'bg-white/10 border border-white/20' 
+                  : 'hover:bg-white/5 border border-transparent hover:border-white/10'
+              }`}
             >
-              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-              <span className="chat-item-text">{chat.title}</span>
+              <MessageCircle size={16} className="text-text-tertiary group-hover:text-white transition-colors" />
+              <span className="flex-1 text-sm text-text-secondary group-hover:text-white truncate font-medium">{chat.title}</span>
               <button
                 onClick={(e) => deleteChat(chat.id, e)}
-                className="delete-button"
+                className="opacity-0 group-hover:opacity-100 p-1.5 text-text-tertiary hover:text-red-400 transition-all hover:bg-red-500/10 rounded-lg"
               >
-                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <Trash2 size={12} />
               </button>
             </div>
           ))}
           {chatSessions.length === 0 && (
-            <div style={{ 
-              textAlign: 'center', 
-              padding: '2rem 1rem',
-              color: 'var(--text-tertiary)',
-              fontSize: '13px'
-            }}>
-              No conversations yet
+            <div className="text-center py-12 px-4">
+              <div className="glass-card p-6 rounded-2xl">
+                <div className="w-12 h-12 mx-auto mb-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                  <MessageCircle size={20} className="text-white" />
+                </div>
+                <p className="text-text-secondary text-sm">No conversations yet</p>
+                <p className="text-text-tertiary text-xs mt-1">Start a new chat to get started</p>
+              </div>
             </div>
           )}
         </div>
         
         {/* Footer Actions */}
-        <div className="p-3 border-t border-border space-y-2">
+        <div className="p-4 border-t border-white/10 space-y-3">
           <Link 
             href="/memories" 
-            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+            className="flex items-center gap-3 px-4 py-3 text-sm text-text-secondary hover:text-white glass-card-hover rounded-xl transition-all"
           >
-            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
+            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+              <div className="w-2 h-2 bg-white rounded-full" />
+            </div>
             View Memory Map
           </Link>
-          <ThemeToggle />
+          <div className="flex justify-center">
+            <ThemeToggle />
+          </div>
         </div>
       </div>
 
@@ -767,53 +740,58 @@ function ChatPageContent() {
       {!sidebarOpen && (
         <button
           onClick={() => setSidebarOpen(true)}
-          className="toggle-sidebar"
+          className="fixed top-6 left-6 z-50 p-3 glass-card hover:bg-white/10 text-white rounded-xl transition-all duration-200 hover:scale-105 shadow-xl"
         >
-          <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
+          <Menu size={20} />
         </button>
       )}
 
       {/* Main Content */}
-      <div className="main-content">
-        <div className="messages-container">
+      <div className="flex-1 flex flex-col h-screen relative z-10">
+        <div className="flex-1 overflow-y-auto p-4">
           {messages.length === 0 ? (
             /* Empty State */
-            <div className="empty-state">
-              <img 
-                src="/lotus-white.png" 
-                alt="Lotus" 
-                style={{ height: '48px', width: 'auto', marginBottom: '16px', opacity: 0.9 }}
-              />
-              <h1 style={{ fontSize: '28px', fontWeight: 600, marginBottom: '8px' }}>
-                How can I help you today?
-              </h1>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                Ask me anything or choose from the suggestions below
-              </p>
+            <div className="flex flex-col items-center justify-center h-full text-center animate-fadeIn">
+              <div className="glass-card p-12 rounded-3xl max-w-2xl w-full mx-4">
+                <img 
+                  src="/lotus-white.png" 
+                  alt="Lotus" 
+                  className="h-16 w-auto mb-6 opacity-90 mx-auto animate-float"
+                />
+                <h1 className="text-responsive-xl font-light mb-4 text-shimmer">
+                  How can I help you today?
+                </h1>
+                <p className="text-text-secondary mb-12 text-responsive-base leading-relaxed">
+                  Ask me anything or choose from the suggestions below
+                </p>
 
-              <div className="suggestions-grid">
-                {[
-                  { icon: '💡', text: 'Explain quantum computing' },
-                  { icon: '✍️', text: 'Write a haiku about coding' },
-                  { icon: '🔍', text: 'Compare React vs Vue' },
-                  { icon: '🎯', text: 'Plan a weekend trip' }
-                ].map((item, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setInputText(item.text)}
-                    className="suggestion-card"
-                  >
-                    <span className="suggestion-icon">{item.icon}</span>
-                    <span className="suggestion-text">{item.text}</span>
-                  </button>
-                ))}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-lg mx-auto">
+                  {[
+                    { icon: <Sparkles size={20} />, text: 'Explain quantum computing' },
+                    { icon: <Search size={20} />, text: 'Write a haiku about coding' },
+                    { icon: <MessageCircle size={20} />, text: 'Compare React vs Vue' },
+                    { icon: <Plus size={20} />, text: 'Plan a weekend trip' }
+                  ].map((item, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setInputText(item.text)}
+                      className="glass-card-hover p-6 rounded-2xl text-left group animate-slideUp border border-white/5"
+                      style={{ animationDelay: `${i * 0.1}s` }}
+                    >
+                      <div className="text-text-tertiary mb-3 group-hover:text-blue-400 transition-colors">
+                        {item.icon}
+                      </div>
+                      <span className="text-sm text-text-secondary group-hover:text-white transition-colors font-medium">
+                        {item.text}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           ) : (
             /* Messages */
-            <div className="messages-wrapper">
+            <div className="space-y-4">
               {messages.map((message, index) => {
                 // Check if this is the current AI message being streamed
                 const isCurrentAIMessage = message.role === 'assistant' && 
@@ -827,57 +805,67 @@ function ChatPageContent() {
                 return (
                   <React.Fragment key={message.id}>
                     {/* Show unified AI processing component */}
-                    {isCurrentAIMessage && showAIProcessing && (
-                      <div className="message-ui-component">
-                        <AIProcessingMinimal 
+                    {/* Unified Agent Activity */}
+                    {isCurrentAIMessage && (thinkingSteps.length > 0 || searchSteps.length > 0 || currentTools.length > 0) && (
+                      <div className="mb-4">
+                        <AgentActivity 
                           thinkingSteps={thinkingSteps}
                           searchSteps={searchSteps}
+                          tools={currentTools}
                           isActive={!agentComplete}
                         />
                       </div>
                     )}
                     
-                    {/* Tool Usage (separate small component) */}
-                    {isCurrentAIMessage && currentTools.length > 0 && (
-                      <div className="message-ui-component">
-                        <ToolUsageMinimal tools={currentTools} />
-                      </div>
-                    )}
-                    
                     {/* Only render message if it should be shown */}
                     {shouldShowAIMessage && (
-                      <div className={`message ${message.role}`}>
-                      <div className="message-avatar">
-                        {message.role === 'user' ? 'U' : 'L'}
-                      </div>
-                      <div className="message-content">
-                        <div className="message-role">
-                          {message.role === 'user' ? 'You' : 'Lotus'}
+                      <div className={`flex gap-4 animate-fadeIn ${message.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                        <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold shadow-lg ${
+                          message.role === 'user' 
+                            ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white' 
+                            : 'bg-gradient-to-br from-purple-500 to-purple-600 text-white'
+                        }`}>
+                          {message.role === 'user' ? 'U' : 'L'}
                         </div>
-                        <div className="message-text">
-                          <MessageRenderer 
-                        content={message.content}
-                        role={message.role}
-                        messageId={message.id}
-                        isStreaming={false}
-                      />
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-sm text-text-secondary mb-2 font-medium ${message.role === 'user' ? 'text-right' : ''}`}>
+                            {message.role === 'user' ? 'You' : 'Lotus'}
+                          </div>
+                          <div className={`${message.role === 'user' ? 'text-right' : ''}`}>
+                            <div className={`glass-card bg-white/5 rounded-2xl p-4 inline-block max-w-none ${
+                              message.role === 'user' ? 'bg-gradient-to-r from-blue-500/10 to-blue-600/10 border-blue-500/20' : ''
+                            }`}>
+                              <MessageRenderer 
+                                content={message.content}
+                                role={message.role}
+                                messageId={message.id}
+                                isStreaming={false}
+                              />
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
                     )}
                   </React.Fragment>
                 )
               })}
               
               {(isLoading || isTyping) && messages[messages.length - 1]?.role !== 'assistant' && (
-                <div className="message assistant">
-                  <div className="message-avatar">L</div>
-                  <div className="message-content">
-                    <div className="message-role">Lotus</div>
-                    <div className="loading-dots">
-                      <div className="loading-dot"></div>
-                      <div className="loading-dot"></div>
-                      <div className="loading-dot"></div>
+                <div className="flex gap-4 animate-fadeIn">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-white flex items-center justify-center text-sm font-semibold shadow-lg">
+                    L
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-text-secondary mb-2 font-medium">Lotus</div>
+                    <div className="glass-card bg-white/5 rounded-2xl p-4 inline-block">
+                      <div className="flex items-center gap-2">
+                        <div className="flex gap-1">
+                          <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
+                          <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                          <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                        </div>
+                        <span className="text-text-tertiary text-sm ml-2">Thinking...</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -889,32 +877,73 @@ function ChatPageContent() {
         </div>
 
         {/* Input Area */}
-        <div className="input-container">
-          <div className="input-wrapper">
-            <textarea
-              ref={inputRef}
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  sendMessage()
-                }
-              }}
-              placeholder="Message Lotus..."
-              disabled={isLoading}
-              rows={1}
-              className="input-field"
-            />
-            <button
-              onClick={sendMessage}
-              disabled={isLoading || !inputText.trim()}
-              className="send-button"
-            >
-              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-            </button>
+        <div className="border-t border-white/10 p-6">
+          <div className="max-w-4xl mx-auto space-y-4">
+            {/* Search Mode Toggle */}
+            <div className="flex justify-center">
+              <div className="glass-card bg-white/5 rounded-2xl p-2 inline-flex">
+                <button
+                  className={`px-4 py-2 text-xs font-medium rounded-xl transition-all duration-200 flex items-center gap-2 ${
+                    searchMode === 'simple' 
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg' 
+                      : 'text-text-tertiary hover:text-white hover:bg-white/10'
+                  }`}
+                  onClick={() => setSearchMode('simple')}
+                  title="Quick search - 2-3 sources, faster responses"
+                  type="button"
+                >
+                  <Search size={12} />
+                  Quick
+                </button>
+                <button
+                  className={`px-4 py-2 text-xs font-medium rounded-xl transition-all duration-200 flex items-center gap-2 ${
+                    searchMode === 'deep' 
+                      ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg' 
+                      : 'text-text-tertiary hover:text-white hover:bg-white/10'
+                  }`}
+                  onClick={() => setSearchMode('deep')}
+                  title="Deep research - 5-8 sources, comprehensive analysis"
+                  type="button"
+                >
+                  <Sparkles size={12} />
+                  Deep
+                </button>
+              </div>
+            </div>
+
+            {/* Input Field */}
+            <div className="glass-card p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-lg">
+              <div className="flex items-end gap-4">
+                <textarea
+                  ref={inputRef}
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      sendMessage()
+                    }
+                  }}
+                  placeholder="Message Lotus..."
+                  disabled={isLoading}
+                  rows={1}
+                  className="flex-1 bg-transparent text-white placeholder-text-muted border-none outline-none resize-none min-h-[24px] max-h-[120px] text-responsive-base leading-relaxed"
+                />
+                <button
+                  onClick={sendMessage}
+                  disabled={isLoading || !inputText.trim()}
+                  className={`p-3 rounded-xl transition-all duration-200 flex items-center justify-center group ${
+                    isLoading || !inputText.trim()
+                      ? 'bg-white/10 text-text-muted cursor-not-allowed' 
+                      : searchMode === 'deep'
+                        ? 'bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white shadow-lg hover:shadow-purple-500/25 hover:scale-105' 
+                        : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-lg hover:shadow-blue-500/25 hover:scale-105'
+                  }`}
+                >
+                  <Send size={16} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform duration-200" />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

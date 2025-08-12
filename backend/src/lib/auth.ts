@@ -20,6 +20,17 @@ export async function authenticateUser(request: NextRequest): Promise<string | n
 
   const token = authHeader.substring(7)
   
+  if (!token || token.length === 0) {
+    return null
+  }
+
+  // Check if token has proper JWT format (3 parts separated by dots)
+  const tokenParts = token.split('.')
+  if (tokenParts.length !== 3) {
+    console.log('Invalid JWT format - expected 3 parts, got:', tokenParts.length)
+    return null
+  }
+  
   try {
     // Verify JWT token
     const decoded = verify(
