@@ -80,7 +80,7 @@ export function AgentActivity({ thinkingSteps, searchSteps, tools, isActive }: A
       id: step.id,
       type: 'thinking' as const,
       label: step.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-      content: step.content.length > 100 ? step.content.substring(0, 100) + '...' : step.content,
+      content: step.content.length > 50 ? step.content.substring(0, 50) + '...' : step.content,
       status: (index === thinkingSteps.length - 1 && isActive && searchSteps.length === 0 && tools.length === 0) ? 'executing' as const : 'complete' as const,
       timestamp: step.timestamp,
       color: STEP_COLORS[step.type] || STEP_COLORS.default
@@ -90,8 +90,8 @@ export function AgentActivity({ thinkingSteps, searchSteps, tools, isActive }: A
     ...searchSteps.map((step, index) => ({
       id: step.id,
       type: 'search' as const,
-      label: step.tool === 'searchhive' ? 'Web Search' : step.tool.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-      content: step.content.length > 80 ? step.content.substring(0, 80) + '...' : step.content,
+      label: step.tool === 'searchhive' ? 'Search' : step.tool.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      content: step.content.length > 40 ? step.content.substring(0, 40) + '...' : step.content,
       status: (step.type === 'complete' || index < searchSteps.length - 1) ? 'complete' as const : 
               (index === searchSteps.length - 1 && isActive) ? 'executing' as const : 'complete' as const,
       timestamp: step.timestamp,
@@ -115,29 +115,33 @@ export function AgentActivity({ thinkingSteps, searchSteps, tools, isActive }: A
   ].sort((a, b) => a.timestamp - b.timestamp)
   
   useEffect(() => {
-    // Add new items with simple fade-in
-    const newItems = allActivities.slice(visibleItems.length)
-    newItems.forEach((item, index) => {
-      setTimeout(() => {
-        setVisibleItems(prev => [...prev, item])
-        
-        // Auto-collapse completed items after 3 seconds
-        if (item.status === 'complete') {
-          const timeoutId = setTimeout(() => {
-            setVisibleItems(prev => 
-              prev.map(i => i.id === item.id ? { ...i, collapsed: true } : i)
-            )
-          }, 3000)
-          collapseTimeouts.current.set(item.id, timeoutId)
-        }
-      }, index * 100)
+    // Always keep only the last 3 activities, regardless of how fast they come
+    const latestActivities = allActivities.slice(-3)
+    
+    // Clear existing timeouts
+    collapseTimeouts.current.forEach(timeout => clearTimeout(timeout))
+    collapseTimeouts.current.clear()
+    
+    // Set visible items to latest 3
+    setVisibleItems(latestActivities)
+    
+    // Auto-collapse completed items after 2 seconds
+    latestActivities.forEach(item => {
+      if (item.status === 'complete') {
+        const timeoutId = setTimeout(() => {
+          setVisibleItems(prev => 
+            prev.map(i => i.id === item.id ? { ...i, collapsed: true } : i)
+          )
+        }, 2000)
+        collapseTimeouts.current.set(item.id, timeoutId)
+      }
     })
     
     // Cleanup timeouts on unmount
     return () => {
       collapseTimeouts.current.forEach(timeout => clearTimeout(timeout))
     }
-  }, [allActivities.length])
+  }, [allActivities])
   
   useEffect(() => {
     if (containerRef.current) {
@@ -147,37 +151,40 @@ export function AgentActivity({ thinkingSteps, searchSteps, tools, isActive }: A
   
   if (allActivities.length === 0) return null
   
-  // Only show last 6 activities, older ones fade out
-  const displayItems = visibleItems.slice(-6)
+  // Display items are already limited to 3 in the useEffect
+  const displayItems = visibleItems
   
   return (
     <>
       <style jsx>{`
         .activity-bubble {
-          background: rgba(255, 255, 255, 0.04);
-          backdrop-filter: blur(8px);
-          border: 1px solid rgba(255, 255, 255, 0.06);
-          border-radius: 16px;
-          padding: 10px 14px;
-          margin-bottom: 8px;
-          transition: all 0.3s ease;
+          display: inline-block;
+          background: rgba(255, 255, 255, 0.03);
+          backdrop-filter: blur(6px);
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          border-radius: 12px;
+          padding: 4px 10px;
+          margin-bottom: 4px;
+          transition: all 0.2s ease;
           opacity: 0;
-          animation: fadeIn 0.3s ease forwards;
+          animation: fadeIn 0.2s ease forwards;
+          max-width: fit-content;
         }
         
         .activity-bubble.collapsed {
-          padding: 6px 12px;
-          background: rgba(255, 255, 255, 0.02);
-          border-color: rgba(255, 255, 255, 0.03);
+          padding: 3px 8px;
+          background: rgba(255, 255, 255, 0.015);
+          border-color: rgba(255, 255, 255, 0.02);
+          font-size: 0.65rem;
         }
         
         .activity-bubble.executing {
-          background: rgba(var(--bubble-color-rgb), 0.08);
-          border-color: rgba(var(--bubble-color-rgb), 0.15);
+          background: rgba(var(--bubble-color-rgb), 0.06);
+          border-color: rgba(var(--bubble-color-rgb), 0.12);
         }
         
         .activity-bubble.complete {
-          opacity: 0.7;
+          opacity: 0.6;
         }
         
         .activity-bubble.collapsed .content-full {
@@ -185,57 +192,60 @@ export function AgentActivity({ thinkingSteps, searchSteps, tools, isActive }: A
         }
         
         .activity-bubble.collapsed .content-summary {
-          display: block;
+          display: inline;
         }
         
         .content-summary {
           display: none;
-          font-size: 0.75rem;
-          color: rgba(255, 255, 255, 0.5);
+          font-size: 0.65rem;
+          color: rgba(255, 255, 255, 0.4);
         }
         
         .activity-label {
-          font-size: 0.7rem;
+          display: inline;
+          font-size: 0.65rem;
           font-weight: 500;
           text-transform: uppercase;
-          letter-spacing: 0.5px;
-          margin-bottom: 4px;
-          opacity: 0.8;
+          letter-spacing: 0.3px;
+          opacity: 0.7;
         }
         
         .activity-content {
-          font-size: 0.875rem;
-          line-height: 1.4;
-          color: rgba(255, 255, 255, 0.85);
+          display: inline;
+          font-size: 0.75rem;
+          line-height: 1.2;
+          color: rgba(255, 255, 255, 0.8);
+          margin-left: 6px;
         }
         
         .activity-meta {
-          display: flex;
-          gap: 12px;
-          margin-top: 4px;
-          font-size: 0.7rem;
-          color: rgba(255, 255, 255, 0.4);
+          display: inline;
+          margin-left: 8px;
+          font-size: 0.65rem;
+          color: rgba(255, 255, 255, 0.35);
         }
         
         .spinner {
           display: inline-block;
-          width: 10px;
-          height: 10px;
-          margin-left: 8px;
-          border: 1.5px solid currentColor;
+          width: 8px;
+          height: 8px;
+          margin-left: 6px;
+          border: 1px solid currentColor;
           border-top-color: transparent;
           border-radius: 50%;
           animation: spin 0.8s linear infinite;
+          vertical-align: middle;
         }
         
         .checkmark {
           display: inline-block;
-          width: 14px;
-          height: 14px;
-          margin-left: 8px;
-          background: rgba(134, 239, 172, 0.2);
+          width: 10px;
+          height: 10px;
+          margin-left: 6px;
+          background: rgba(134, 239, 172, 0.15);
           border-radius: 50%;
           position: relative;
+          vertical-align: middle;
         }
         
         .checkmark::after {
@@ -244,18 +254,29 @@ export function AgentActivity({ thinkingSteps, searchSteps, tools, isActive }: A
           top: 50%;
           left: 50%;
           transform: translate(-50%, -50%);
-          font-size: 0.6rem;
+          font-size: 0.5rem;
           color: #86efac;
         }
         
         @keyframes fadeIn {
           from {
             opacity: 0;
-            transform: translateY(8px);
+            transform: translateY(4px);
           }
           to {
             opacity: 1;
             transform: translateY(0);
+          }
+        }
+        
+        @keyframes fadeUp {
+          from {
+            opacity: 1;
+            transform: translateY(0);
+          }
+          to {
+            opacity: 0;
+            transform: translateY(-10px);
           }
         }
         
@@ -264,8 +285,11 @@ export function AgentActivity({ thinkingSteps, searchSteps, tools, isActive }: A
         }
         
         .activity-container {
-          max-width: 600px;
-          padding: 0 12px;
+          padding: 0;
+        }
+        
+        .activity-wrapper {
+          margin-bottom: 3px;
         }
         
         /* Pulse animation for active items */
@@ -275,7 +299,7 @@ export function AgentActivity({ thinkingSteps, searchSteps, tools, isActive }: A
         }
         
         .activity-bubble.executing {
-          animation: fadeIn 0.3s ease forwards, gentlePulse 2s ease-in-out infinite;
+          animation: fadeIn 0.2s ease forwards, gentlePulse 2s ease-in-out infinite;
         }
       `}</style>
       
@@ -295,52 +319,53 @@ export function AgentActivity({ thinkingSteps, searchSteps, tools, isActive }: A
           }
           
           return (
-            <div
-              key={item.id}
-              className={`activity-bubble ${isExecuting ? 'executing' : ''} ${isCompleted ? 'complete' : ''} ${isCollapsed ? 'collapsed' : ''}`}
-              style={{ 
-                '--bubble-color': item.color,
-                '--bubble-color-rgb': hexToRgb(item.color),
-                animationDelay: `${index * 0.05}s`,
-                opacity: index < displayItems.length - 3 ? 0.4 : 1
-              } as React.CSSProperties}
-            >
-              <div className="activity-label" style={{ color: item.color }}>
-                {item.label}
-                {isExecuting && <span className="spinner" />}
-                {isCompleted && !isCollapsed && <span className="checkmark" />}
-              </div>
-              
-              <div className="content-full">
-                <div className="activity-content">
-                  {item.content}
-                </div>
+            <div key={item.id} className="activity-wrapper">
+              <div
+                className={`activity-bubble ${isExecuting ? 'executing' : ''} ${isCompleted ? 'complete' : ''} ${isCollapsed ? 'collapsed' : ''}`}
+                style={{ 
+                  '--bubble-color': item.color,
+                  '--bubble-color-rgb': hexToRgb(item.color),
+                  animationDelay: `${index * 0.05}s`,
+                  opacity: index === 0 ? 0.4 : (index === 1 ? 0.7 : 1)
+                } as React.CSSProperties}
+              >
+                <span className="activity-label" style={{ color: item.color }}>
+                  {item.label}
+                  {isExecuting && <span className="spinner" />}
+                  {isCompleted && !isCollapsed && <span className="checkmark" />}
+                </span>
                 
-                {(item.url || item.duration || item.resultSize) && (
-                  <div className="activity-meta">
-                    {item.url && (
-                      <span>
-                        {(() => {
-                          try {
-                            return new URL(item.url).hostname.replace('www.', '')
-                          } catch {
-                            return item.url.substring(0, 20)
-                          }
-                        })()}
-                      </span>
-                    )}
-                    {item.duration && item.status === 'complete' && (
-                      <span>{(item.duration / 1000).toFixed(1)}s</span>
-                    )}
-                    {item.resultSize && (
-                      <span>{item.resultSize} results</span>
-                    )}
-                  </div>
-                )}
-              </div>
-              
-              <div className="content-summary">
-                {item.label} • Complete
+                <span className="content-full">
+                  <span className="activity-content">
+                    {item.content}
+                  </span>
+                  
+                  {(item.url || item.duration || item.resultSize) && (
+                    <span className="activity-meta">
+                      {item.url && (
+                        <span>
+                          • {(() => {
+                            try {
+                              return new URL(item.url).hostname.replace('www.', '')
+                            } catch {
+                              return item.url.substring(0, 15)
+                            }
+                          })()}
+                        </span>
+                      )}
+                      {item.duration && item.status === 'complete' && (
+                        <span> • {(item.duration / 1000).toFixed(1)}s</span>
+                      )}
+                      {item.resultSize && (
+                        <span> • {item.resultSize}</span>
+                      )}
+                    </span>
+                  )}
+                </span>
+                
+                <span className="content-summary">
+                  Complete
+                </span>
               </div>
             </div>
           )
@@ -348,19 +373,21 @@ export function AgentActivity({ thinkingSteps, searchSteps, tools, isActive }: A
         
         {/* Processing indicator */}
         {isActive && visibleItems.every(item => item.status === 'complete') && (
-          <div
-            className="activity-bubble executing"
-            style={{ 
-              '--bubble-color': '#94a3b8',
-              '--bubble-color-rgb': '148, 163, 184'
-            } as React.CSSProperties}
-          >
-            <div className="activity-label" style={{ color: '#94a3b8' }}>
-              Processing
-              <span className="spinner" />
-            </div>
-            <div className="activity-content" style={{ fontSize: '0.8rem', opacity: 0.7 }}>
-              Analyzing information...
+          <div className="activity-wrapper">
+            <div
+              className="activity-bubble executing"
+              style={{ 
+                '--bubble-color': '#94a3b8',
+                '--bubble-color-rgb': '148, 163, 184'
+              } as React.CSSProperties}
+            >
+              <span className="activity-label" style={{ color: '#94a3b8' }}>
+                Processing
+                <span className="spinner" />
+              </span>
+              <span className="activity-content" style={{ fontSize: '0.7rem', opacity: 0.6 }}>
+                Analyzing...
+              </span>
             </div>
           </div>
         )}
