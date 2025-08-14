@@ -756,7 +756,8 @@ function ChatPageContent() {
                 <img 
                   src="/lotus.svg" 
                   alt="Lotus" 
-                  className="h-16 w-auto mb-6 opacity-90 mx-auto animate-float filter brightness-0 invert"
+                  className="h-16 w-auto mb-6 opacity-60 mx-auto filter brightness-0 invert"
+                  style={{ filter: 'brightness(0) invert(1) drop-shadow(0 0 20px rgba(255,255,255,0.3))' }}
                 />
                 <h1 className="text-responsive-xl font-light mb-4 text-shimmer">
                   How can I help you today?
