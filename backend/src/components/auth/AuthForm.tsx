@@ -62,7 +62,7 @@ export default function AuthForm({ type }: AuthFormProps) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden">
       {/* Dither Background */}
       <div className="absolute inset-0 -z-10">
         <Dither
@@ -78,11 +78,22 @@ export default function AuthForm({ type }: AuthFormProps) {
         />
       </div>
 
+      {/* Lotus Branding Header */}
+      <div className="mb-8 text-center relative z-10">
+        <Link href="/" className="inline-block">
+          <img 
+            src="/lotus-full.svg" 
+            alt="Lotus" 
+            className="h-12 w-auto opacity-90 hover:opacity-100 transition-opacity filter brightness-0 invert"
+          />
+        </Link>
+      </div>
+
       <Card className="w-full max-w-md bg-white/5 backdrop-blur-xl border border-white/20 relative z-10 shadow-2xl shadow-purple-500/10 hover:shadow-purple-500/20 transition-all duration-500 hover:scale-105">
         <CardHeader className="text-center space-y-4">
           <CardTitle className="text-3xl font-bold text-white">
             <ShinyText
-              text={type === "login" ? "Welcome Back" : "Join Lotus"}
+              text={type === "login" ? "Welcome Back" : "Own Your AI"}
               disabled={false}
               speed={3}
               className="text-3xl font-bold"
@@ -92,8 +103,8 @@ export default function AuthForm({ type }: AuthFormProps) {
             <TextType
               text={
                 type === "login"
-                  ? ["Sign in to your account", "Access your AI assistant", "Continue your journey"]
-                  : ["Start your AI journey", "Experience intelligent assistance", "Join the Lotus community"]
+                  ? ["Your AI that remembers you", "Privacy-first intelligence", "Continue where you left off"]
+                  : ["$5/month, not $20", "Your data stays yours", "Intelligence without surveillance"]
               }
               typingSpeed={50}
               pauseDuration={2000}
@@ -260,6 +271,16 @@ export default function AuthForm({ type }: AuthFormProps) {
                 </ScrambledText>
               </div>
             )}
+          </div>
+
+          {/* Privacy Message */}
+          <div className="text-center pt-4 border-t border-white/10">
+            <p className="text-xs text-gray-400 leading-relaxed">
+              {type === "signup" 
+                ? "🔒 We never train on your data. Your conversations stay private. Cancel anytime." 
+                : "🔒 Your data stays yours. Privacy-first AI you can trust."
+              }
+            </p>
           </div>
         </CardContent>
       </Card>

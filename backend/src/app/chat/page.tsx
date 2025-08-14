@@ -643,9 +643,9 @@ function ChatPageContent() {
         <div className="flex items-center justify-between p-4 border-b border-white/10">
           <Link href="/" className="flex items-center">
             <img 
-              src="/lotus-white.png" 
+              src="/lotus-full.svg" 
               alt="Lotus" 
-              className="h-7 w-auto opacity-90 hover:opacity-100 transition-opacity"
+              className="h-7 w-auto opacity-90 hover:opacity-100 transition-opacity filter brightness-0 invert"
             />
           </Link>
           <button
@@ -754,9 +754,9 @@ function ChatPageContent() {
             <div className="flex flex-col items-center justify-center h-full text-center animate-fadeIn">
               <div className="glass-card p-12 rounded-3xl max-w-2xl w-full mx-4">
                 <img 
-                  src="/lotus-white.png" 
+                  src="/lotus.svg" 
                   alt="Lotus" 
-                  className="h-16 w-auto mb-6 opacity-90 mx-auto animate-float"
+                  className="h-16 w-auto mb-6 opacity-90 mx-auto animate-float filter brightness-0 invert"
                 />
                 <h1 className="text-responsive-xl font-light mb-4 text-shimmer">
                   How can I help you today?

@@ -16,14 +16,14 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXTAUTH_URL || 'http://localhost:3000'),
   title: {
-    default: "FlowBuilder - Build Internal Tools That Actually Flow",
-    template: "%s | FlowBuilder"
+    default: "Lotus: The Private, Personal, and Powerful AI You Own",
+    template: "%s | Lotus"
   },
-  description: "Design lightweight internal apps and workflows with zero friction. Fast to launch. Easy to evolve. Built to feel invisible.",
-  keywords: ["internal tools", "workflow builder", "app builder", "drag and drop", "low code", "no code", "workflow automation", "business tools", "team productivity"],
-  authors: [{ name: "FlowBuilder Team" }],
-  creator: "FlowBuilder",
-  publisher: "FlowBuilder",
+  description: "Why rent an AI that watches you, forgets you, and costs $20? Lotus learns you, protects you, and costs less than your coffee. For users who want intelligence—not surveillance.",
+  keywords: ["ai assistant", "private ai", "personal ai", "ai chat", "memory ai", "affordable ai", "privacy-first ai", "ai that learns", "intelligent assistant", "ai ownership"],
+  authors: [{ name: "Lotus Team" }],
+  creator: "Lotus",
+  publisher: "Lotus",
   robots: {
     index: true,
     follow: true,
@@ -39,24 +39,24 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'en_US',
     url: '/',
-    siteName: 'FlowBuilder',
-    title: 'FlowBuilder - Build Internal Tools That Actually Flow',
-    description: 'Design lightweight internal apps and workflows with zero friction. Fast to launch. Easy to evolve. Built to feel invisible.',
+    siteName: 'Lotus',
+    title: 'Lotus: The Private, Personal, and Powerful AI You Own',
+    description: 'Why rent an AI that watches you, forgets you, and costs $20? Lotus learns you, protects you, and costs less than your coffee. For users who want intelligence—not surveillance.',
     images: [
       {
-        url: '/lotus-white.png',
+        url: '/lotus.svg',
         width: 1200,
         height: 630,
-        alt: 'FlowBuilder - Build Internal Tools That Actually Flow',
+        alt: 'Lotus: The Private, Personal, and Powerful AI You Own',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'FlowBuilder - Build Internal Tools That Actually Flow',
-    description: 'Design lightweight internal apps and workflows with zero friction. Fast to launch. Easy to evolve. Built to feel invisible.',
-    images: ['/lotus-white.png'],
-    creator: '@flowbuilder',
+    title: 'Lotus: The Private, Personal, and Powerful AI You Own',
+    description: 'Why rent an AI that watches you, forgets you, and costs $20? Lotus learns you, protects you, and costs less than your coffee. For users who want intelligence—not surveillance.',
+    images: ['/lotus.svg'],
+    creator: '@lotus_ai',
   },
   verification: {
     google: 'google-site-verification-code-here',
@@ -74,11 +74,11 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link rel="preload" href="/lotus-white.png" as="image" />
-        <meta name="theme-color" content="#7c3aed" />
+        <link rel="preload" href="/lotus.svg" as="image" />
+        <meta name="theme-color" content="#8B5CF6" />
         <meta name="color-scheme" content="dark" />
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" href="/lotus-white.png" />
+        <link rel="icon" href="/lotus.svg" type="image/svg+xml" />
+        <link rel="apple-touch-icon" href="/lotus.svg" />
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
       </head>
       <body

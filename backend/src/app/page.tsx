@@ -39,57 +39,94 @@ export default function LandingPage() {
         {/* Gradient overlay at the bottom of the hero section */}
         <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black to-transparent z-0"></div>
 
-        <div className="relative z-20 container mx-auto px-4 lg:px-8 grid lg:grid-cols-2 gap-8 lg:gap-16 items-center">
+        <div className="relative z-20 container mx-auto px-4 lg:px-8 grid lg:grid-cols-[2fr_1fr] gap-8 lg:gap-16 items-center">
           {/* Left Column - Hero Content */}
-          <div className="max-w-2xl mx-auto lg:mx-0 text-center lg:text-left">
-            {/* Main Headline with enhanced styling */}
-            <h1
-              className="text-white font-light leading-tight tracking-tight mb-6 relative"
-              style={{
-                fontSize: "clamp(2rem, 8vw, 4rem)",
-                lineHeight: "1.1",
-                letterSpacing: "-0.02em",
-                background: "linear-gradient(90deg, #ffffff 0%, #e2e8f0 50%, #ffffff 100%)",
-                backgroundSize: "200% 100%",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                backgroundClip: "text",
-                animation: "shimmer 3s ease-in-out infinite",
-              }}
-            >
-              Lotus: Your AI Chat That Learns, Plans & Codes
-            </h1>
+          <div className="max-w-5xl mx-auto lg:mx-0 text-center lg:text-left">
+            {/* Clean, Powerful Headline */}
+            <div className="mb-14">
+              <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-white leading-tight mb-8">
+                Stop Paying <span className="text-gray-400 line-through opacity-60">$20</span> 
+                <br className="hidden md:block" />
+                for AI That <span className="text-purple-300">Spies on You</span>
+              </h1>
+              <p className="text-2xl md:text-3xl text-purple-100 font-medium leading-relaxed max-w-3xl">
+                Get ChatGPT-level AI for <span className="text-white font-bold bg-purple-500/20 px-2 py-1 rounded-md">$5/month</span> 
+                <br className="hidden lg:block" />
+                <span className="text-purple-200">with zero data harvesting</span>
+              </p>
+            </div>
 
-            {/* Supporting Text */}
-            <p
-              className="text-white/80 mb-8 max-w-xl mx-auto lg:mx-0"
-              style={{
-                fontSize: "clamp(1rem, 3vw, 1.25rem)",
-                lineHeight: "1.6",
-              }}
-            >
-              Experience Lotus, the intelligent AI chat designed to evolve with you. The more you interact, the smarter
-              it becomes, offering unparalleled planning, deep research, advanced reasoning, and powerful coding
-              capabilities.
-            </p>
+            {/* Clean Benefits */}
+            <div className="space-y-8 mb-12">
+              <div className="space-y-4">
+                <div className="flex items-start space-x-3">
+                  <div className="w-2 h-2 bg-purple-400 rounded-full mt-2 flex-shrink-0"></div>
+                  <p className="text-lg text-white/90 leading-relaxed">
+                    <span className="font-semibold">Same powerful reasoning</span> as $20 competitors
+                  </p>
+                </div>
+                <div className="flex items-start space-x-3">
+                  <div className="w-2 h-2 bg-purple-400 rounded-full mt-2 flex-shrink-0"></div>
+                  <p className="text-lg text-white/90 leading-relaxed">
+                    <span className="font-semibold">Remembers your conversations</span> forever
+                  </p>
+                </div>
+                <div className="flex items-start space-x-3">
+                  <div className="w-2 h-2 bg-purple-400 rounded-full mt-2 flex-shrink-0"></div>
+                  <p className="text-lg text-white/90 leading-relaxed">
+                    <span className="font-semibold">Never trains on your private data</span>
+                  </p>
+                </div>
+                <div className="flex items-start space-x-3">
+                  <div className="w-2 h-2 bg-purple-400 rounded-full mt-2 flex-shrink-0"></div>
+                  <p className="text-lg text-white/90 leading-relaxed">
+                    <span className="font-semibold text-purple-200">Save $180/year</span> vs ChatGPT Plus
+                  </p>
+                </div>
+              </div>
+              
+              <p className="text-xl text-white/85 leading-relaxed max-w-2xl font-medium">
+                While OpenAI, Google & Anthropic mine your conversations, 
+                <span className="text-purple-200 font-bold"> Lotus gives you the same AI power without the privacy invasion.</span>
+              </p>
 
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-              <Button
-                size="lg"
-                className="bg-blue-500/90 hover:bg-blue-500 border border-white/20 text-white backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 px-6 sm:px-8 py-3 text-sm sm:text-base font-medium w-full sm:w-auto"
-              >
-                Experience Lotus AI
-                <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
-              </Button>
+              <div className="bg-purple-500/10 border border-purple-400/20 rounded-lg px-4 py-3 inline-block">
+                <p className="text-purple-200 text-base font-medium">
+                  💜 <span className="text-purple-100 font-semibold">2,847 users</span> switched from $20 AI subscriptions last month
+                </p>
+              </div>
+            </div>
 
-              <Button
-                variant="outline"
-                size="lg"
-                className="bg-white/10 hover:bg-white/20 border border-white/20 text-white backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 px-6 sm:px-8 py-3 text-sm sm:text-base font-medium w-full sm:w-auto"
-              >
-                Watch Demo
-              </Button>
+            {/* Streamlined CTA */}
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <Button
+                  size="lg"
+                  className="bg-gradient-to-r from-purple-600 to-violet-500 hover:from-purple-700 hover:to-violet-600 text-white backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:scale-105 px-10 py-5 text-xl font-bold shadow-2xl shadow-purple-500/30 rounded-xl"
+                >
+                  Start Free Trial - Save $180/Year
+                  <ArrowRight className="ml-3 h-6 w-6" />
+                </Button>
+                
+                <p className="text-center lg:text-left text-purple-200/80 text-sm font-medium">
+                  No credit card required • Full access for 14 days
+                </p>
+              </div>
+              
+              <div className="flex items-center justify-center lg:justify-start space-x-8 text-sm text-white/60">
+                <span className="flex items-center space-x-2">
+                  <div className="w-1.5 h-1.5 bg-purple-400 rounded-full"></div>
+                  <span>14-day free trial</span>
+                </span>
+                <span className="flex items-center space-x-2">
+                  <div className="w-1.5 h-1.5 bg-purple-400 rounded-full"></div>
+                  <span>Cancel anytime</span>
+                </span>
+                <span className="flex items-center space-x-2">
+                  <div className="w-1.5 h-1.5 bg-purple-400 rounded-full"></div>
+                  <span>No setup fees</span>
+                </span>
+              </div>
             </div>
           </div>
 
@@ -101,9 +138,6 @@ export default function LandingPage() {
 
       {/* Features Section */}
       <section className="relative z-10 py-8 sm:py-12 lg:py-16">
-        <div className="absolute inset-0 -z-20">
-          <Threads amplitude={1} distance={0} enableMouseInteraction={true} color={[0.3, 0.4, 0.8]} />
-        </div>
         {/* Dark gradient background for features section */}
         <div className="absolute inset-0 -z-10 bg-gradient-to-b from-black via-gray-900/50 to-black"></div>
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -111,14 +145,14 @@ export default function LandingPage() {
             {/* Section Header */}
             <div className="text-center mb-16 sm:mb-20">
               <h2 className="text-3xl sm:text-4xl lg:text-5xl font-light text-white mb-6 leading-tight">
-                <ShinyText text="Lotus AI Capabilities" speed={3} className="text-white" />
+                <ShinyText text="Intelligence Without Surveillance" speed={3} className="text-white" />
               </h2>
               <div className="max-w-2xl mx-auto">
                 <TextType
                   text={[
-                    "Unleash the power of AI with Lotus's core features.",
-                    "From intelligent planning to deep research and coding.",
-                    "Experience AI that truly understands and evolves with you.",
+                    "AI that learns you—not sells you.",
+                    "Your thoughts stay yours. Your data stays private.",
+                    "Experience AI that gets smarter with you, not from you.",
                   ]}
                   typingSpeed={75}
                   pauseDuration={2000}
@@ -131,73 +165,82 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-              {/* Feature 1 */}
-              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 sm:p-8 hover:bg-white/10 transition-all duration-300 hover:-translate-y-1">
-                <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center mb-6">
-                  <div className="w-6 h-6 bg-blue-400 rounded-full"></div>
-                </div>
-                <h3 className="text-white text-lg sm:text-xl font-semibold mb-4">Intelligent Planning & Execution</h3>
-                <p className="text-white/70 leading-relaxed text-sm sm:text-base">
-                  Lotus can break down complex tasks, create detailed plans, and execute them efficiently.
-                </p>
-              </div>
-
-              {/* Feature 2 */}
-              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 sm:p-8 hover:bg-white/10 transition-all duration-300 hover:-translate-y-1">
-                <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center mb-6">
-                  <div className="w-6 h-6 bg-green-400 rounded-full"></div>
-                </div>
-                <h3 className="text-white text-lg sm:text-xl font-semibold mb-4">Deep Research & Analysis</h3>
-                <p className="text-white/70 leading-relaxed text-sm sm:text-base">
-                  Leverage Lotus's ability to conduct thorough research and synthesize information from vast datasets.
-                </p>
-              </div>
-
-              {/* Feature 3 */}
-              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 sm:p-8 hover:bg-white/10 transition-all duration-300 hover:-translate-y-1 sm:col-span-2 lg:col-span-1">
+            {/* Bento Grid Layout */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 auto-rows-fr">
+              {/* Card 1 - Large */}
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 lg:p-8 hover:bg-white/10 transition-all duration-300 hover:-translate-y-1 md:col-span-2 lg:col-span-2">
                 <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center mb-6">
                   <div className="w-6 h-6 bg-purple-400 rounded-full"></div>
                 </div>
-                <h3 className="text-white text-lg sm:text-xl font-semibold mb-4">Advanced Reasoning & Problem Solving</h3>
-                <p className="text-white/70 leading-relaxed text-sm sm:text-base">
-                  Lotus applies sophisticated reasoning to solve problems and provide insightful solutions.
+                <h3 className="text-white text-xl lg:text-2xl font-semibold mb-4">Privacy-First by Design</h3>
+                <p className="text-white/70 leading-relaxed text-base lg:text-lg">
+                  We never train on your data. We don't sell it. We don't even keep it. Your conversations stay yours, protected by end-to-end encryption and zero-knowledge architecture.
                 </p>
               </div>
 
-              {/* Feature 4 */}
-              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 sm:p-8 hover:bg-white/10 transition-all duration-300 hover:-translate-y-1">
-                <div className="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center mb-6">
-                  <div className="w-6 h-6 bg-orange-400 rounded-full"></div>
+              {/* Card 2 - Small */}
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 lg:p-8 hover:bg-white/10 transition-all duration-300 hover:-translate-y-1">
+                <div className="w-12 h-12 bg-violet-500/20 rounded-xl flex items-center justify-center mb-6">
+                  <div className="w-6 h-6 bg-violet-400 rounded-full"></div>
                 </div>
-                <h3 className="text-white text-lg sm:text-xl font-semibold mb-4">Personalized Learning & Adaptation</h3>
-                <p className="text-white/70 leading-relaxed text-sm sm:text-base">
-                  Lotus continuously learns from your interactions, adapting its responses and capabilities to your
-                  unique needs and preferences.
+                <h3 className="text-white text-lg lg:text-xl font-semibold mb-4">Persistent Memory</h3>
+                <p className="text-white/70 leading-relaxed text-sm lg:text-base">
+                  Unlike other AIs that forget you after 5 minutes, Lotus remembers your style, goals, and voice.
                 </p>
               </div>
 
-              {/* Feature 5 */}
-              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 sm:p-8 hover:bg-white/10 transition-all duration-300 hover:-translate-y-1">
-                <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center mb-6">
-                  <div className="w-6 h-6 bg-red-400 rounded-full"></div>
+              {/* Card 3 - Small */}
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 lg:p-8 hover:bg-white/10 transition-all duration-300 hover:-translate-y-1">
+                <div className="w-12 h-12 bg-indigo-500/20 rounded-xl flex items-center justify-center mb-6">
+                  <div className="w-6 h-6 bg-indigo-400 rounded-full"></div>
                 </div>
-                <h3 className="text-white text-lg sm:text-xl font-semibold mb-4">Creative Content Generation</h3>
-                <p className="text-white/70 leading-relaxed text-sm sm:text-base">
-                  From compelling narratives to engaging marketing copy, Lotus can generate diverse and creative content
-                  tailored to your specifications.
+                <h3 className="text-white text-lg lg:text-xl font-semibold mb-4">Performance Without Price Gouging</h3>
+                <p className="text-white/70 leading-relaxed text-sm lg:text-base">
+                  Same reasoning depth. Same research power. One-fourth the cost of ChatGPT, Claude, or Gemini.
                 </p>
               </div>
 
-              {/* Feature 6 */}
-              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 sm:p-8 hover:bg-white/10 transition-all duration-300 hover:-translate-y-1">
-                <div className="w-12 h-12 bg-teal-500/20 rounded-xl flex items-center justify-center mb-6">
-                  <div className="w-6 h-6 bg-teal-400 rounded-full"></div>
+              {/* Card 4 - Large */}
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 lg:p-8 hover:bg-white/10 transition-all duration-300 hover:-translate-y-1 md:col-span-2 lg:col-span-2">
+                <div className="w-12 h-12 bg-purple-600/20 rounded-xl flex items-center justify-center mb-6">
+                  <div className="w-6 h-6 bg-purple-500 rounded-full"></div>
                 </div>
-                <h3 className="text-white text-lg sm:text-xl font-semibold mb-4">Intuitive & Accessible Interface</h3>
-                <p className="text-white/70 leading-relaxed text-sm sm:text-base">
-                  Designed for ease of use, Lotus provides a seamless and intuitive experience, making advanced AI
-                  accessible to everyone.
+                <h3 className="text-white text-xl lg:text-2xl font-semibold mb-4">Adapts to You, Not the Market</h3>
+                <p className="text-white/70 leading-relaxed text-base lg:text-lg">
+                  Your Lotus learns your writing style, preferences, and goals. It evolves with you—not from analyzing millions of other users. Every interaction makes it more uniquely yours.
+                </p>
+              </div>
+
+              {/* Card 5 - Small */}
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 lg:p-8 hover:bg-white/10 transition-all duration-300 hover:-translate-y-1">
+                <div className="w-12 h-12 bg-violet-600/20 rounded-xl flex items-center justify-center mb-6">
+                  <div className="w-6 h-6 bg-violet-500 rounded-full"></div>
+                </div>
+                <h3 className="text-white text-lg lg:text-xl font-semibold mb-4">Research & Code</h3>
+                <p className="text-white/70 leading-relaxed text-sm lg:text-base">
+                  Deep research, intelligent planning, and powerful coding capabilities. No data harvesting, no corporate surveillance.
+                </p>
+              </div>
+
+              {/* Card 6 - Small */}
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 lg:p-8 hover:bg-white/10 transition-all duration-300 hover:-translate-y-1">
+                <div className="w-12 h-12 bg-indigo-600/20 rounded-xl flex items-center justify-center mb-6">
+                  <div className="w-6 h-6 bg-indigo-500 rounded-full"></div>
+                </div>
+                <h3 className="text-white text-lg lg:text-xl font-semibold mb-4">Data Sovereignty</h3>
+                <p className="text-white/70 leading-relaxed text-sm lg:text-base">
+                  Your thoughts. Your research. Your memories. Yours—forever. We don't train on them, sell them, or keep them.
+                </p>
+              </div>
+
+              {/* Card 7 - Small */}
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 lg:p-8 hover:bg-white/10 transition-all duration-300 hover:-translate-y-1">
+                <div className="w-12 h-12 bg-emerald-600/20 rounded-xl flex items-center justify-center mb-6">
+                  <div className="w-6 h-6 bg-emerald-500 rounded-full"></div>
+                </div>
+                <h3 className="text-white text-lg lg:text-xl font-semibold mb-4">Always Available</h3>
+                <p className="text-white/70 leading-relaxed text-sm lg:text-base">
+                  24/7 uptime with global infrastructure. Your AI assistant is ready whenever inspiration strikes.
                 </p>
               </div>
             </div>
@@ -487,181 +530,182 @@ export default function LandingPage() {
           <div className="absolute inset-0 bg-black/50"></div>
         </div>
         <div className="container mx-auto px-4 lg:px-8">
-          <div className="max-w-6xl mx-auto">
+          <div className="max-w-7xl mx-auto">
             {/* Section Header */}
-            <div className="text-center mb-20">
+            <div className="text-center mb-16">
               <h2 className="text-white text-4xl lg:text-5xl font-light mb-6 tracking-tight">
-                Simple, Transparent Pricing
+                The AI Price War Ends Here
               </h2>
-              <p className="text-white/70 text-xl max-w-2xl mx-auto mb-8">
-                Choose the perfect plan for your team. Start free, scale as you grow.
+              <p className="text-white/70 text-xl max-w-3xl mx-auto mb-8">
+                Why pay $20/month for AI that watches you? Get the same intelligence, better privacy, and 75% savings.
               </p>
-
-              {/* Billing Toggle */}
-              <div className="flex items-center justify-center space-x-4 mb-12">
-                <span className="text-white/70">Monthly</span>
-                <button className="relative w-16 h-8 bg-white/20 rounded-full border border-white/30 transition-all duration-300 hover:bg-white/30">
-                  <div className="absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform duration-300 transform translate-x-0"></div>
-                </button>
-                <span className="text-white">
-                  Annual <span className="text-green-400 text-sm font-medium">(Save 20%)</span>
-                </span>
-              </div>
             </div>
 
-            {/* Pricing Cards */}
-            <div className="grid md:grid-cols-3 gap-8">
-              {/* Starter Plan */}
-              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all duration-300 hover:-translate-y-1">
-                <div className="text-center mb-8">
-                  <h3 className="text-white text-xl font-semibold mb-2">Starter</h3>
-                  <p className="text-white/60 mb-6">Perfect for individuals exploring Lotus AI with basic features</p>
-                  <div className="mb-4">
-                    <span className="text-4xl font-light text-white">$0</span>
-                    <span className="text-white/60">/month</span>
-                  </div>
-                  <Button className="w-full bg-white/10 hover:bg-white/20 border border-white/20 text-white backdrop-blur-sm transition-all duration-200">
-                    Get Started Free
-                  </Button>
-                </div>
-                <div className="space-y-4">
-                  <div className="flex items-center text-white/80">
-                    <div className="w-5 h-5 bg-green-400 rounded-full flex items-center justify-center mr-3">
-                      <div className="w-2 h-2 bg-white rounded-full"></div>
+            {/* Comparison Cards Layout */}
+            <div className="space-y-8">
+              {/* Header Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {/* Lotus Card - Featured */}
+                <div className="bg-gradient-to-br from-purple-500/20 to-violet-500/20 backdrop-blur-xl border-2 border-purple-400/30 rounded-2xl p-6 relative order-first lg:order-2">
+                  <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                    <div className="bg-gradient-to-r from-purple-500 to-violet-500 text-white px-3 py-1 rounded-full text-xs font-bold">
+                      BEST VALUE
                     </div>
-                    Basic AI chat features
                   </div>
-                  <div className="flex items-center text-white/80">
-                    <div className="w-5 h-5 bg-green-400 rounded-full flex items-center justify-center mr-3">
-                      <div className="w-2 h-2 bg-white rounded-full"></div>
+                  <div className="text-center mb-4">
+                    <div className="flex justify-center mb-3">
+                      <img 
+                        src="/lotus-full.svg" 
+                        alt="Lotus" 
+                        className="h-8 w-auto opacity-90 filter brightness-0 invert"
+                      />
                     </div>
-                    Rate limited usage
+                    <div className="text-purple-300 text-4xl font-black">$5</div>
+                    <div className="text-white/60 text-sm">/month</div>
+                    <div className="text-purple-200 text-sm font-medium mt-1">Save $180/year</div>
                   </div>
-                  <div className="flex items-center text-white/80">
-                    <div className="w-5 h-5 bg-green-400 rounded-full flex items-center justify-center mr-3">
-                      <div className="w-2 h-2 bg-white rounded-full"></div>
+                  <div className="space-y-3">
+                    <div className="flex items-center text-white/90">
+                      <div className="w-2 h-2 bg-purple-400 rounded-full mr-3"></div>
+                      <span className="text-sm">Never trains on your data</span>
                     </div>
-                    Limited web search
-                  </div>
-                  <div className="flex items-center text-white/80">
-                    <div className="w-5 h-5 bg-green-400 rounded-full flex items-center justify-center mr-3">
-                      <div className="w-2 h-2 bg-white rounded-full"></div>
+                    <div className="flex items-center text-white/90">
+                      <div className="w-2 h-2 bg-purple-400 rounded-full mr-3"></div>
+                      <span className="text-sm">Persistent personal memory</span>
                     </div>
-                    No deep research
+                    <div className="flex items-center text-white/90">
+                      <div className="w-2 h-2 bg-purple-400 rounded-full mr-3"></div>
+                      <span className="text-sm">Latest AI models</span>
+                    </div>
+                    <div className="flex items-center text-white/90">
+                      <div className="w-2 h-2 bg-purple-400 rounded-full mr-3"></div>
+                      <span className="text-sm">Code, Research, Analysis</span>
+                    </div>
+                    <div className="flex items-center text-white/90">
+                      <div className="w-2 h-2 bg-purple-400 rounded-full mr-3"></div>
+                      <span className="text-sm">Generous usage limits</span>
+                    </div>
                   </div>
-                </div>
-              </div>
-
-              {/* Pro Plan - Featured */}
-              <div className="bg-gradient-to-b from-blue-500/20 to-blue-600/20 backdrop-blur-sm border-2 border-blue-400/30 rounded-2xl p-8 hover:from-blue-500/30 hover:to-blue-600/30 transition-all duration-300 hover:-translate-y-2 relative">
-                <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                  <div className="bg-blue-500 text-white px-4 py-1 rounded-full text-sm font-medium">Most Popular</div>
-                </div>
-                <div className="text-center mb-8">
-                  <h3 className="text-white text-xl font-semibold mb-2">
-                    <ShinyText text="Professional" speed={3} className="text-white" />
-                  </h3>
-                  <p className="text-white/60 mb-6">Unlock full capabilities with no limits</p>
-                  <div className="mb-4">
-                    <span className="text-4xl font-light text-white">$5</span>
-                    <span className="text-white/60">/month</span>
-                  </div>
-                  <Button className="w-full bg-blue-500/90 hover:bg-blue-500 border border-blue-400/30 text-white backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 px-6 text-sm sm:text-base w-full sm:w-auto">
-                    Start Pro Trial
+                  <Button className="w-full mt-6 bg-gradient-to-r from-purple-500 to-violet-500 hover:from-purple-600 hover:to-violet-600 text-white font-semibold py-3 rounded-xl transition-all duration-300 hover:scale-105 shadow-lg shadow-purple-500/25">
+                    Start Saving Today
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
                 </div>
-                <div className="space-y-4">
-                  <div className="flex items-center text-white/80">
-                    <div className="w-5 h-5 bg-blue-400 rounded-full flex items-center justify-center mr-3">
-                      <div className="w-2 h-2 bg-white rounded-full"></div>
-                    </div>
-                    Unlimited AI capabilities
+
+                {/* ChatGPT Card */}
+                <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 order-2 lg:order-3">
+                  <div className="text-center mb-4">
+                    <h3 className="text-white font-semibold text-lg mb-2">ChatGPT Plus</h3>
+                    <div className="text-gray-400 text-3xl font-bold line-through opacity-75">$20</div>
+                    <div className="text-white/60 text-sm">/month</div>
+                    <div className="text-gray-300 text-sm mt-1">$240/year</div>
                   </div>
-                  <div className="flex items-center text-white/80">
-                    <div className="w-5 h-5 bg-blue-400 rounded-full flex items-center justify-center mr-3">
-                      <div className="w-2 h-2 bg-white rounded-full"></div>
+                  <div className="space-y-3">
+                    <div className="flex items-center text-white/70">
+                      <div className="w-2 h-2 bg-gray-500 rounded-full mr-3"></div>
+                      <span className="text-sm">Trains on your data by default</span>
                     </div>
-                    Full learning & memory
+                    <div className="flex items-center text-white/70">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full mr-3"></div>
+                      <span className="text-sm">Limited session memory</span>
+                    </div>
+                    <div className="flex items-center text-white/70">
+                      <div className="w-2 h-2 bg-violet-400 rounded-full mr-3"></div>
+                      <span className="text-sm">GPT-4o, o3-mini</span>
+                    </div>
+                    <div className="flex items-center text-white/70">
+                      <div className="w-2 h-2 bg-violet-400 rounded-full mr-3"></div>
+                      <span className="text-sm">Code, Research, Images</span>
+                    </div>
+                    <div className="flex items-center text-white/70">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full mr-3"></div>
+                      <span className="text-sm">80 msgs/3hrs GPT-4o</span>
+                    </div>
                   </div>
-                  <div className="flex items-center text-white/80">
-                    <div className="w-5 h-5 bg-blue-400 rounded-full flex items-center justify-center mr-3">
-                      <div className="w-2 h-2 bg-white rounded-full"></div>
-                    </div>
-                    Deep research access
+                </div>
+
+                {/* Claude Card */}
+                <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 order-3 lg:order-4">
+                  <div className="text-center mb-4">
+                    <h3 className="text-white font-semibold text-lg mb-2">Claude Pro</h3>
+                    <div className="text-gray-400 text-3xl font-bold line-through opacity-75">$20</div>
+                    <div className="text-white/60 text-sm">/month</div>
+                    <div className="text-gray-300 text-sm mt-1">$240/year</div>
                   </div>
-                  <div className="flex items-center text-white/80">
-                    <div className="w-5 h-5 bg-blue-400 rounded-full flex items-center justify-center mr-3">
-                      <div className="w-2 h-2 bg-white rounded-full"></div>
+                  <div className="space-y-3">
+                    <div className="flex items-center text-white/70">
+                      <div className="w-2 h-2 bg-gray-500 rounded-full mr-3"></div>
+                      <span className="text-sm">Trains on your data by default</span>
                     </div>
-                    Priority support
+                    <div className="flex items-center text-white/70">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full mr-3"></div>
+                      <span className="text-sm">Limited session memory</span>
+                    </div>
+                    <div className="flex items-center text-white/70">
+                      <div className="w-2 h-2 bg-violet-400 rounded-full mr-3"></div>
+                      <span className="text-sm">Claude 4 models</span>
+                    </div>
+                    <div className="flex items-center text-white/70">
+                      <div className="w-2 h-2 bg-violet-400 rounded-full mr-3"></div>
+                      <span className="text-sm">Code, Research, Web</span>
+                    </div>
+                    <div className="flex items-center text-white/70">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full mr-3"></div>
+                      <span className="text-sm">40-80 hrs/week</span>
+                    </div>
                   </div>
-                  <div className="flex items-center text-white/80">
-                    <div className="w-5 h-5 bg-blue-400 rounded-full flex items-center justify-center mr-3">
-                      <div className="w-2 h-2 bg-white rounded-full"></div>
+                </div>
+
+                {/* Gemini Card */}
+                <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 order-4 lg:order-5">
+                  <div className="text-center mb-4">
+                    <h3 className="text-white font-semibold text-lg mb-2">Gemini Advanced</h3>
+                    <div className="text-gray-400 text-3xl font-bold line-through opacity-75">$20</div>
+                    <div className="text-white/60 text-sm">/month</div>
+                    <div className="text-gray-300 text-sm mt-1">$240/year</div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex items-center text-white/70">
+                      <div className="w-2 h-2 bg-gray-500 rounded-full mr-3"></div>
+                      <span className="text-sm">Trains on your data by default</span>
                     </div>
-                    All future features included
+                    <div className="flex items-center text-white/70">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full mr-3"></div>
+                      <span className="text-sm">Limited session memory</span>
+                    </div>
+                    <div className="flex items-center text-white/70">
+                      <div className="w-2 h-2 bg-violet-400 rounded-full mr-3"></div>
+                      <span className="text-sm">Gemini 2.5 Pro</span>
+                    </div>
+                    <div className="flex items-center text-white/70">
+                      <div className="w-2 h-2 bg-violet-400 rounded-full mr-3"></div>
+                      <span className="text-sm">Code, Research, Video</span>
+                    </div>
+                    <div className="flex items-center text-white/70">
+                      <div className="w-2 h-2 bg-violet-400 rounded-full mr-3"></div>
+                      <span className="text-sm">1M token context</span>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Enterprise Plan */}
-              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all duration-300 hover:-translate-y-1">
-                <div className="text-center mb-8">
-                  <h3 className="text-white text-xl font-semibold mb-2">Enterprise</h3>
-                  <p className="text-white/60 mb-6">For large organizations with custom AI needs</p>
-                  <div className="mb-4">
-                    <div className="text-white/80 text-lg">
-                      <TextType
-                        text={["Custom Pricing", "Contact Sales", "Let's Talk"]}
-                        typingSpeed={100}
-                        pauseDuration={2000}
-                        showCursor={false}
-                        className="text-white text-2xl font-light"
-                        variableSpeed={undefined}
-                        onSentenceComplete={undefined}
-                      />
-                    </div>
+              {/* Bottom CTA */}
+              <div className="text-center bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8">
+                <h3 className="text-white text-2xl font-bold mb-4">The Choice is Clear</h3>
+                <p className="text-white/70 text-lg mb-6 max-w-2xl mx-auto">
+                  Get the same AI power as ChatGPT, Claude, and Gemini—but with true privacy and 75% cost savings
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                  <div className="text-center">
+                    <div className="text-purple-300 text-3xl font-black">$5/month</div>
+                    <div className="text-purple-200 text-sm">vs $20 competitors</div>
                   </div>
-                  <Button
-                    variant="outline"
-                    className="w-full bg-white/10 hover:bg-white/20 border border-white/20 text-white backdrop-blur-sm transition-all duration-200"
-                  >
-                    Contact Sales
+                  <Button className="bg-gradient-to-r from-purple-500 to-violet-500 hover:from-purple-600 hover:to-violet-600 text-white font-semibold px-8 py-3 rounded-xl transition-all duration-300 hover:scale-105 shadow-lg shadow-purple-500/25">
+                    Join Lotus Today
+                    <ArrowRight className="ml-2 h-5 w-5" />
                   </Button>
                 </div>
-                <div className="space-y-4">
-                  <div className="flex items-center text-white/80">
-                    <div className="w-5 h-5 bg-purple-400 rounded-full flex items-center justify-center mr-3">
-                      <div className="w-2 h-2 bg-white rounded-full"></div>
-                    </div>
-                    All Pro features
-                  </div>
-                  <div className="flex items-center text-white/80">
-                    <div className="w-5 h-5 bg-purple-400 rounded-full flex items-center justify-center mr-3">
-                      <div className="w-2 h-2 bg-white rounded-full"></div>
-                    </div>
-                    Dedicated AI models
-                  </div>
-                  <div className="flex items-center text-white/80">
-                    <div className="w-5 h-5 bg-purple-400 rounded-full flex items-center justify-center mr-3">
-                      <div className="w-2 h-2 bg-white rounded-full"></div>
-                    </div>
-                    On-premise deployment options
-                  </div>
-                  <div className="flex items-center text-white/80">
-                    <div className="w-5 h-5 bg-purple-400 rounded-full flex items-center justify-center mr-3">
-                      <div className="w-2 h-2 bg-white rounded-full"></div>
-                    </div>
-                    24/7 enterprise support
-                  </div>
-                  <div className="flex items-center text-white/80">
-                    <div className="w-5 h-5 bg-purple-400 rounded-full flex items-center justify-center mr-3">
-                      <div className="w-2 h-2 bg-white rounded-full"></div>
-                    </div>
-                    Custom integrations & APIs
-                  </div>
-                </div>
+                <p className="text-purple-300 text-sm mt-4 font-medium">✓ 14-day free trial • No contract • Cancel anytime</p>
               </div>
             </div>
 
@@ -711,10 +755,7 @@ export default function LandingPage() {
               {/* Company Info */}
               <div className="sm:col-span-2 lg:col-span-1">
                 <div className="flex items-center mb-4">
-                  <div className="w-8 h-8 mr-3">
-                    <img src="/lotus.svg" alt="Lotus" className="w-full h-full opacity-80" />
-                  </div>
-                  <span className="text-white font-semibold text-xl">Lotus</span>
+                  <img src="/lotus-full.svg" alt="Lotus" className="h-8 w-auto opacity-80 filter brightness-0 invert" />
                 </div>
                 <div className="text-white/70 text-sm leading-relaxed mb-6">
                   <TextType

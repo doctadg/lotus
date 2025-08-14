@@ -29,17 +29,12 @@ export default function DynamicNavbar() {
     >
       <div className="flex items-center justify-between">
         {/* Logo */}
-        <Link href="/" className="flex items-center space-x-3 group">
-          <div className="w-8 h-8 transition-transform duration-300 group-hover:scale-110">
-            <img
-              src="/lotus.svg"
-              alt="FlowBuilder"
-              className="w-full h-full opacity-80 group-hover:opacity-100 transition-opacity"
-            />
-          </div>
-          <span className="text-white font-semibold text-xl group-hover:text-blue-300 transition-colors">
-            FlowBuilder
-          </span>
+        <Link href="/" className="flex items-center group">
+          <img
+            src="/lotus-full.svg"
+            alt="Lotus"
+            className="h-8 w-auto opacity-80 group-hover:opacity-100 transition-all duration-300 group-hover:scale-110 filter brightness-0 invert"
+          />
         </Link>
 
         {/* Desktop Navigation */}
