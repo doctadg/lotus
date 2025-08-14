@@ -16,6 +16,12 @@ interface Message {
   timestamp: Date
 }
 
+interface DynamicQuestion {
+  text: string
+  category: 'technical' | 'creative' | 'personal' | 'general'
+  reasoning: string
+}
+
 interface ChatSession {
   id: string
   title: string
@@ -67,6 +73,9 @@ function ChatPageContent() {
   const [currentTools, setCurrentTools] = useState<ToolCall[]>([])
   const [showAIProcessing, setShowAIProcessing] = useState(false)
   const [agentComplete, setAgentComplete] = useState(false)
+  const [dynamicQuestions, setDynamicQuestions] = useState<DynamicQuestion[]>([])
+  const [questionsLoading, setQuestionsLoading] = useState(false)
+  const [isPersonalized, setIsPersonalized] = useState(false)
   const [searchMode, setSearchMode] = useState<'simple' | 'deep'>(() => {
     if (typeof window !== 'undefined') {
       return (localStorage.getItem('searchMode') as 'simple' | 'deep') || 'simple'
@@ -537,6 +546,52 @@ function ChatPageContent() {
     }
   }
 
+  // Load dynamic questions for the user
+  const loadDynamicQuestions = async () => {
+    if (!token) return
+    
+    setQuestionsLoading(true)
+    try {
+      const response = await fetch('/api/user/questions', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          setDynamicQuestions(data.data.questions || [])
+          setIsPersonalized(data.data.isPersonalized || false)
+          console.log(`🎯 [CHAT] Loaded ${data.data.questions?.length || 0} dynamic questions (personalized: ${data.data.isPersonalized})`)
+        }
+      } else {
+        // Fallback to static questions if API fails
+        const fallbackQuestions: DynamicQuestion[] = [
+          { text: 'Explain quantum computing', category: 'technical', reasoning: 'General technical interest' },
+          { text: 'Write a haiku about coding', category: 'creative', reasoning: 'Creative expression' },
+          { text: 'Compare React vs Vue', category: 'technical', reasoning: 'Web development' },
+          { text: 'Plan a weekend trip', category: 'personal', reasoning: 'Personal assistance' }
+        ]
+        setDynamicQuestions(fallbackQuestions)
+        setIsPersonalized(false)
+      }
+    } catch (error) {
+      console.error('Error loading dynamic questions:', error)
+      // Fallback questions on error
+      const fallbackQuestions: DynamicQuestion[] = [
+        { text: 'Explain quantum computing', category: 'technical', reasoning: 'General technical interest' },
+        { text: 'Write a haiku about coding', category: 'creative', reasoning: 'Creative expression' },
+        { text: 'Compare React vs Vue', category: 'technical', reasoning: 'Web development' },
+        { text: 'Plan a weekend trip', category: 'personal', reasoning: 'Personal assistance' }
+      ]
+      setDynamicQuestions(fallbackQuestions)
+      setIsPersonalized(false)
+    } finally {
+      setQuestionsLoading(false)
+    }
+  }
+
   // Load messages for a specific chat
   const loadChatMessages = async (chatId: string): Promise<Message[]> => {
     try {
@@ -565,6 +620,21 @@ function ChatPageContent() {
     setCurrentChatId(null)
     setMessages([])
     setTimeout(() => inputRef.current?.focus(), 100)
+  }
+
+  // Get icon for question category
+  const getQuestionIcon = (category: string) => {
+    switch (category) {
+      case 'technical':
+        return <Search size={20} />
+      case 'creative':
+        return <Sparkles size={20} />
+      case 'personal':
+        return <MessageCircle size={20} />
+      case 'general':
+      default:
+        return <Plus size={20} />
+    }
   }
 
   const selectChat = async (chatId: string) => {
@@ -597,9 +667,12 @@ function ChatPageContent() {
     }
   }
 
-  // Load chats on component mount
+  // Load chats and questions on component mount
   useEffect(() => {
-    loadChats()
+    if (token) {
+      loadChats()
+      loadDynamicQuestions()
+    }
   }, [token])
 
   // Keyboard shortcuts
@@ -762,32 +835,45 @@ function ChatPageContent() {
                 <h1 className="text-responsive-xl font-light mb-4 text-shimmer">
                   How can I help you today?
                 </h1>
-                <p className="text-text-secondary mb-12 text-responsive-base leading-relaxed">
-                  Ask me anything or choose from the suggestions below
-                </p>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-lg mx-auto">
-                  {[
-                    { icon: <Sparkles size={20} />, text: 'Explain quantum computing' },
-                    { icon: <Search size={20} />, text: 'Write a haiku about coding' },
-                    { icon: <MessageCircle size={20} />, text: 'Compare React vs Vue' },
-                    { icon: <Plus size={20} />, text: 'Plan a weekend trip' }
-                  ].map((item, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setInputText(item.text)}
-                      className="glass-card-hover p-6 rounded-2xl text-left group animate-slideUp border border-white/5"
-                      style={{ animationDelay: `${i * 0.1}s` }}
-                    >
-                      <div className="text-text-tertiary mb-3 group-hover:text-blue-400 transition-colors">
-                        {item.icon}
-                      </div>
-                      <span className="text-sm text-text-secondary group-hover:text-white transition-colors font-medium">
-                        {item.text}
-                      </span>
-                    </button>
-                  ))}
+                <div className="flex items-center justify-center gap-2 mb-8">
+                  <p className="text-text-secondary text-responsive-base leading-relaxed">
+                    {questionsLoading ? 'Loading personalized suggestions...' : 
+                     isPersonalized ? 'Here are some personalized suggestions for you' : 
+                     'Ask me anything or choose from the suggestions below'}
+                  </p>
+                  {isPersonalized && (
+                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" title="Personalized suggestions based on your memories"></div>
+                  )}
                 </div>
+
+                {questionsLoading ? (
+                  <div className="flex justify-center">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-lg mx-auto">
+                    {dynamicQuestions.map((question, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setInputText(question.text)}
+                        className="glass-card-hover p-6 rounded-2xl text-left group animate-slideUp border border-white/5"
+                        style={{ animationDelay: `${i * 0.1}s` }}
+                        title={`${question.reasoning} (${question.category})`}
+                      >
+                        <div className="text-text-tertiary mb-3 group-hover:text-blue-400 transition-colors">
+                          {getQuestionIcon(question.category)}
+                        </div>
+                        <span className="text-sm text-text-secondary group-hover:text-white transition-colors font-medium">
+                          {question.text}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           ) : (
