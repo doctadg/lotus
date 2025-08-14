@@ -30,9 +30,11 @@ interface MemoryNodeMeshProps {
   node: MemoryNode
   onClick: (node: MemoryNode) => void
   isSelected: boolean
+  isHighlighted: boolean
+  isSearchActive: boolean
 }
 
-const MemoryNodeMesh = ({ node, onClick, isSelected }: MemoryNodeMeshProps) => {
+const MemoryNodeMesh = ({ node, onClick, isSelected, isHighlighted, isSearchActive }: MemoryNodeMeshProps) => {
   const meshRef = useRef<THREE.Mesh>(null)
   const glowRef = useRef<THREE.Mesh>(null)
   const [hovered, setHovered] = useState(false)
@@ -90,15 +92,19 @@ const MemoryNodeMesh = ({ node, onClick, isSelected }: MemoryNodeMeshProps) => {
 
   return (
     <group position={node.position}>
-      {/* Outer glow sphere with age-based opacity */}
+      {/* Outer glow sphere with age-based opacity and search highlighting */}
       <Sphere
         ref={glowRef}
-        args={[node.size * 1.3, 16, 16]}
+        args={[node.size * (isHighlighted ? 1.6 : 1.3), 16, 16]}
       >
         <meshBasicMaterial
-          color={getTypeGlow(node.memory.type)}
+          color={isHighlighted ? '#fbbf24' : getTypeGlow(node.memory.type)}
           transparent
-          opacity={(hovered || isSelected ? 0.15 : 0.08) * ageOpacity * (isRecent ? 1.3 : 1)}
+          opacity={
+            isSearchActive && !isHighlighted ? 
+              0.02 * ageOpacity : 
+              (hovered || isSelected || isHighlighted ? 0.25 : 0.08) * ageOpacity * (isRecent ? 1.3 : 1)
+          }
         />
       </Sphere>
       
@@ -357,11 +363,11 @@ const ConnectionLine = ({ start, end, strength }: ConnectionLineProps) => {
       new THREE.Vector3(...end)
     ])
     
-    // Create tube geometry for the connection
+    // Create tube geometry for the connection (reduced thickness by 70%)
     const tubeGeometry = new THREE.TubeGeometry(
       curve,
       64, // segments
-      Math.max(0.02, strength * 0.08), // radius
+      Math.max(0.01, strength * 0.025), // radius - reduced from 0.08 to 0.025
       8, // radial segments
       false
     )
@@ -588,9 +594,130 @@ export default function MemoryMindmap3D({ memories }: MemoryMindmap3DProps) {
   const [selectedNode, setSelectedNode] = useState<MemoryNode | null>(null)
   const [nodes, setNodes] = useState<MemoryNode[]>([])
   const [connections, setConnections] = useState<Array<{ from: string; to: string; strength: number }>>([])
+  const [connectionStrengthThreshold, setConnectionStrengthThreshold] = useState(0.4)
+  const [visibleConnections, setVisibleConnections] = useState<Array<{ from: string; to: string; strength: number }>>([])
+  const [searchQuery, setSearchQuery] = useState('')
+  const [highlightedNodes, setHighlightedNodes] = useState<Set<string>>(new Set())
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+
+  // Force-directed graph simulation
+  const runForceSimulation = (memories: Memory[]) => {
+    const nodes: MemoryNode[] = []
+    const typeColors = {
+      preference: '#3b82f6',
+      fact: '#10b981', 
+      context: '#f59e0b',
+      skill: '#ef4444'
+    }
+
+    // Initialize nodes with random positions
+    memories.forEach((memory, idx) => {
+      const createdDate = new Date(memory.createdAt)
+      const updatedDate = new Date(memory.updatedAt)
+      const now = new Date()
+      const daysSinceCreated = (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24)
+      const daysSinceUpdated = (now.getTime() - updatedDate.getTime()) / (1000 * 60 * 60 * 24)
+      
+      const temporalDepth = Math.max(-8, Math.min(8, (daysSinceCreated - 30) / 15))
+      const recentActivity = daysSinceUpdated < 7 ? 1.3 : daysSinceUpdated < 30 ? 1.0 : 0.7
+      
+      nodes.push({
+        id: memory.id,
+        memory,
+        position: [
+          (Math.random() - 0.5) * 20,
+          (Math.random() - 0.5) * 10, 
+          (Math.random() - 0.5) * 20 + temporalDepth
+        ],
+        connections: [],
+        color: typeColors[memory.type as keyof typeof typeColors] || '#6b7280',
+        size: Math.max(0.2, (0.25 + memory.confidence * 0.35) * recentActivity)
+      })
+    })
+
+    // Calculate forces and update positions iteratively
+    const iterations = 150
+    const dampening = 0.85
+    const repulsionStrength = 80
+    const attractionStrength = 0.8
+    const centeringForce = 0.02
+    
+    for (let iter = 0; iter < iterations; iter++) {
+      const forces: [number, number, number][] = nodes.map(() => [0, 0, 0])
+      
+      // Repulsion forces (all nodes push each other away)
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const dx = nodes[i].position[0] - nodes[j].position[0]
+          const dy = nodes[i].position[1] - nodes[j].position[1] 
+          const dz = nodes[i].position[2] - nodes[j].position[2]
+          const distance = Math.sqrt(dx*dx + dy*dy + dz*dz)
+          
+          if (distance > 0) {
+            const force = repulsionStrength / (distance * distance)
+            const fx = (dx / distance) * force
+            const fy = (dy / distance) * force
+            const fz = (dz / distance) * force
+            
+            forces[i][0] += fx
+            forces[i][1] += fy
+            forces[i][2] += fz
+            forces[j][0] -= fx
+            forces[j][1] -= fy
+            forces[j][2] -= fz
+          }
+        }
+      }
+      
+      // Type-based clustering attraction
+      const typeCenters: Record<string, [number, number, number]> = {
+        preference: [8, 2, 0],
+        fact: [-8, 2, 0], 
+        context: [0, 2, 8],
+        skill: [0, 2, -8]
+      }
+      
+      for (let i = 0; i < nodes.length; i++) {
+        const center = typeCenters[nodes[i].memory.type]
+        if (center) {
+          const dx = center[0] - nodes[i].position[0]
+          const dy = center[1] - nodes[i].position[1]
+          const dz = center[2] - nodes[i].position[2]
+          
+          forces[i][0] += dx * 0.05
+          forces[i][1] += dy * 0.03
+          forces[i][2] += dz * 0.05
+        }
+      }
+      
+      // Centering force to prevent drift
+      for (let i = 0; i < nodes.length; i++) {
+        forces[i][0] -= nodes[i].position[0] * centeringForce
+        forces[i][1] -= nodes[i].position[1] * centeringForce * 0.5
+        forces[i][2] -= nodes[i].position[2] * centeringForce
+      }
+      
+      // Apply forces with dampening
+      for (let i = 0; i < nodes.length; i++) {
+        nodes[i].position[0] += forces[i][0] * dampening * (1 - iter / iterations)
+        nodes[i].position[1] += forces[i][1] * dampening * (1 - iter / iterations)
+        nodes[i].position[2] += forces[i][2] * dampening * (1 - iter / iterations)
+      }
+    }
+    
+    return nodes
+  }
 
   useEffect(() => {
-    // Group memories by type and category
+    if (memories.length === 0) return
+    
+    // Run force-directed layout
+    const newNodes = runForceSimulation(memories)
+
+    // Enhanced multi-level clustering and semantic connections
+    const newConnections: Array<{ from: string; to: string; strength: number }> = []
+    
+    // Organize memories by type and category for better clustering
     const typeGroups: Record<string, Memory[]> = {}
     const categoryGroups: Record<string, Memory[]> = {}
     
@@ -603,81 +730,123 @@ export default function MemoryMindmap3D({ memories }: MemoryMindmap3DProps) {
         categoryGroups[memory.category].push(memory)
       }
     })
-
-    // Create nodes with 3D positions
-    const newNodes: MemoryNode[] = []
-    const typeColors = {
-      preference: '#3b82f6', // blue
-      fact: '#10b981',       // green
-      context: '#f59e0b',    // yellow
-      skill: '#ef4444'       // red
-    }
-
-    let nodeIndex = 0
-    Object.entries(typeGroups).forEach(([type, typeMemories], typeIdx) => {
-      const angleStep = (2 * Math.PI) / Object.keys(typeGroups).length
-      const baseAngle = angleStep * typeIdx
-      
-      typeMemories.forEach((memory, idx) => {
-        const radius = 5 + (idx % 3) * 2
-        const verticalOffset = Math.floor(idx / 3) * 2 - 2
-        const angle = baseAngle + (idx * 0.3)
-        
-        // Calculate memory age for temporal depth layers
-        const createdDate = new Date(memory.createdAt)
-        const updatedDate = new Date(memory.updatedAt)
-        const now = new Date()
-        const daysSinceCreated = (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24)
-        const daysSinceUpdated = (now.getTime() - updatedDate.getTime()) / (1000 * 60 * 60 * 24)
-        
-        // Apply temporal depth - older memories move slightly back, newer ones forward
-        const temporalDepth = Math.max(-5, Math.min(5, (daysSinceCreated - 30) / 30))
-        const recentActivity = daysSinceUpdated < 7 ? 1.2 : daysSinceUpdated < 30 ? 1.0 : 0.8
-        
-        newNodes.push({
-          id: memory.id,
-          memory,
-          position: [
-            Math.cos(angle) * radius,
-            verticalOffset + (Math.random() - 0.5) * 0.5,
-            Math.sin(angle) * radius + temporalDepth
-          ],
-          connections: [],
-          color: typeColors[type as keyof typeof typeColors] || '#6b7280',
-          size: (0.3 + memory.confidence * 0.3) * recentActivity
-        })
-        nodeIndex++
-      })
-    })
-
-    // Create connections based on category and semantic similarity
-    const newConnections: Array<{ from: string; to: string; strength: number }> = []
     
+    // Apply additional clustering forces to the positioned nodes
+    const applyClusteringForces = () => {
+      const clusterForce = 0.3
+      const iterations = 50
+      
+      for (let iter = 0; iter < iterations; iter++) {
+        const forces: [number, number, number][] = newNodes.map(() => [0, 0, 0])
+        
+        // Category-based clustering
+        Object.entries(categoryGroups).forEach(([category, categoryMemories]) => {
+          if (categoryMemories.length < 2) return
+          
+          // Calculate center of mass for this category
+          const categoryNodes = newNodes.filter(n => n.memory.category === category)
+          const centerX = categoryNodes.reduce((sum, n) => sum + n.position[0], 0) / categoryNodes.length
+          const centerY = categoryNodes.reduce((sum, n) => sum + n.position[1], 0) / categoryNodes.length
+          const centerZ = categoryNodes.reduce((sum, n) => sum + n.position[2], 0) / categoryNodes.length
+          
+          // Apply attraction to category center
+          categoryNodes.forEach(node => {
+            const nodeIndex = newNodes.findIndex(n => n.id === node.id)
+            if (nodeIndex !== -1) {
+              forces[nodeIndex][0] += (centerX - node.position[0]) * clusterForce * 0.1
+              forces[nodeIndex][1] += (centerY - node.position[1]) * clusterForce * 0.05
+              forces[nodeIndex][2] += (centerZ - node.position[2]) * clusterForce * 0.1
+            }
+          })
+        })
+        
+        // Semantic similarity clustering (keyword-based)
+        for (let i = 0; i < newNodes.length; i++) {
+          for (let j = i + 1; j < newNodes.length; j++) {
+            const nodeKeywords = newNodes[i].memory.key.toLowerCase().split(/[\\s_-]+/)
+            const otherKeywords = newNodes[j].memory.key.toLowerCase().split(/[\\s_-]+/)
+            const valueKeywords = newNodes[i].memory.value.toLowerCase().split(/[\\s_-]+/)
+            const otherValueKeywords = newNodes[j].memory.value.toLowerCase().split(/[\\s_-]+/)
+            
+            // Check keyword overlap in keys and values
+            const keyOverlap = nodeKeywords.filter(k => k.length > 2 && otherKeywords.includes(k)).length
+            const valueOverlap = valueKeywords.filter(v => v.length > 3 && otherValueKeywords.includes(v)).length
+            
+            const semanticSimilarity = (keyOverlap * 0.3 + valueOverlap * 0.2) / Math.max(nodeKeywords.length, otherKeywords.length)
+            
+            if (semanticSimilarity > 0.1) {
+              const dx = newNodes[j].position[0] - newNodes[i].position[0]
+              const dy = newNodes[j].position[1] - newNodes[i].position[1]
+              const dz = newNodes[j].position[2] - newNodes[i].position[2]
+              const distance = Math.sqrt(dx*dx + dy*dy + dz*dz)
+              
+              if (distance > 0) {
+                const attractionForce = semanticSimilarity * clusterForce * 0.05
+                const fx = (dx / distance) * attractionForce
+                const fy = (dy / distance) * attractionForce
+                const fz = (dz / distance) * attractionForce
+                
+                forces[i][0] += fx
+                forces[i][1] += fy
+                forces[i][2] += fz
+                forces[j][0] -= fx
+                forces[j][1] -= fy
+                forces[j][2] -= fz
+              }
+            }
+          }
+        }
+        
+        // Apply clustering forces
+        for (let i = 0; i < newNodes.length; i++) {
+          newNodes[i].position[0] += forces[i][0] * (1 - iter / iterations)
+          newNodes[i].position[1] += forces[i][1] * (1 - iter / iterations)
+          newNodes[i].position[2] += forces[i][2] * (1 - iter / iterations)
+        }
+      }
+    }
+    
+    applyClusteringForces()
+    
+    // Create connections with improved strength calculation
     newNodes.forEach((node, i) => {
       newNodes.forEach((otherNode, j) => {
         if (i >= j) return
         
         let strength = 0
         
-        // Same category = stronger connection
+        // Same category = very strong connection
         if (node.memory.category && node.memory.category === otherNode.memory.category) {
-          strength += 0.5
+          strength += 0.7
         }
         
         // Same type = moderate connection
         if (node.memory.type === otherNode.memory.type) {
-          strength += 0.3
+          strength += 0.4
         }
         
-        // Check for keyword similarity
-        const nodeKeywords = node.memory.key.toLowerCase().split(/\s+/)
-        const otherKeywords = otherNode.memory.key.toLowerCase().split(/\s+/)
-        const commonKeywords = nodeKeywords.filter(k => otherKeywords.includes(k))
-        if (commonKeywords.length > 0) {
-          strength += 0.2 * commonKeywords.length
+        // Enhanced semantic similarity
+        const nodeKeywords = node.memory.key.toLowerCase().split(/[\\s_-]+/).filter(k => k.length > 2)
+        const otherKeywords = otherNode.memory.key.toLowerCase().split(/[\\s_-]+/).filter(k => k.length > 2)
+        const nodeValueWords = node.memory.value.toLowerCase().split(/[\\s_-]+/).filter(v => v.length > 3)
+        const otherValueWords = otherNode.memory.value.toLowerCase().split(/[\\s_-]+/).filter(v => v.length > 3)
+        
+        const keyMatches = nodeKeywords.filter(k => otherKeywords.includes(k)).length
+        const valueMatches = nodeValueWords.filter(v => otherValueWords.includes(v)).length
+        
+        if (keyMatches > 0) {
+          strength += 0.3 * Math.min(keyMatches, 3) / 3
+        }
+        if (valueMatches > 0) {
+          strength += 0.2 * Math.min(valueMatches, 2) / 2
         }
         
-        if (strength > 0.3) {
+        // Confidence-based weighting
+        const avgConfidence = (node.memory.confidence + otherNode.memory.confidence) / 2
+        strength *= (0.7 + avgConfidence * 0.3)
+        
+        // Only create connections above a higher threshold for cleaner visualization
+        if (strength > 0.4) {
           newConnections.push({
             from: node.id,
             to: otherNode.id,
@@ -692,6 +861,55 @@ export default function MemoryMindmap3D({ memories }: MemoryMindmap3DProps) {
     setNodes(newNodes)
     setConnections(newConnections)
   }, [memories])
+
+  // Filter visible connections based on threshold and camera distance
+  useEffect(() => {
+    const filtered = connections.filter(conn => {
+      // Always show connections for selected node
+      if (selectedNode && (conn.from === selectedNode.id || conn.to === selectedNode.id)) {
+        return conn.strength > 0.3
+      }
+      // Filter by strength threshold
+      return conn.strength >= connectionStrengthThreshold
+    })
+    
+    // Limit number of visible connections to improve performance
+    const maxConnections = Math.min(filtered.length, 150)
+    const sortedFiltered = filtered
+      .sort((a, b) => b.strength - a.strength)
+      .slice(0, maxConnections)
+    
+    setVisibleConnections(sortedFiltered)
+  }, [connections, connectionStrengthThreshold, selectedNode])
+
+  // Search and highlighting functionality
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setHighlightedNodes(new Set())
+      return
+    }
+
+    const query = searchQuery.toLowerCase()
+    const matchingNodeIds = new Set<string>()
+    
+    nodes.forEach(node => {
+      const keyMatch = node.memory.key.toLowerCase().includes(query)
+      const valueMatch = node.memory.value.toLowerCase().includes(query)
+      const categoryMatch = node.memory.category?.toLowerCase().includes(query)
+      const typeMatch = node.memory.type.toLowerCase().includes(query)
+      
+      if (keyMatch || valueMatch || categoryMatch || typeMatch) {
+        matchingNodeIds.add(node.id)
+        
+        // Also highlight connected nodes
+        node.connections.forEach(connId => {
+          matchingNodeIds.add(connId)
+        })
+      }
+    })
+    
+    setHighlightedNodes(matchingNodeIds)
+  }, [searchQuery, nodes])
 
   const CameraController = () => {
     const { camera } = useThree()
@@ -1070,11 +1288,120 @@ export default function MemoryMindmap3D({ memories }: MemoryMindmap3DProps) {
           border-radius: 20px;
           padding: 20px;
           backdrop-filter: blur(25px) saturate(1.5);
-          max-width: 200px;
+          max-width: 220px;
           box-shadow: 
             0 16px 32px -8px rgba(0, 0, 0, 0.3),
             inset 0 1px 0 rgba(255, 255, 255, 0.2),
             inset 0 -1px 0 rgba(0, 0, 0, 0.1);
+        }
+
+        .connection-controls {
+          margin-top: 16px;
+          padding-top: 16px;
+          border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .slider-label {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          font-size: 12px;
+          color: #d1d5db;
+          font-weight: 500;
+        }
+
+        .slider-label span:first-child {
+          color: #ffffff;
+          font-weight: 600;
+        }
+
+        .strength-slider {
+          -webkit-appearance: none;
+          width: 100%;
+          height: 6px;
+          border-radius: 3px;
+          background: linear-gradient(90deg, rgba(59, 130, 246, 0.3), rgba(16, 185, 129, 0.3));
+          outline: none;
+          cursor: pointer;
+        }
+
+        .strength-slider::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 16px;
+          height: 16px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+          cursor: pointer;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+          border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .strength-slider::-moz-range-thumb {
+          width: 16px;
+          height: 16px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+          cursor: pointer;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+          border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .slider-value {
+          text-align: center;
+          font-weight: 600;
+          color: #10b981;
+          font-size: 11px;
+        }
+
+        .search-controls {
+          margin-top: 16px;
+          padding-top: 16px;
+          border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .search-label {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          font-size: 12px;
+          color: #d1d5db;
+          font-weight: 500;
+        }
+
+        .search-label span:first-child {
+          color: #ffffff;
+          font-weight: 600;
+        }
+
+        .search-input {
+          width: 100%;
+          padding: 8px 12px;
+          background: rgba(31, 41, 55, 0.8);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          border-radius: 8px;
+          color: #ffffff;
+          font-size: 12px;
+          outline: none;
+          transition: all 0.2s ease;
+        }
+
+        .search-input:focus {
+          border-color: #fbbf24;
+          box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.2);
+          background: rgba(31, 41, 55, 1);
+        }
+
+        .search-input::placeholder {
+          color: #9ca3af;
+        }
+
+        .search-stats {
+          font-size: 10px;
+          color: #fbbf24;
+          text-align: center;
+          margin-top: 4px;
+          font-weight: 600;
         }
 
         .controls-text {
@@ -1105,6 +1432,74 @@ export default function MemoryMindmap3D({ memories }: MemoryMindmap3DProps) {
           0%, 100% { transform: scale(1); opacity: 0.9; }
           50% { transform: scale(1.05); opacity: 1; }
         }
+
+        .minimap-section {
+          margin-top: 24px;
+          padding-top: 20px;
+          border-top: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .minimap-title {
+          font-size: 14px;
+          font-weight: 700;
+          color: #ffffff;
+          margin-bottom: 12px;
+          text-align: center;
+        }
+
+        .minimap {
+          background: linear-gradient(135deg, rgba(0, 0, 0, 0.3), rgba(31, 41, 55, 0.2));
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          padding: 8px;
+          width: 100%;
+          max-width: 160px;
+          height: auto;
+          cursor: crosshair;
+        }
+
+        .minimap-node {
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .minimap-node:hover {
+          transform: scale(1.5);
+          opacity: 1 !important;
+        }
+
+        .minimap-stats {
+          display: flex;
+          justify-content: space-between;
+          margin-top: 8px;
+          gap: 8px;
+        }
+
+        .stat-mini {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          flex: 1;
+          background: rgba(31, 41, 55, 0.4);
+          border-radius: 8px;
+          padding: 6px 4px;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-count {
+          font-size: 14px;
+          font-weight: 700;
+          color: #ffffff;
+          line-height: 1;
+        }
+
+        .stat-label {
+          font-size: 9px;
+          color: #9ca3af;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          margin-top: 2px;
+        }
       `}</style>
 
       <Canvas camera={{ position: [12, 8, 12], fov: 50 }}>
@@ -1134,8 +1529,8 @@ export default function MemoryMindmap3D({ memories }: MemoryMindmap3DProps) {
           dampingFactor={0.05}
         />
         
-        {/* Render connections */}
-        {connections.map((connection, idx) => {
+        {/* Render filtered connections */}
+        {visibleConnections.map((connection, idx) => {
           const fromNode = nodes.find(n => n.id === connection.from)
           const toNode = nodes.find(n => n.id === connection.to)
           if (!fromNode || !toNode) return null
@@ -1157,6 +1552,8 @@ export default function MemoryMindmap3D({ memories }: MemoryMindmap3DProps) {
             node={node}
             onClick={setSelectedNode}
             isSelected={selectedNode?.id === node.id}
+            isHighlighted={highlightedNodes.has(node.id)}
+            isSearchActive={searchQuery.trim().length > 0}
           />
         ))}
       </Canvas>
@@ -1185,6 +1582,78 @@ export default function MemoryMindmap3D({ memories }: MemoryMindmap3DProps) {
           <div className="legend-dot" style={{ backgroundColor: '#ef4444', color: '#ef4444' }}></div>
           <span>Skills</span>
         </div>
+        
+        {/* Mini Navigation Map */}
+        <div className="minimap-section">
+          <h4 className="minimap-title">Network Overview</h4>
+          <svg className="minimap" width="160" height="120" viewBox="-20 -15 40 30">
+            {/* Background grid */}
+            <defs>
+              <pattern id="grid" width="2" height="2" patternUnits="userSpaceOnUse">
+                <path d="M 2 0 L 0 0 0 2" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="0.1"/>
+              </pattern>
+            </defs>
+            <rect x="-20" y="-15" width="40" height="30" fill="url(#grid)" />
+            
+            {/* Render nodes as small dots */}
+            {nodes.slice(0, 100).map((node, idx) => {
+              const x = (node.position[0] / 40) * 20
+              const z = (node.position[2] / 40) * 15
+              const isActive = selectedNode?.id === node.id || highlightedNodes.has(node.id)
+              
+              return (
+                <circle
+                  key={idx}
+                  cx={x}
+                  cy={z}
+                  r={isActive ? 1.2 : 0.6}
+                  fill={isActive ? '#fbbf24' : node.color}
+                  opacity={isActive ? 1 : 0.6}
+                  stroke={isActive ? '#ffffff' : 'none'}
+                  strokeWidth={isActive ? 0.3 : 0}
+                  className="minimap-node"
+                  onClick={() => setSelectedNode(node)}
+                />
+              )
+            })}
+            
+            {/* Render major connections */}
+            {visibleConnections.slice(0, 20).map((conn, idx) => {
+              const fromNode = nodes.find(n => n.id === conn.from)
+              const toNode = nodes.find(n => n.id === conn.to)
+              if (!fromNode || !toNode) return null
+              
+              const x1 = (fromNode.position[0] / 40) * 20
+              const z1 = (fromNode.position[2] / 40) * 15
+              const x2 = (toNode.position[0] / 40) * 20
+              const z2 = (toNode.position[2] / 40) * 15
+              
+              return (
+                <line
+                  key={idx}
+                  x1={x1}
+                  y1={z1}
+                  x2={x2}
+                  y2={z2}
+                  stroke="rgba(59, 130, 246, 0.3)"
+                  strokeWidth={conn.strength * 0.5}
+                  opacity={0.6}
+                />
+              )
+            })}
+          </svg>
+          
+          <div className="minimap-stats">
+            <div className="stat-mini">
+              <span className="stat-count">{nodes.length}</span>
+              <span className="stat-label">Nodes</span>
+            </div>
+            <div className="stat-mini">
+              <span className="stat-count">{visibleConnections.length}</span>
+              <span className="stat-label">Connections</span>
+            </div>
+          </div>
+        </div>
       </div>
       
       {/* Enhanced Controls */}
@@ -1195,6 +1664,39 @@ export default function MemoryMindmap3D({ memories }: MemoryMindmap3DProps) {
           • Scroll to zoom in/out<br/>
           • Click orbs for details<br/>
           • Auto-rotation when idle
+        </div>
+        <div className="connection-controls">
+          <label className="slider-label">
+            <span>Connection Filter</span>
+            <input
+              type="range"
+              min="0.2"
+              max="1.0"
+              step="0.1"
+              value={connectionStrengthThreshold}
+              onChange={(e) => setConnectionStrengthThreshold(parseFloat(e.target.value))}
+              className="strength-slider"
+            />
+            <span className="slider-value">{Math.round(connectionStrengthThreshold * 100)}%</span>
+          </label>
+          
+          <div className="search-controls">
+            <label className="search-label">
+              <span>Search Neural Network</span>
+              <input
+                type="text"
+                placeholder="Find memories..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="search-input"
+              />
+            </label>
+            {searchQuery && (
+              <div className="search-stats">
+                {highlightedNodes.size} nodes highlighted
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
