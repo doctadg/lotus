@@ -181,9 +181,11 @@ function DitheredWaves({
   disableAnimation,
   enableMouseInteraction,
   mouseRadius,
+  frameSkip = 0,
 }: any) {
   const mesh = useRef(null);
   const mouseRef = useRef(new THREE.Vector2());
+  const frameCounter = useRef(0);
   const { viewport, size, gl } = useThree();
 
   const waveUniformsRef = useRef({
@@ -210,6 +212,13 @@ function DitheredWaves({
 
   const prevColor = useRef([...waveColor]);
   useFrame(({ clock }) => {
+    frameCounter.current++;
+    
+    // Skip frames based on frameSkip setting
+    if (frameSkip > 0 && frameCounter.current % (frameSkip + 1) !== 0) {
+      return;
+    }
+
     const u = waveUniformsRef.current;
 
     if (!disableAnimation) {
@@ -283,6 +292,7 @@ export default function Dither({
   disableAnimation = false,
   enableMouseInteraction = true,
   mouseRadius = 1,
+  frameSkip = 0,
 }) {
   return (
     <Canvas
@@ -301,6 +311,7 @@ export default function Dither({
         disableAnimation={disableAnimation}
         enableMouseInteraction={enableMouseInteraction}
         mouseRadius={mouseRadius}
+        frameSkip={frameSkip}
       />
     </Canvas>
   );

@@ -35,6 +35,7 @@ export default function LandingPage() {
             waveFrequency={2}
             waveSpeed={0.02}
             pixelSize={4}
+            frameSkip={2}
           />
         </div>
         {/* Gradient overlay at the bottom of the hero section */}
@@ -517,6 +518,7 @@ export default function LandingPage() {
             waveFrequency={2}
             waveSpeed={0.02}
             pixelSize={4}
+            frameSkip={2}
           />
         </div>
         {/* Smooth gradient transitions and blend overlays */}

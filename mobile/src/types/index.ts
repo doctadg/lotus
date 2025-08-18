@@ -39,3 +39,53 @@ export interface SendMessageRequest {
 export interface CreateChatRequest {
   title?: string
 }
+
+export interface UserMemory {
+  id: string
+  userId: string
+  type: 'preference' | 'fact' | 'context' | 'skill'
+  category: string
+  key: string
+  value: string
+  confidence: number
+  source: 'explicit' | 'inferred'
+  createdAt: string
+  updatedAt: string
+}
+
+export interface UserContext {
+  id: string
+  userId: string
+  communicationStyle?: string
+  topicsOfInterest?: string[]
+  expertiseAreas?: string[]
+  preferredResponseStyle?: string
+  timezone?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PersonalizedQuestion {
+  id: string
+  content: string
+  category?: string
+  isPersonalized?: boolean
+}
+
+export interface Subscription {
+  id?: string
+  userId: string
+  planType: 'free' | 'pro' | 'premium'
+  status: 'active' | 'canceled' | 'past_due' | null
+  currentPeriodStart?: string
+  currentPeriodEnd?: string
+  stripeCustomerId?: string
+  stripeSubscriptionId?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface AuthResponse {
+  user: User
+  token: string
+}
