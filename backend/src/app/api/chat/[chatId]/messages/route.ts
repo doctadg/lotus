@@ -10,14 +10,16 @@ export async function GET(
 ) {
   try {
     const { chatId } = await params
-    const userId = await authenticateUser(request)
+    const authData = await authenticateUser(request)
     
-    if (!userId) {
+    if (!authData) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 })
     }
+    
+    const userId = authData.userId
 
     const chat = await prisma.chat.findFirst({
       where: {
@@ -57,14 +59,16 @@ export async function POST(
 ) {
   try {
     const { chatId } = await params
-    const userId = await authenticateUser(request)
+    const authData = await authenticateUser(request)
     
-    if (!userId) {
+    if (!authData) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 })
     }
+    
+    const userId = authData.userId
 
     const { content, role = 'user' }: SendMessageRequest = await request.json()
 

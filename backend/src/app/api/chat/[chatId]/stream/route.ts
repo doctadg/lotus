@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authenticateUser } from '@/lib/auth'
 import { aiAgent } from '@/lib/agent'
+import { trackMessageUsage } from '@/lib/rate-limit'
 
 
 // Add OPTIONS handler for CORS preflight
@@ -25,12 +26,15 @@ export async function POST(
   try {
     const { chatId } = await params
     console.log('💬 Chat ID:', chatId)
-    const userId = await authenticateUser(request)
-    console.log('👤 User ID:', userId)
+    const authData = await authenticateUser(request)
+    console.log('👤 Auth Data:', authData)
     
-    if (!userId) {
+    if (!authData) {
       return new Response('Unauthorized', { status: 401 })
     }
+    
+    const userId = authData.userId
+    const userEmail = authData.email
 
     const { content, deepResearchMode = false } = await request.json()
 
@@ -113,6 +117,43 @@ async function processAIResponse(
   userId?: string
 ) {
   try {
+    // Check rate limit for free users
+    if (userId) {
+      const withinLimit = await trackMessageUsage(userId)
+      if (!withinLimit) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+          type: 'limit_exceeded',
+          data: { 
+            message: 'You have reached your hourly message limit. Upgrade to Pro for unlimited messages.',
+            metadata: { limitReached: true }
+          }
+        })}\n\n`))
+        controller.close()
+        return
+      }
+    }
+
+    // Check if user is trying to use deep research mode without Pro plan
+    if (deepResearchMode && userId) {
+      const subscription = await prisma.subscription.findUnique({
+        where: { userId }
+      })
+      
+      const isProUser = subscription && subscription.planType === 'pro' && subscription.status === 'active'
+      
+      if (!isProUser) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+          type: 'error',
+          data: { 
+            message: 'Deep research mode is only available for Pro users. Please upgrade to access this feature.',
+            metadata: { proRequired: true }
+          }
+        })}\n\n`))
+        controller.close()
+        return
+      }
+    }
+
     // Send typing indicator
     controller.enqueue(encoder.encode(`data: ${JSON.stringify({
       type: 'ai_typing',

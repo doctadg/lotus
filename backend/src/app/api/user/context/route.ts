@@ -7,14 +7,16 @@ import { ApiResponse } from '@/types'
 // GET /api/user/context - Get user's context
 export async function GET(request: NextRequest) {
   try {
-    const userId = await authenticateUser(request)
+    const authData = await authenticateUser(request)
     
-    if (!userId) {
+    if (!authData) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 })
     }
+    
+    const userId = authData.userId
 
     const context = await prisma.userContext.findFirst({
       where: { userId },
@@ -38,14 +40,16 @@ export async function GET(request: NextRequest) {
 // POST /api/user/context - Update user's context
 export async function POST(request: NextRequest) {
   try {
-    const userId = await authenticateUser(request)
+    const authData = await authenticateUser(request)
     
-    if (!userId) {
+    if (!authData) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 })
     }
+    
+    const userId = authData.userId
 
     const body = await request.json()
     const {

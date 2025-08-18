@@ -2,6 +2,7 @@
 import { ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useState } from "react"
+import Link from "next/link"
 import TextType from "@/components/landing/TextType"
 import ShinyText from "@/components/landing/ShinyText"
 import ScrambledText from "@/components/landing/ScrambledText"
@@ -808,9 +809,14 @@ export default function LandingPage() {
                 </h4>
                 <ul className="space-y-3 sm:space-y-4">
                   <li>
-                    <a href="#" className="text-white/70 hover:text-white text-sm transition-colors duration-200">
-                      Features
-                    </a>
+              <Link href="/pricing" className="text-white/70 hover:text-white text-sm transition-colors duration-200">
+                Features
+              </Link>
+                  </li>
+                  <li>
+              <Link href="/pricing" className="text-white/70 hover:text-white text-sm transition-colors duration-200">
+                Pricing
+              </Link>
                   </li>
                   <li>
                     <a href="#" className="text-white/70 hover:text-white text-sm transition-colors duration-200">

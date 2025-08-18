@@ -18,10 +18,13 @@ model User {
   email         String        @unique
   password      String?       // Made optional for migration
   name          String?
+  stripeCustomerId String?      @unique
   chats         Chat[]
   memories      UserMemory[]
   contexts      UserContext[]
   embeddings    UserEmbedding[]
+  subscription  Subscription?
+  messageUsage  MessageUsage[]
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
@@ -91,11 +94,40 @@ model UserEmbedding {
   userId           String   @map("user_id")
   content          String   // the original text that was embedded
   embedding        Float[]  // vector embedding (fallback for Prisma compatibility)
-  vectorEmbedding  String?  @map("vector_embedding") // pgvector column (managed via raw SQL)
+  vectorEmbedding  Unsupported("vector")? @map("vector_embedding") // pgvector column
   type             String   // 'memory', 'message', 'preference'
   metadata         Json?    // additional context
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt        DateTime @default(now()) @map("created_at")
 
   @@map("user_embeddings")
+}
+
+model Subscription {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  stripeCustomerId  String?
+  stripeSubscriptionId String?
+  planType          String   @default("free") // 'free' or 'pro'
+  status            String?  // 'active', 'canceled', 'past_due', etc.
+  currentPeriodStart DateTime?
+  currentPeriodEnd  DateTime?
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("subscriptions")
+}
+
+model MessageUsage {
+  id        String   @id @default(cuid())
+  userId    String
+  hour      DateTime // timestamp rounded to the hour
+  count     Int      @default(0)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, hour])
+  @@map("message_usage")
 }

@@ -5,14 +5,16 @@ import { ApiResponse, CreateChatRequest } from '@/types'
 
 export async function POST(request: NextRequest) {
   try {
-    const userId = await authenticateUser(request)
+    const authData = await authenticateUser(request)
     
-    if (!userId) {
+    if (!authData) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 })
     }
+    
+    const userId = authData.userId
 
     const { title }: CreateChatRequest = await request.json()
 
@@ -43,14 +45,16 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const userId = await authenticateUser(request)
+    const authData = await authenticateUser(request)
     
-    if (!userId) {
+    if (!authData) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 })
     }
+    
+    const userId = authData.userId
 
     const chats = await prisma.chat.findMany({
       where: { userId },

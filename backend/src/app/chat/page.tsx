@@ -6,6 +6,7 @@ import { useAuth, ProtectedRoute } from '../../lib/auth-context'
 import { MessageRenderer } from '../../components/chat/MessageRenderer'
 import { ThemeToggle } from '../../components/ui/ThemeToggle'
 import { AgentActivity } from '../../components/chat/AgentActivity'
+import { UpgradePrompt } from '../../components/chat/UpgradePrompt'
 import Dither from '../../components/landing/Dither'
 import { Search, Sparkles, Send, Menu, X, LogOut, MessageCircle, Plus, Trash2 } from 'lucide-react'
 
@@ -65,7 +66,13 @@ function ChatPageContent() {
   const [inputText, setInputText] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    // Auto-hide sidebar on mobile by default
+    if (typeof window !== 'undefined') {
+      return window.innerWidth >= 768 // md breakpoint
+    }
+    return true
+  })
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
   const [thinkingSteps, setThinkingSteps] = useState<ThinkingStep[]>([])
@@ -82,6 +89,7 @@ function ChatPageContent() {
     }
     return 'simple'
   })
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const thinkingBatchRef = useRef<ThinkingStep[]>([])
@@ -140,6 +148,38 @@ function ChatPageContent() {
 
   const sendMessage = async () => {
     if (!inputText.trim() || isLoading) return
+
+    // Check if user is trying to use deep research mode without Pro plan
+    if (searchMode === 'deep') {
+      try {
+        const response = await fetch('/api/user/subscription', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          const subscription = data.data.subscription
+          const isProUser = subscription.planType === 'pro' && subscription.status === 'active'
+
+          if (!isProUser) {
+            // Show upgrade prompt instead of sending message
+            const upgradeMessage: Message = {
+              id: (Date.now() + 1).toString(),
+              content: 'Deep research mode is only available for Pro users. Please upgrade to access this feature.',
+              role: 'assistant',
+              timestamp: new Date()
+            }
+            setMessages(prev => [...prev, upgradeMessage])
+            setInputText('')
+            return
+          }
+        }
+      } catch (error) {
+        console.error('Error checking subscription:', error)
+      }
+    }
 
     const messageText = inputText.trim()
     const userMessage: Message = {
@@ -478,6 +518,13 @@ function ChatPageContent() {
                   // Don't hide them completely
                   break
                   
+                case 'limit_exceeded':
+                  console.log('[WEB] Limit exceeded:', parsed.data)
+                  setShowUpgradePrompt(true)
+                  setIsLoading(false)
+                  setIsTyping(false)
+                  return
+
                 default:
                   console.log('[WEB] Unknown event type:', parsed.type)
               }
@@ -675,7 +722,7 @@ function ChatPageContent() {
     }
   }, [token])
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts and responsive handling
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
@@ -688,14 +735,29 @@ function ChatPageContent() {
       }
     }
 
+    const handleResize = () => {
+      // Auto-close sidebar on mobile when resizing to mobile view
+      if (window.innerWidth < 768 && sidebarOpen) {
+        setSidebarOpen(false)
+      }
+      // Auto-open sidebar on desktop when resizing to desktop view
+      if (window.innerWidth >= 768 && !sidebarOpen) {
+        setSidebarOpen(true)
+      }
+    }
+
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+    window.addEventListener('resize', handleResize)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [sidebarOpen])
 
   return (
     <div className="flex h-screen bg-black text-white relative overflow-hidden">
-      {/* Dither Background */}
-      <div className="absolute inset-0 z-0">
+      {/* Dither Background - Hidden on mobile for performance */}
+      <div className="absolute inset-0 z-0 hidden md:block">
         <Dither
           waveColor={[0.1, 0.15, 0.3]}
           disableAnimation={false}
@@ -710,9 +772,30 @@ function ChatPageContent() {
         {/* Overlay to soften dither effect */}
         <div className="absolute inset-0 bg-black/60" />
       </div>
+      
+      {/* Mobile Background - Simple gradient for performance */}
+      <div className="absolute inset-0 z-0 md:hidden bg-gradient-to-br from-gray-900 via-black to-gray-800" />
+
+      {/* Mobile Sidebar Overlay */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
       {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 glass-card bg-black/20 border-r border-white/10 flex flex-col overflow-hidden relative z-10`}>
+      <div className={`
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+        ${sidebarOpen ? 'md:w-80' : 'md:w-0'}
+        fixed md:relative
+        w-80 md:w-80
+        h-full
+        transition-all duration-300 ease-in-out
+        glass-card bg-black/20 border-r border-white/10 
+        flex flex-col overflow-hidden 
+        z-50 md:z-10
+      `}>
         <div className="flex items-center justify-between p-4 border-b border-white/10">
           <Link href="/" className="flex items-center">
             <img 
@@ -723,9 +806,9 @@ function ChatPageContent() {
           </Link>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="p-2 text-text-tertiary hover:text-white transition-all duration-200 hover:bg-white/10 rounded-lg"
+            className="p-3 md:p-2 text-tertiary hover:text-primary transition-all duration-200 hover:bg-white/10 rounded-lg touch-manipulation"
           >
-            <X size={16} />
+            <X size={20} className="md:w-4 md:h-4" />
           </button>
         </div>
 
@@ -739,16 +822,16 @@ function ChatPageContent() {
               <div className="text-sm font-medium text-white truncate">
                 {user?.name || 'User'}
               </div>
-              <div className="text-xs text-text-tertiary truncate">
+              <div className="text-xs text-tertiary truncate">
                 {user?.email}
               </div>
             </div>
             <button
               onClick={logout}
-              className="p-2 text-text-tertiary hover:text-white transition-all duration-200 hover:bg-white/10 rounded-lg"
+              className="p-3 md:p-2 text-tertiary hover:text-primary transition-all duration-200 hover:bg-white/10 rounded-lg touch-manipulation"
               title="Logout"
             >
-              <LogOut size={16} />
+              <LogOut size={20} className="md:w-4 md:h-4" />
             </button>
           </div>
         </div>
@@ -803,6 +886,15 @@ function ChatPageContent() {
             </div>
             View Memory Map
           </Link>
+          <Link 
+            href="/settings" 
+            className="flex items-center gap-3 px-4 py-3 text-sm text-text-secondary hover:text-white glass-card-hover rounded-xl transition-all"
+          >
+            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+              <div className="w-2 h-2 bg-white rounded-full" />
+            </div>
+            Settings
+          </Link>
           <div className="flex justify-center">
             <ThemeToggle />
           </div>
@@ -813,19 +905,47 @@ function ChatPageContent() {
       {!sidebarOpen && (
         <button
           onClick={() => setSidebarOpen(true)}
-          className="fixed top-6 left-6 z-50 p-3 glass-card hover:bg-white/10 text-white rounded-xl transition-all duration-200 hover:scale-105 shadow-xl"
+          className="fixed top-4 left-4 z-50 p-4 md:p-3 glass-card hover:bg-white/10 text-white rounded-xl transition-all duration-200 hover:scale-105 shadow-xl touch-manipulation"
         >
-          <Menu size={20} />
+          <Menu size={24} className="md:w-5 md:h-5" />
         </button>
       )}
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col h-screen relative z-10">
-        <div className="flex-1 overflow-y-auto p-4">
+        {showUpgradePrompt && (
+          <UpgradePrompt 
+            onUpgrade={async () => {
+              try {
+                const response = await fetch('/api/stripe/checkout', {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                  }
+                })
+
+                if (response.ok) {
+                  const data = await response.json()
+                  // Redirect to Stripe checkout
+                  window.location.href = data.data.url
+                } else {
+                  // Fallback to settings page
+                  window.location.href = '/settings'
+                }
+              } catch (error) {
+                // Fallback to settings page
+                window.location.href = '/settings'
+              }
+            }}
+            onClose={() => setShowUpgradePrompt(false)}
+          />
+        )}
+        <div className="flex-1 overflow-y-auto p-3 md:p-4">
           {messages.length === 0 ? (
             /* Empty State */
             <div className="flex flex-col items-center justify-center h-full text-center animate-fadeIn">
-              <div className="glass-card p-12 rounded-3xl max-w-2xl w-full mx-4">
+              <div className="glass-card p-6 md:p-12 rounded-2xl md:rounded-3xl max-w-2xl w-full mx-2 md:mx-4">
                 <img 
                   src="/lotus.svg" 
                   alt="Lotus" 
@@ -855,12 +975,12 @@ function ChatPageContent() {
                     </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-lg mx-auto">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 max-w-lg mx-auto">
                     {dynamicQuestions.map((question, i) => (
                       <button
                         key={i}
                         onClick={() => setInputText(question.text)}
-                        className="glass-card-hover p-6 rounded-2xl text-left group animate-slideUp border border-white/5"
+                        className="glass-card-hover p-4 md:p-6 rounded-xl md:rounded-2xl text-left group animate-slideUp border border-white/5 touch-manipulation"
                         style={{ animationDelay: `${i * 0.1}s` }}
                         title={`${question.reasoning} (${question.category})`}
                       >
@@ -878,7 +998,7 @@ function ChatPageContent() {
             </div>
           ) : (
             /* Messages */
-            <div className="space-y-4">
+            <div className="space-y-3 md:space-y-4">
               {messages.map((message, index) => {
                 // Check if this is the current AI message being streamed
                 const isCurrentAIMessage = message.role === 'assistant' && 
@@ -906,8 +1026,8 @@ function ChatPageContent() {
                     
                     {/* Only render message if it should be shown */}
                     {shouldShowAIMessage && (
-                      <div className={`flex gap-4 animate-fadeIn ${message.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                        <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold shadow-lg ${
+                      <div className={`flex gap-3 md:gap-4 animate-fadeIn ${message.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                        <div className={`flex-shrink-0 w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-xs md:text-sm font-semibold shadow-lg ${
                           message.role === 'user' 
                             ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white' 
                             : 'bg-gradient-to-br from-purple-500 to-purple-600 text-white'
@@ -919,7 +1039,7 @@ function ChatPageContent() {
                             {message.role === 'user' ? 'You' : 'Lotus'}
                           </div>
                           <div className={`${message.role === 'user' ? 'text-right' : ''}`}>
-                            <div className={`glass-card bg-white/5 rounded-2xl p-4 inline-block max-w-none ${
+                            <div className={`glass-card bg-white/5 rounded-xl md:rounded-2xl p-3 md:p-4 inline-block max-w-none ${
                               message.role === 'user' ? 'bg-gradient-to-r from-blue-500/10 to-blue-600/10 border-blue-500/20' : ''
                             }`}>
                               <MessageRenderer 
@@ -938,13 +1058,13 @@ function ChatPageContent() {
               })}
               
               {(isLoading || isTyping) && messages[messages.length - 1]?.role !== 'assistant' && (
-                <div className="flex gap-4 animate-fadeIn">
-                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-white flex items-center justify-center text-sm font-semibold shadow-lg">
+                <div className="flex gap-3 md:gap-4 animate-fadeIn">
+                  <div className="flex-shrink-0 w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-white flex items-center justify-center text-xs md:text-sm font-semibold shadow-lg">
                     L
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm text-text-secondary mb-2 font-medium">Lotus</div>
-                    <div className="glass-card bg-white/5 rounded-2xl p-4 inline-block">
+                    <div className="glass-card bg-white/5 rounded-xl md:rounded-2xl p-3 md:p-4 inline-block">
                       <div className="flex items-center gap-2">
                         <div className="flex gap-1">
                           <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
@@ -964,13 +1084,13 @@ function ChatPageContent() {
         </div>
 
         {/* Input Area */}
-        <div className="border-t border-white/10 p-6">
+        <div className="border-t border-white/10 p-4 md:p-6">
           <div className="max-w-4xl mx-auto space-y-4">
             {/* Search Mode Toggle */}
             <div className="flex justify-center">
-              <div className="glass-card bg-white/5 rounded-2xl p-2 inline-flex">
+              <div className="glass-card bg-white/5 rounded-xl md:rounded-2xl p-1.5 md:p-2 inline-flex">
                 <button
-                  className={`px-4 py-2 text-xs font-medium rounded-xl transition-all duration-200 flex items-center gap-2 ${
+                  className={`px-3 md:px-4 py-2.5 md:py-2 text-xs font-medium rounded-lg md:rounded-xl transition-all duration-200 flex items-center gap-2 touch-manipulation ${
                     searchMode === 'simple' 
                       ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg' 
                       : 'text-text-tertiary hover:text-white hover:bg-white/10'
@@ -983,7 +1103,7 @@ function ChatPageContent() {
                   Quick
                 </button>
                 <button
-                  className={`px-4 py-2 text-xs font-medium rounded-xl transition-all duration-200 flex items-center gap-2 ${
+                  className={`px-3 md:px-4 py-2.5 md:py-2 text-xs font-medium rounded-lg md:rounded-xl transition-all duration-200 flex items-center gap-2 touch-manipulation ${
                     searchMode === 'deep' 
                       ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg' 
                       : 'text-text-tertiary hover:text-white hover:bg-white/10'
@@ -999,8 +1119,8 @@ function ChatPageContent() {
             </div>
 
             {/* Input Field */}
-            <div className="glass-card p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-lg">
-              <div className="flex items-end gap-4">
+            <div className="glass-card p-3 md:p-4 rounded-xl md:rounded-2xl bg-white/5 border border-white/10 backdrop-blur-lg">
+              <div className="flex items-end gap-3 md:gap-4">
                 <textarea
                   ref={inputRef}
                   value={inputText}
@@ -1014,12 +1134,12 @@ function ChatPageContent() {
                   placeholder="Message Lotus..."
                   disabled={isLoading}
                   rows={1}
-                  className="flex-1 bg-transparent text-white placeholder-text-muted border-none outline-none resize-none min-h-[24px] max-h-[120px] text-responsive-base leading-relaxed"
+                  className="flex-1 bg-transparent text-white placeholder-text-muted border-none outline-none resize-none min-h-[24px] max-h-[120px] text-sm md:text-base leading-relaxed touch-manipulation"
                 />
                 <button
                   onClick={sendMessage}
                   disabled={isLoading || !inputText.trim()}
-                  className={`p-3 rounded-xl transition-all duration-200 flex items-center justify-center group ${
+                  className={`p-4 md:p-3 rounded-lg md:rounded-xl transition-all duration-200 flex items-center justify-center group touch-manipulation ${
                     isLoading || !inputText.trim()
                       ? 'bg-white/10 text-text-muted cursor-not-allowed' 
                       : searchMode === 'deep'
@@ -1027,7 +1147,7 @@ function ChatPageContent() {
                         : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-lg hover:shadow-blue-500/25 hover:scale-105'
                   }`}
                 >
-                  <Send size={16} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform duration-200" />
+                  <Send size={18} className="md:w-4 md:h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform duration-200" />
                 </button>
               </div>
             </div>

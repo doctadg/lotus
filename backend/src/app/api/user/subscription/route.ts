@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth'
-import { getCachedDynamicQuestions } from '@/lib/question-generator'
+import { prisma } from '@/lib/prisma'
 import { ApiResponse } from '@/types'
 
-// GET /api/user/questions - Get personalized questions for the user
 export async function GET(request: NextRequest) {
   try {
     const authData = await authenticateUser(request)
@@ -17,24 +16,28 @@ export async function GET(request: NextRequest) {
     
     const userId = authData.userId
 
-    console.log(`🎯 [API] Generating questions for user: ${userId}`)
-    
-    const questionResult = await getCachedDynamicQuestions(userId)
-    
-    return NextResponse.json<ApiResponse>({
-      success: true,
-      data: {
-        questions: questionResult.questions,
-        isPersonalized: questionResult.isPersonalized,
-        source: questionResult.source
-      }
+    // Get user's subscription status
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId }
     })
 
+    // If no subscription found, user is on free plan
+    const subscriptionData = subscription || {
+      planType: 'free',
+      status: null,
+      currentPeriodStart: null,
+      currentPeriodEnd: null,
+    }
+
+    return NextResponse.json<ApiResponse>({
+      success: true,
+      data: { subscription: subscriptionData }
+    })
   } catch (error) {
-    console.error('Error generating questions:', error)
+    console.error('Error fetching subscription:', error)
     return NextResponse.json<ApiResponse>({
       success: false,
-      error: 'Failed to generate questions'
+      error: 'Internal server error'
     }, { status: 500 })
   }
 }

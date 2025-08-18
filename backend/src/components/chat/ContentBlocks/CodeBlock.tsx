@@ -82,59 +82,65 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
   }
 
   return (
-    <div className="code-block group relative bg-surface border border-border rounded-lg overflow-hidden my-4">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 bg-surface-elevated border-b border-border">
-        <div className="flex items-center space-x-2">
-          <div className="flex space-x-1">
-            <div className="w-3 h-3 rounded-full bg-red-500"></div>
-            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-            <div className="w-3 h-3 rounded-full bg-green-500"></div>
+    <div className="code-block group relative bg-black/40 border border-white/10 rounded-xl overflow-hidden my-4 backdrop-blur-sm">
+      {/* Professional Header */}
+      <div className="flex items-center justify-between px-4 py-3 bg-black/60 border-b border-white/10">
+        <div className="flex items-center space-x-3">
+          <div className="flex space-x-1.5">
+            <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
+            <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+            <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
           </div>
-          <span className="text-sm font-mono text-text-secondary">
-            {fileName || language}
-          </span>
+          <div className="flex items-center space-x-2">
+            <div 
+              className="w-2 h-2 rounded-full" 
+              style={{ backgroundColor: getLanguageColor(language) }}
+            />
+            <span className="text-sm font-mono text-white/70 font-medium">
+              {fileName || language.toUpperCase()}
+            </span>
+          </div>
         </div>
         
-        <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
           {isExecutable(language) && (
             <button
               onClick={executeCode}
               disabled={isExecuting}
-              className="p-1.5 rounded hover:bg-surface-hover transition-colors"
+              className="p-2 rounded-lg hover:bg-white/10 transition-colors group/btn"
               title="Run code"
             >
               <Play 
                 size={14} 
-                className={`text-text-tertiary hover:text-accent-primary ${isExecuting ? 'animate-spin' : ''}`}
+                className={`text-white/60 group-hover/btn:text-green-400 transition-colors ${isExecuting ? 'animate-spin' : ''}`}
               />
             </button>
           )}
           
           <button
             onClick={downloadCode}
-            className="p-1.5 rounded hover:bg-surface-hover transition-colors"
+            className="p-2 rounded-lg hover:bg-white/10 transition-colors group/btn"
             title="Download code"
           >
-            <Download size={14} className="text-text-tertiary hover:text-accent-primary" />
+            <Download size={14} className="text-white/60 group-hover/btn:text-blue-400 transition-colors" />
           </button>
           
           <button
             onClick={copyToClipboard}
-            className="p-1.5 rounded hover:bg-surface-hover transition-colors"
+            className="p-2 rounded-lg hover:bg-white/10 transition-colors group/btn"
             title="Copy code"
           >
             {copied ? (
-              <Check size={14} className="text-green-500" />
+              <Check size={14} className="text-green-400" />
             ) : (
-              <Copy size={14} className="text-text-tertiary hover:text-accent-primary" />
+              <Copy size={14} className="text-white/60 group-hover/btn:text-white/90 transition-colors" />
             )}
           </button>
         </div>
       </div>
 
-      {/* Code Content */}
-      <div className="relative" style={{ maxHeight }}>
+      {/* Enhanced Code Content */}
+      <div className="relative overflow-auto" style={{ maxHeight }}>
         <SyntaxHighlighter
           language={language.toLowerCase()}
           style={theme === 'dark' ? oneDark : oneLight}
@@ -142,24 +148,35 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
           wrapLines={true}
           customStyle={{
             margin: 0,
-            padding: '1rem',
+            padding: '1.25rem',
             background: 'transparent',
-            fontSize: '13px',
-            lineHeight: '1.5'
+            fontSize: '14px',
+            lineHeight: '1.6',
+            fontFamily: 'JetBrains Mono, SF Mono, Monaco, Inconsolata, Roboto Mono, Menlo, Consolas, monospace',
           }}
           codeTagProps={{
             style: {
-              fontFamily: 'JetBrains Mono, Consolas, Monaco, monospace'
+              fontFamily: 'JetBrains Mono, SF Mono, Monaco, Inconsolata, Roboto Mono, Menlo, Consolas, monospace',
+              fontFeatureSettings: '"liga" 1, "calt" 1',
+              fontWeight: '450',
             }
+          }}
+          lineNumberStyle={{
+            color: 'rgba(255, 255, 255, 0.3)',
+            fontSize: '12px',
+            paddingRight: '1rem',
+            minWidth: '2.5rem',
+            textAlign: 'right',
+            userSelect: 'none',
           }}
         >
           {code}
         </SyntaxHighlighter>
       </div>
 
-      {/* Fade overlay if content is scrollable */}
-      {code.split('\n').length > 20 && (
-        <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-surface to-transparent pointer-events-none"></div>
+      {/* Enhanced fade overlay for long content */}
+      {code.split('\n').length > 25 && (
+        <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black/40 via-black/20 to-transparent pointer-events-none"></div>
       )}
     </div>
   )

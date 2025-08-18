@@ -11,7 +11,7 @@ interface JWTPayload {
   exp: number
 }
 
-export async function authenticateUser(request: NextRequest): Promise<string | null> {
+export async function authenticateUser(request: NextRequest): Promise<{ userId: string; email: string } | null> {
   const authHeader = request.headers.get('authorization')
   
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -43,7 +43,7 @@ export async function authenticateUser(request: NextRequest): Promise<string | n
       where: { id: decoded.userId }
     })
     
-    return user?.id || null
+    return user ? { userId: user.id, email: user.email } : null
   } catch (error) {
     console.error('Auth error:', error)
     return null

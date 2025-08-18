@@ -30,7 +30,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(({
 }) => {
   const { processedContent, detectedBlocks } = useMessageFormatting(content)
 
-  // Custom components for ReactMarkdown
+  // Enhanced custom components for ReactMarkdown with professional styling
   const components = {
     code({ node, inline, className, children, ...props }: any) {
       const match = /language-(\w+)/.exec(className || '')
@@ -51,8 +51,12 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(({
         return <CodeBlock code={content} language={language} />
       }
 
+      // Enhanced inline code styling
       return (
-        <code className={className} {...props}>
+        <code 
+          className="px-1 md:px-1.5 py-0.5 bg-white/10 text-white/95 rounded text-xs md:text-sm font-mono font-medium border border-white/5" 
+          {...props}
+        >
           {children}
         </code>
       )
@@ -62,56 +66,131 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(({
       return <TableBlock>{children}</TableBlock>
     },
 
-    a({ href, children }: any) {
-      return <LinkPreview url={href}>{children}</LinkPreview>
-    },
 
     blockquote({ children }: any) {
       return (
-        <blockquote className="border-l-4 border-accent-primary/30 pl-4 py-2 bg-accent-subtle/50 rounded-r-lg my-4 italic">
-          {children}
-        </blockquote>
+        <div className="my-3 md:my-4 pl-3 md:pl-4 py-2 md:py-3 border-l-3 md:border-l-4 border-blue-500/50 bg-white/[0.02] rounded-r-lg">
+          <div className="text-white/80 italic leading-relaxed text-sm md:text-base">
+            {children}
+          </div>
+        </div>
       )
     },
 
     h1({ children }: any) {
-      return <h1 className="text-2xl font-bold mb-4 text-text-primary border-b border-border pb-2">{children}</h1>
+      return (
+        <h1 className="text-xl md:text-2xl font-semibold text-white/95 mb-4 md:mb-6 mt-6 md:mt-8 first:mt-0 leading-tight tracking-tight">
+          {children}
+        </h1>
+      )
     },
 
     h2({ children }: any) {
-      return <h2 className="text-xl font-semibold mb-3 text-text-primary">{children}</h2>
+      return (
+        <h2 className="text-lg md:text-xl font-semibold text-white/95 mb-3 md:mb-4 mt-6 md:mt-8 first:mt-0 leading-snug tracking-tight">
+          {children}
+        </h2>
+      )
     },
 
     h3({ children }: any) {
-      return <h3 className="text-lg font-medium mb-2 text-text-primary">{children}</h3>
+      return (
+        <h3 className="text-base md:text-lg font-semibold text-white/92 mb-2 md:mb-3 mt-4 md:mt-6 first:mt-0 leading-snug tracking-tight">
+          {children}
+        </h3>
+      )
+    },
+
+    h4({ children }: any) {
+      return (
+        <h4 className="text-sm md:text-base font-semibold text-white/90 mb-2 mt-4 md:mt-5 first:mt-0 leading-normal">
+          {children}
+        </h4>
+      )
+    },
+
+    h5({ children }: any) {
+      return (
+        <h5 className="text-xs md:text-sm font-semibold text-white/90 mb-2 mt-3 md:mt-4 first:mt-0 leading-normal uppercase tracking-wide">
+          {children}
+        </h5>
+      )
+    },
+
+    h6({ children }: any) {
+      return (
+        <h6 className="text-xs md:text-sm font-medium text-white/85 mb-2 mt-3 md:mt-4 first:mt-0 leading-normal uppercase tracking-wider">
+          {children}
+        </h6>
+      )
     },
 
     p({ children }: any) {
-      return <p className="mb-4 text-text-primary leading-relaxed">{children}</p>
+      return (
+        <p className="mb-3 md:mb-4 text-white/90 leading-relaxed text-sm md:text-base [line-height:1.65] last:mb-0">
+          {children}
+        </p>
+      )
     },
 
     ul({ children }: any) {
-      return <ul className="list-disc list-inside mb-4 space-y-1 text-text-primary">{children}</ul>
+      return (
+        <ul className="mb-3 md:mb-4 pl-5 md:pl-6 space-y-1.5 md:space-y-2 text-white/90 text-sm md:text-base [&>li]:relative [&>li]:pl-2 [&>li::before]:content-['•'] [&>li::before]:absolute [&>li::before]:left-[-0.75rem] [&>li::before]:text-white/60 [&>li::before]:font-bold">
+          {children}
+        </ul>
+      )
     },
 
     ol({ children }: any) {
-      return <ol className="list-decimal list-inside mb-4 space-y-1 text-text-primary">{children}</ol>
+      return (
+        <ol className="mb-3 md:mb-4 pl-5 md:pl-6 space-y-1.5 md:space-y-2 text-white/90 text-sm md:text-base list-decimal [&>li]:pl-2">
+          {children}
+        </ol>
+      )
     },
 
     li({ children }: any) {
-      return <li className="text-text-primary">{children}</li>
+      return (
+        <li className="text-white/90 leading-relaxed text-sm md:text-base">
+          {children}
+        </li>
+      )
     },
 
     strong({ children }: any) {
-      return <strong className="font-semibold text-text-primary">{children}</strong>
+      return (
+        <strong className="font-semibold text-white/95">
+          {children}
+        </strong>
+      )
     },
 
     em({ children }: any) {
-      return <em className="italic text-text-primary">{children}</em>
+      return (
+        <em className="italic text-white/92 font-medium">
+          {children}
+        </em>
+      )
     },
 
     hr() {
-      return <hr className="border-border my-6" />
+      return (
+        <hr className="my-8 border-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+      )
+    },
+
+    // Enhanced link styling
+    a({ href, children }: any) {
+      return (
+        <a 
+          href={href}
+          className="text-blue-400 hover:text-blue-300 underline underline-offset-2 decoration-blue-400/60 hover:decoration-blue-300 transition-colors duration-200 font-medium"
+          target={href?.startsWith('http') ? '_blank' : undefined}
+          rel={href?.startsWith('http') ? 'noopener noreferrer' : undefined}
+        >
+          {children}
+        </a>
+      )
     }
   }
 
@@ -125,7 +204,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(({
         </div>
       )}
 
-      <div className="prose prose-sm max-w-none prose-gray dark:prose-invert">
+      <div className="prose prose-lg prose-enhanced max-w-none text-secondary [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkMath]}
           rehypePlugins={[rehypeKatex, rehypeHighlight]}
@@ -136,11 +215,11 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(({
       </div>
 
       {isStreaming && (
-        <div className="streaming-indicator">
+        <div className="streaming-indicator mt-2">
           <div className="flex items-center space-x-1">
-            <div className="w-1 h-1 bg-accent-primary rounded-full animate-bounce"></div>
-            <div className="w-1 h-1 bg-accent-primary rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-            <div className="w-1 h-1 bg-accent-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></div>
+            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
           </div>
         </div>
       )}

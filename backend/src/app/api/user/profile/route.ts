@@ -5,14 +5,16 @@ import { ApiResponse } from '@/types'
 
 export async function GET(request: NextRequest) {
   try {
-    const userId = await authenticateUser(request)
+    const authData = await authenticateUser(request)
     
-    if (!userId) {
+    if (!authData) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 })
     }
+    
+    const userId = authData.userId
 
     const user = await prisma.user.findUnique({
       where: { id: userId },

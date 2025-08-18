@@ -8,14 +8,16 @@ import { ApiResponse } from '@/types'
 // GET /api/user/memories - Get user's memories
 export async function GET(request: NextRequest) {
   try {
-    const userId = await authenticateUser(request)
+    const authData = await authenticateUser(request)
     
-    if (!userId) {
+    if (!authData) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 })
     }
+    
+    const userId = authData.userId
 
     const { searchParams } = new URL(request.url)
     const query = searchParams.get('query')
@@ -58,14 +60,16 @@ export async function GET(request: NextRequest) {
 // POST /api/user/memories - Create new memory
 export async function POST(request: NextRequest) {
   try {
-    const userId = await authenticateUser(request)
+    const authData = await authenticateUser(request)
     
-    if (!userId) {
+    if (!authData) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 })
     }
+    
+    const userId = authData.userId
 
     const body = await request.json()
     const { type, category, key, value, confidence = 1.0 } = body
@@ -111,14 +115,16 @@ export async function POST(request: NextRequest) {
 // DELETE /api/user/memories - Delete memory
 export async function DELETE(request: NextRequest) {
   try {
-    const userId = await authenticateUser(request)
+    const authData = await authenticateUser(request)
     
-    if (!userId) {
+    if (!authData) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 })
     }
+    
+    const userId = authData.userId
 
     const { searchParams } = new URL(request.url)
     const memoryId = searchParams.get('id')
