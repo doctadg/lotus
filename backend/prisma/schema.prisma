@@ -18,6 +18,7 @@ model User {
   email         String        @unique
   password      String?       // Made optional for migration
   name          String?
+  role          String        @default("user") // 'user' or 'admin'
   stripeCustomerId String?      @unique
   chats         Chat[]
   memories      UserMemory[]
@@ -25,6 +26,7 @@ model User {
   embeddings    UserEmbedding[]
   subscription  Subscription?
   messageUsage  MessageUsage[]
+  adminActions  AdminAction[]
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
@@ -130,4 +132,16 @@ model MessageUsage {
 
   @@unique([userId, hour])
   @@map("message_usage")
+}
+
+model AdminAction {
+  id          String   @id @default(cuid())
+  adminId     String
+  action      String   // 'upgrade_user', 'change_role', 'view_stats', etc.
+  targetId    String?  // ID of the target user/resource
+  details     Json?    // Additional action details
+  admin       User     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@map("admin_actions")
 }

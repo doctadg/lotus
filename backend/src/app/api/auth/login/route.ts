@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
         email: true,
         password: true,
         name: true,
+        role: true,
         createdAt: true
       }
     })
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     // Create JWT token
     const token = sign(
-      { userId: user.id, email: user.email },
+      { userId: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET || 'fallback-secret-key',
       { expiresIn: '7d' }
     )

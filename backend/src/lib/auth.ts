@@ -7,11 +7,12 @@ import { traceable } from 'langsmith/traceable'
 interface JWTPayload {
   userId: string
   email: string
+  role: string
   iat: number
   exp: number
 }
 
-export async function authenticateUser(request: NextRequest): Promise<{ userId: string; email: string } | null> {
+export async function authenticateUser(request: NextRequest): Promise<{ userId: string; email: string; role: string } | null> {
   const authHeader = request.headers.get('authorization')
   
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -38,16 +39,27 @@ export async function authenticateUser(request: NextRequest): Promise<{ userId: 
       process.env.JWT_SECRET || 'fallback-secret-key'
     ) as JWTPayload
     
-    // Verify user still exists
+    // Verify user still exists and get current role
     const user = await prisma.user.findUnique({
-      where: { id: decoded.userId }
+      where: { id: decoded.userId },
+      select: { id: true, email: true, role: true }
     })
     
-    return user ? { userId: user.id, email: user.email } : null
+    return user ? { userId: user.id, email: user.email, role: user.role } : null
   } catch (error) {
     console.error('Auth error:', error)
     return null
   }
+}
+
+export async function authenticateAdmin(request: NextRequest): Promise<{ userId: string; email: string; role: string } | null> {
+  const authData = await authenticateUser(request)
+  
+  if (!authData || authData.role !== 'admin') {
+    return null
+  }
+  
+  return authData
 }
 
 // Legacy function - kept for backwards compatibility but updated
