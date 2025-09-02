@@ -191,6 +191,22 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(({
           {children}
         </a>
       )
+    },
+
+    // Image component to handle data URLs and blob URLs
+    img({ src, alt, ...props }: any) {
+      // Handle data URLs and blob URLs properly
+      if (!src) return null
+      
+      return (
+        <img 
+          src={src}
+          alt={alt || 'Generated image'}
+          className="max-w-full h-auto rounded-lg my-4 shadow-lg"
+          loading="lazy"
+          {...props}
+        />
+      )
     }
   }
 

@@ -18,7 +18,7 @@ interface Subscription {
 }
 
 export default function SettingsPage() {
-  const { user, token, signOut } = useAuth()
+  const { user, signOut } = useAuth()
   const router = useRouter()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -28,7 +28,7 @@ export default function SettingsPage() {
   const [message, setMessage] = useState('')
 
   useEffect(() => {
-    if (!token) {
+    if (!user) {
       router.push('/login')
       return
     }
@@ -39,15 +39,11 @@ export default function SettingsPage() {
 
     // Load subscription data
     fetchSubscription()
-  }, [token, user, router])
+  }, [user, router])
 
   const fetchSubscription = async () => {
     try {
-      const response = await fetch('/api/user/subscription', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
+      const response = await fetch('/api/user/subscription')
 
       if (response.ok) {
         const data = await response.json()
@@ -83,7 +79,6 @@ export default function SettingsPage() {
       const response = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       })

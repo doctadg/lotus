@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { useAuth, ProtectedRoute } from '../../lib/auth-context'
+import { useAuth } from '../../hooks/useAuth'
 
 const MemoryMindmap3D = dynamic(
   () => import('@/components/MemoryMindmap3D'),
@@ -30,7 +30,7 @@ interface Memory {
 }
 
 function MemoriesPageContent() {
-  const { token } = useAuth()
+  const { user } = useAuth()
   const [memories, setMemories] = useState<Memory[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -55,7 +55,6 @@ function MemoriesPageContent() {
       const response = await fetch(`/api/user/memories?${params}`, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         },
         credentials: 'include'
       })
@@ -86,7 +85,6 @@ function MemoriesPageContent() {
       const response = await fetch(`/api/user/memories?id=${memoryId}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${token}`
         },
         credentials: 'include'
       })
@@ -119,7 +117,6 @@ function MemoriesPageContent() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           type,
@@ -523,9 +520,5 @@ function MemoriesPageContent() {
 }
 
 export default function MemoriesPage() {
-  return (
-    <ProtectedRoute>
-      <MemoriesPageContent />
-    </ProtectedRoute>
-  )
+  return <MemoriesPageContent />
 }

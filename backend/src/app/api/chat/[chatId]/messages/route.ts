@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
-import { authenticateUser } from '@/lib/auth'
+import { syncUserWithDatabase } from '@/lib/sync-user'
 import { aiAgent } from '@/lib/agent'
 import { ApiResponse, SendMessageRequest } from '@/types'
 
@@ -10,21 +11,29 @@ export async function GET(
 ) {
   try {
     const { chatId } = await params
-    const authData = await authenticateUser(request)
+    const { userId: clerkUserId } = await auth()
     
-    if (!authData) {
+    if (!clerkUserId) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 })
     }
     
-    const userId = authData.userId
+    // Sync user with database if needed
+    const user = await syncUserWithDatabase(clerkUserId)
+    
+    if (!user) {
+      return NextResponse.json<ApiResponse>({
+        success: false,
+        error: 'User sync failed'
+      }, { status: 500 })
+    }
 
     const chat = await prisma.chat.findFirst({
       where: {
         id: chatId,
-        userId
+        userId: user.id
       }
     })
 
@@ -59,31 +68,32 @@ export async function POST(
 ) {
   try {
     const { chatId } = await params
-    const authData = await authenticateUser(request)
+    const { userId: clerkUserId } = await auth()
     
-    if (!authData) {
+    if (!clerkUserId) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 })
     }
     
-    const userId = authData.userId
-
-    const { content, role = 'user' }: SendMessageRequest = await request.json()
-
-    if (!content) {
+    // Sync user with database if needed
+    const user = await syncUserWithDatabase(clerkUserId)
+    
+    if (!user) {
       return NextResponse.json<ApiResponse>({
         success: false,
-        error: 'Message content is required'
-      }, { status: 400 })
+        error: 'User sync failed'
+      }, { status: 500 })
     }
+
+    const { content }: SendMessageRequest = await request.json()
 
     // Verify chat ownership
     const chat = await prisma.chat.findFirst({
       where: {
         id: chatId,
-        userId
+        userId: user.id
       }
     })
 
@@ -94,54 +104,47 @@ export async function POST(
       }, { status: 404 })
     }
 
-    // Save user message
+    // Get chat history for context
+    const messages = await prisma.message.findMany({
+      where: { chatId },
+      orderBy: { createdAt: 'asc' },
+      take: 10  // Limit context to last 10 messages for performance
+    })
+
+    // Store user message
     const userMessage = await prisma.message.create({
       data: {
-        chatId: chatId,
-        role,
+        chatId,
+        role: 'user',
         content
       }
     })
 
-    // Get chat history for context
-    const chatHistory = await prisma.message.findMany({
-      where: { chatId: chatId },
-      orderBy: { createdAt: 'asc' },
-      take: -20 // Last 20 messages
-    })
-
-    // Process message with AI agent
-    const agentResponse = await aiAgent.processMessage(
+    // Process with AI agent
+    const response = await aiAgent.processMessage(
       content,
-      chatHistory.map(msg => ({
-        role: msg.role,
-        content: msg.content
+      messages.map(m => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content
       })),
       false, // deepResearchMode
-      userId // pass userId for personalization
+      user.id
     )
 
-    // Save AI response
-    const aiMessage = await prisma.message.create({
+    // Store assistant response
+    const assistantMessage = await prisma.message.create({
       data: {
-        chatId: chatId,
+        chatId,
         role: 'assistant',
-        content: agentResponse.content,
-        metadata: agentResponse.metadata ? JSON.parse(JSON.stringify(agentResponse.metadata)) : null
+        content: response.content
       }
-    })
-
-    // Update chat's updatedAt timestamp
-    await prisma.chat.update({
-      where: { id: chatId },
-      data: { updatedAt: new Date() }
     })
 
     return NextResponse.json<ApiResponse>({
       success: true,
       data: {
         userMessage,
-        aiMessage
+        assistantMessage
       }
     })
   } catch (error) {

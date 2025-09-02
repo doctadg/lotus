@@ -7,6 +7,7 @@ import { ChatOpenAI } from '@langchain/openai'
 import { PromptTemplate } from '@langchain/core/prompts'
 import { JsonOutputParser } from '@langchain/core/output_parsers'
 import { adaptiveMemory } from './adaptive-memory'
+import { prisma } from './prisma'
 import { groqCircuitBreaker } from './circuit-breaker'
 import { traceable } from 'langsmith/traceable'
 
@@ -28,36 +29,39 @@ const llm = new ChatOpenAI({
 const parser = new JsonOutputParser()
 
 const questionGenerationPrompt = PromptTemplate.fromTemplate(`
-You are a helpful assistant that generates personalized conversation starters based on a user's interests and context.
+You generate the next things the user is likely to ask the assistant, based on their RECENT memories and overall context.
 
-Based on the user's memories and context below, generate 4 engaging questions or conversation starters that would be interesting to them.
+Produce 4 concise first-person prompts/requests the user would type to the assistant (not the assistant asking the user questions).
 
 Return ONLY valid JSON in this exact format:
 {{
   "questions": [
     {{
-      "text": "A specific question or prompt",
+      "text": "A specific first-person prompt/request",
       "category": "technical|creative|personal|general",
-      "reasoning": "Why this question is relevant to the user"
+      "reasoning": "Why this is relevant now based on recent memories"
     }}
   ]
 }}
 
 RULES:
-1. Make questions specific and actionable
-2. Use the user's interests, skills, and preferences from their memories
-3. Vary the categories and types of questions
-4. Keep questions concise (under 50 characters when possible)
-5. Make them conversation starters, not yes/no questions
-6. If no memories are available, generate general interesting questions
+1. Write from the user's perspective addressing the assistant (e.g., "Summarize my last meeting notes", "Draft a follow-up email to Sam").
+2. NEVER ask the user questions about themselves (avoid "What is your...", "Do you...").
+3. Prefer recent memories; tie suggestions to recent topics, tasks, people, or tools when possible.
+4. Be specific and actionable; avoid vague or yes/no prompts.
+5. Vary categories and keep to <= 80 characters when possible.
+6. If no memories are available, generate generally useful prompts.
 
-USER MEMORIES:
+RECENT MEMORIES (prioritize):
+{recentMemories}
+
+ALL MEMORIES (fallback/context):
 {memories}
 
 USER CONTEXT:
 {userContext}
 
-Generate 4 personalized questions as JSON:
+Generate exactly 4 personalized prompts as JSON:
 `)
 
 const fallbackQuestions: GeneratedQuestion[] = [
@@ -114,8 +118,25 @@ export const generateDynamicQuestions = traceable(async (
 
     console.log(`📚 [QUESTION_GEN] Found ${memoryResult.memories.length} memories`)
 
+    // Also fetch the most recent memories explicitly to prioritize recency
+    console.log(`⏱️  [QUESTION_GEN] Retrieving recent memories to prioritize recency`)
+    const recentRaw = await prisma.userMemory.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 12,
+      select: { type: true, key: true, value: true, confidence: true, createdAt: true }
+    })
+
+    // Filter out conversation-like entries
+    const recentFiltered = recentRaw.filter(m => {
+      const v = `${m.key} ${m.value}`
+      if (/\b(User|Assistant|Human|AI|Bot):\s/i.test(v)) return false
+      if (/^(You|I|We|They) (said|asked|responded|replied|answered|told|mentioned)/i.test(v)) return false
+      return true
+    })
+
     // If we have no meaningful memories, use fallback questions
-    if (memoryResult.memories.length === 0) {
+    if (memoryResult.memories.length === 0 && recentFiltered.length === 0) {
       console.log(`📭 [QUESTION_GEN] No memories found, using fallback questions`)
       return {
         questions: fallbackQuestions,
@@ -129,6 +150,10 @@ export const generateDynamicQuestions = traceable(async (
       .map(memory => `- ${memory.key}: ${memory.value} (type: ${memory.type}, confidence: ${memory.confidence})`)
       .join('\n')
 
+    const recentMemoriesText = recentFiltered
+      .map(memory => `- ${memory.key}: ${memory.value} (type: ${memory.type}, confidence: ${memory.confidence})`)
+      .join('\n') || 'None'
+
     const contextText = memoryResult.context ? JSON.stringify(memoryResult.context, null, 2) : 'None'
 
     console.log(`🎨 [QUESTION_GEN] Generating personalized questions using AI`)
@@ -141,6 +166,7 @@ export const generateDynamicQuestions = traceable(async (
         const result = await groqCircuitBreaker.execute(
           async () => await chain.invoke({
             memories: memoriesText,
+            recentMemories: recentMemoriesText,
             userContext: contextText
           }),
           async () => {

@@ -19,6 +19,7 @@ model User {
   password      String?       // Made optional for migration
   name          String?
   role          String        @default("user") // 'user' or 'admin'
+  clerkId       String?       @unique // Clerk user ID for authentication
   stripeCustomerId String?      @unique
   chats         Chat[]
   memories      UserMemory[]

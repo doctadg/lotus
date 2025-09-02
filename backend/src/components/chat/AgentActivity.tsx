@@ -115,29 +115,28 @@ export function AgentActivity({ thinkingSteps, searchSteps, tools, isActive }: A
   ].sort((a, b) => a.timestamp - b.timestamp)
   
   useEffect(() => {
-    // Always keep only the last 3 activities, regardless of how fast they come
-    const latestActivities = allActivities.slice(-3)
-    
-    // Clear existing timeouts
+    // Always show only the latest 3 activities (during streaming and after).
+    const itemsToShow = allActivities.slice(-3)
+
+    // Clear existing collapse timers
     collapseTimeouts.current.forEach(timeout => clearTimeout(timeout))
     collapseTimeouts.current.clear()
-    
-    // Set visible items to latest 3
-    setVisibleItems(latestActivities)
-    
+
+    setVisibleItems(itemsToShow)
+
     // Auto-collapse completed items after 2 seconds
-    latestActivities.forEach(item => {
+    itemsToShow.forEach(item => {
       if (item.status === 'complete') {
         const timeoutId = setTimeout(() => {
-          setVisibleItems(prev => 
-            prev.map(i => i.id === item.id ? { ...i, collapsed: true } : i)
+          setVisibleItems(prev =>
+            prev.map(i => (i.id === item.id ? { ...i, collapsed: true } : i))
           )
         }, 2000)
         collapseTimeouts.current.set(item.id, timeoutId)
       }
     })
-    
-    // Cleanup timeouts on unmount
+
+    // Cleanup timeouts on unmount/change
     return () => {
       collapseTimeouts.current.forEach(timeout => clearTimeout(timeout))
     }
@@ -371,26 +370,7 @@ export function AgentActivity({ thinkingSteps, searchSteps, tools, isActive }: A
           )
         })}
         
-        {/* Processing indicator */}
-        {isActive && visibleItems.every(item => item.status === 'complete') && (
-          <div className="activity-wrapper">
-            <div
-              className="activity-bubble executing"
-              style={{ 
-                '--bubble-color': '#94a3b8',
-                '--bubble-color-rgb': '148, 163, 184'
-              } as React.CSSProperties}
-            >
-              <span className="activity-label" style={{ color: '#94a3b8' }}>
-                Processing
-                <span className="spinner" />
-              </span>
-              <span className="activity-content" style={{ fontSize: '0.7rem', opacity: 0.6 }}>
-                Analyzing...
-              </span>
-            </div>
-          </div>
-        )}
+        {/* No additional processing indicator to guarantee max 3 items */}
       </div>
     </>
   )

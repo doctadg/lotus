@@ -1,26 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
-import { authenticateUser } from '@/lib/auth'
+import { syncUserWithDatabase } from '@/lib/sync-user'
 import { ApiResponse, CreateChatRequest } from '@/types'
 
 export async function POST(request: NextRequest) {
   try {
-    const authData = await authenticateUser(request)
+    const { userId } = await auth()
     
-    if (!authData) {
+    if (!userId) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 })
     }
-    
-    const userId = authData.userId
+
+    // Sync user with database if needed
+    const user = await syncUserWithDatabase(userId)
+
+    if (!user) {
+      return NextResponse.json<ApiResponse>({
+        success: false,
+        error: 'User sync failed'
+      }, { status: 500 })
+    }
 
     const { title }: CreateChatRequest = await request.json()
 
     const chat = await prisma.chat.create({
       data: {
-        userId,
+        userId: user.id,
         title: title || 'New Chat'
       },
       include: {
@@ -45,19 +54,27 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const authData = await authenticateUser(request)
+    const { userId } = await auth()
     
-    if (!authData) {
+    if (!userId) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 })
     }
-    
-    const userId = authData.userId
+
+    // Sync user with database if needed
+    const user = await syncUserWithDatabase(userId)
+
+    if (!user) {
+      return NextResponse.json<ApiResponse>({
+        success: false,
+        error: 'User sync failed'
+      }, { status: 500 })
+    }
 
     const chats = await prisma.chat.findMany({
-      where: { userId },
+      where: { userId: user.id },
       orderBy: { updatedAt: 'desc' },
       include: {
         messages: {

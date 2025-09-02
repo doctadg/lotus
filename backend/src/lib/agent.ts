@@ -2,12 +2,39 @@ import { config } from 'dotenv'
 import path from 'path'
 import { ChatOpenAI } from '@langchain/openai'
 import { AgentExecutor, createToolCallingAgent } from 'langchain/agents'
-import { DynamicTool } from '@langchain/core/tools'
+import { DynamicTool, DynamicStructuredTool } from '@langchain/core/tools'
+import { z } from 'zod'
+
+// Shared tool schemas (module-level so both standard and streaming agents can use them)
+const VISION_INPUT_SCHEMA = z.union([
+  z.object({ prompt: z.string().optional(), imageUrl: z.string().url().optional(), imageBase64: z.string().optional() }),
+  z.object({ input: z.object({ prompt: z.string().optional(), imageUrl: z.string().url().optional(), imageBase64: z.string().optional() }) })
+])
+
+const DOC_INPUT_SCHEMA = z.union([
+  z.object({ url: z.string().url(), instructions: z.string().optional() }),
+  z.object({ input: z.object({ url: z.string().url(), instructions: z.string().optional() }) })
+])
+
+const IMAGE_GEN_SCHEMA = z.union([
+  z.object({ prompt: z.string() }),
+  z.object({ input: z.object({ prompt: z.string() }) }),
+  z.object({})
+])
+
+const IMAGE_EDIT_SCHEMA = z.union([
+  z.object({ prompt: z.string(), imageUrl: z.string().url().optional(), imageBase64: z.string().optional() }),
+  z.object({ input: z.object({ prompt: z.string(), imageUrl: z.string().url().optional(), imageBase64: z.string().optional() }) })
+])
 import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts'
 import { traceable } from 'langsmith/traceable'
 import { Client } from 'langsmith'
 import agentConfig from '../../config/agent-prompts.json'
 import { searchHiveService } from './searchhive'
+import { getOpenRouterClient, OPENROUTER_IMAGE_MODEL } from './openrouter'
+import { parseDataUrl, extensionForMime } from './dataurl'
+import { uploadToBlob } from './blob'
+import { parseFromUrl } from './parse-doc'
 import { intelligentSearch } from './intelligent-search'
 import { adaptiveMemory } from './adaptive-memory'
 import { getRelevantMemories, processMessageForMemories } from './memory-extractor'
@@ -169,8 +196,198 @@ class AIAgent {
     this.initializeAgent()
   }
 
+  // Helper: clamp long strings to avoid context overflows
+  private truncate(input: string, max: number): string {
+    if (!input) return ''
+    return input.length > max ? input.slice(0, max) + '…' : input
+  }
+
+  // Helper: trim chat history message content
+  private trimHistory(
+    chatHistory: Array<{ role: string; content: string }>,
+    maxItems: number,
+    maxPerItemChars: number
+  ) {
+    return chatHistory
+      .slice(-maxItems)
+      .map(msg => {
+        const content = this.truncate(String(msg.content || ''), maxPerItemChars)
+        if (msg.role === 'user') return ['human', content]
+        if (msg.role === 'assistant') return ['ai', content]
+        return ['system', content]
+      })
+  }
+
 
   private async initializeAgent() {
+    // Augment tools with multimodal/image/document tools (no change to primary chat model)
+
+    const multimodalTools: any[] = [
+      // Image edit tool using OpenRouter (image-to-image via text + source image)
+      new DynamicStructuredTool({
+        name: 'image_edit',
+        description: 'Edit or transform an existing image (e.g., isolate subject, remove background, blur, crop, recolor). Input JSON must include a clear prompt and one image via imageUrl or imageBase64. Returns Markdown image(s) with edited result.',
+        schema: IMAGE_EDIT_SCHEMA,
+        func: traceable(async (raw: any) => {
+          try {
+            const input = ((): any => (raw && typeof raw === 'object' && 'input' in raw) ? (raw as any).input : raw)()
+            const prompt: string = String(input?.prompt || '')
+            const imageUrl: string | undefined = input?.imageUrl
+            const imageBase64: string | undefined = input?.imageBase64
+            if (!prompt || (!imageUrl && !imageBase64)) {
+              return 'Image edit requires a prompt and an imageUrl or imageBase64.'
+            }
+            const client = getOpenRouterClient()
+            const content: any[] = [ { type: 'text', text: prompt } ]
+            if (imageUrl) content.push({ type: 'image_url', image_url: { url: imageUrl } })
+            if (imageBase64) content.push({ type: 'image_url', image_url: { url: imageBase64 } })
+            const result = await client.chat.completions.create({
+              model: process.env.OPENROUTER_IMAGE_EDIT_MODEL || OPENROUTER_IMAGE_MODEL,
+              messages: [ { role: 'user', content } ],
+              modalities: ['image', 'text'] as any,
+            } as any)
+            const message: any = result.choices?.[0]?.message
+            const images: any[] = message?.images || []
+            if (!images.length) return 'The image edit model returned no images.'
+            const uploaded = await Promise.all(images.map(async (img: any, i: number) => {
+              const url: string = img?.image_url?.url || ''
+              if (url.startsWith('data:')) {
+                const parsed = parseDataUrl(url)
+                if (parsed) {
+                  const ext = extensionForMime(parsed.mime)
+                  const path = `generated/edits/${Date.now()}-${i}.${ext}`
+                  try {
+                    const blobUrl = await uploadToBlob({ path, data: parsed.buffer, contentType: parsed.mime })
+                    return blobUrl
+                  } catch {
+                    return url
+                  }
+                }
+              }
+              return url
+            }))
+            const md = uploaded.map((u, i) => `![edited image ${i+1}](${u})`).join('\n\n')
+            return md
+          } catch (err: any) {
+            return `Image edit failed: ${err?.message || String(err)}`
+          }
+        }, addTraceMetadata({ tool_type: 'multimodal', capability: 'image_edit' }))
+      }),
+      // Image generation tool using OpenRouter image-capable model
+      new DynamicStructuredTool({
+        name: 'image_generate',
+        description: 'Generate an image when the user explicitly asks for an image or picture. Input can be plain text prompt or JSON {"prompt": string}. Include brief relevant context from the ongoing chat in the prompt. Returns a Markdown image tag with embedded base64 image data. Do not use unless the user requests an image.',
+        schema: IMAGE_GEN_SCHEMA,
+        func: traceable(async (raw: any) => {
+          try {
+            const normalized = ((): any => {
+              if (typeof raw === 'string') return { prompt: raw }
+              if (raw && typeof raw === 'object') {
+                if ('prompt' in raw) return raw as any
+                if ('input' in raw) return (raw as any).input
+              }
+              return { prompt: '' }
+            })()
+            const prompt: string = String(normalized.prompt || '')
+            if (!prompt) return 'No prompt provided for image generation.'
+            const client = getOpenRouterClient()
+            const result = await client.chat.completions.create({
+              model: OPENROUTER_IMAGE_MODEL,
+              messages: [ { role: 'user', content: prompt } ],
+              modalities: ['image', 'text'] as any,
+            } as any)
+            const message: any = result.choices?.[0]?.message
+            const images: any[] = message?.images || []
+            if (!images.length) return 'The image model returned no images.'
+
+            const uploaded = await Promise.all(images.map(async (img: any, i: number) => {
+              const url: string = img?.image_url?.url || ''
+              if (url.startsWith('data:')) {
+                const parsed = parseDataUrl(url)
+                if (parsed) {
+                  const ext = extensionForMime(parsed.mime)
+                  const path = `generated/${Date.now()}-${i}.${ext}`
+                  try {
+                    const blobUrl = await uploadToBlob({ path, data: parsed.buffer, contentType: parsed.mime })
+                    return blobUrl
+                  } catch (e) {
+                    // Fallback to data URL if blob upload fails
+                    return url
+                  }
+                }
+              }
+              return url
+            }))
+
+            const md = uploaded.map((u, i) => `![generated image ${i+1}](${u})`).join('\n\n')
+            return md
+          } catch (err: any) {
+            return `Image generation failed: ${err?.message || String(err)}`
+          }
+        }, addTraceMetadata({ tool_type: 'multimodal', capability: 'image_generate' }))
+      }),
+
+      // Vision analysis tool (image understanding)
+      new DynamicStructuredTool({
+        name: 'vision_analyze',
+        description: 'Summarize or describe an image. Input must be JSON: {"prompt": string, "imageUrl"?: string, "imageBase64"?: string}. Include brief relevant chat context in the prompt. Use when the user asks about an image or provides an image URL/data URI. Returns a concise summary/answer.',
+        schema: VISION_INPUT_SCHEMA,
+        func: traceable(async (raw: any) => {
+          try {
+            const input = ((): any => (raw && typeof raw === 'object' && 'input' in raw) ? (raw as any).input : raw)()
+            const prompt: string = input?.prompt ? String(input.prompt) : ''
+            const imageUrl: string | undefined = input?.imageUrl
+            const imageBase64: string | undefined = input?.imageBase64
+            if (!prompt && !imageUrl && !imageBase64) return 'No prompt or image provided.'
+            const client = getOpenRouterClient()
+            const content: any[] = []
+            if (prompt) content.push({ type: 'text', text: prompt })
+            if (imageUrl) content.push({ type: 'image_url', image_url: { url: imageUrl } })
+            if (imageBase64) content.push({ type: 'image_url', image_url: { url: imageBase64 } })
+            const completion = await client.chat.completions.create({
+              model: process.env.OPENROUTER_VISION_MODEL || OPENROUTER_IMAGE_MODEL,
+              messages: [ { role: 'user', content } ],
+            })
+            const text = completion.choices?.[0]?.message?.content || 'No description available.'
+            return text
+          } catch (err: any) {
+            return `Vision analysis failed: ${err?.message || String(err)}`
+          }
+        }, addTraceMetadata({ tool_type: 'multimodal', capability: 'vision_analyze' }))
+      }),
+
+      // Document summarize tool (PDF/DOCX/TXT/MD/HTML)
+      new DynamicStructuredTool({
+        name: 'document_summarize',
+        description: 'Summarize a document from a URL. Input must be JSON: {"url": string, "instructions"?: string}. Include any brief context/instructions relevant from the chat. Supports PDF, DOCX, TXT, MD, HTML. Returns a concise summary.',
+        schema: DOC_INPUT_SCHEMA,
+        func: traceable(async (raw: any) => {
+          try {
+            const input = ((): any => (raw && typeof raw === 'object' && 'input' in raw) ? (raw as any).input : raw)()
+            const url: string = input?.url ? String(input.url) : ''
+            const instructions: string = input?.instructions ? String(input.instructions) : 'Provide a concise helpful summary.'
+            if (!url) return 'No URL provided.'
+            const parsed = await parseFromUrl(url)
+            const text = (parsed.text || '').slice(0, 120_000) // Simple safety cap
+            const client = getOpenRouterClient()
+            const completion = await client.chat.completions.create({
+              model: process.env.OPENROUTER_VISION_MODEL || OPENROUTER_IMAGE_MODEL,
+              messages: [
+                { role: 'system', content: 'You are a helpful assistant summarizing documents. Be accurate and concise.' },
+                { role: 'user', content: [ { type: 'text', text: `${instructions}\n\nDocument type: ${parsed.type}\n\nContent:\n${text}` } ] as any },
+              ],
+            })
+            const summary = completion.choices?.[0]?.message?.content || 'No summary available.'
+            return summary
+          } catch (err: any) {
+            return `Document summarization failed: ${err?.message || String(err)}`
+          }
+        }, addTraceMetadata({ tool_type: 'multimodal', capability: 'document_summarize' }))
+      }),
+    ]
+
+    // Extend the default tools set (keeps primary chat model intact)
+    this.tools = [webSearchTool, comprehensiveSearchTool, ...multimodalTools]
     const prompt = ChatPromptTemplate.fromMessages([
       ['system', agentConfig.systemPrompt],
       new MessagesPlaceholder('chat_history'),
@@ -263,6 +480,17 @@ class AIAgent {
           // Add only highly relevant memories
           userMemoriesContext += `Relevant Information:\n`
           memoryResult.memories.forEach((memory: any) => {
+            // Skip if value looks like a conversation exchange
+            if (memory.value && (
+              memory.value.includes('User:') || 
+              memory.value.includes('Assistant:') ||
+              memory.value.includes('\nUser:') ||
+              memory.value.includes('\nAssistant:')
+            )) {
+              console.log('🚫 [AGENT] Skipping conversation-like memory in context')
+              return
+            }
+            
             // Only include high-relevance memories
             if (!memory.relevanceScore || memory.relevanceScore > 0.7) {
               userMemoriesContext += `- ${memory.key}: ${memory.value}\n`
@@ -280,16 +508,7 @@ class AIAgent {
       
       console.log(`⚡ [TRACE] Parallel operations completed in ${parallelDuration}ms`)
 
-      const formattedHistory = chatHistory
-        .slice(-agentConfig.conversationSettings.maxHistoryLength)
-        .map(msg => {
-          if (msg.role === 'user') {
-            return ['human', msg.content]
-          } else if (msg.role === 'assistant') {
-            return ['ai', msg.content]
-          }
-          return ['system', msg.content]
-        })
+      const formattedHistory = this.trimHistory(chatHistory, agentConfig.conversationSettings.maxHistoryLength, 2000)
 
       // Add current date and time to every query
       const now = new Date()
@@ -306,7 +525,25 @@ class AIAgent {
         timeZoneName: 'short'
       })
 
-      let processedMessage = `[CURRENT DATE & TIME: ${currentDateTime} (${localDateTime})]${userMemoriesContext}${message}`
+      // Safety caps for context length
+      const MAX_MEMORY_CONTEXT = 4000
+      const MAX_MEMORY_ITEM = 500
+      if (userMemoriesContext.includes('Relevant Information:')) {
+        // Re-trim memory context defensively
+        const lines = userMemoriesContext.split('\n')
+        let acc = ''
+        for (const line of lines) {
+          const toAdd = this.truncate(line, MAX_MEMORY_ITEM)
+          if ((acc + toAdd + '\n').length > MAX_MEMORY_CONTEXT) break
+          acc += toAdd + '\n'
+        }
+        userMemoriesContext = acc
+      } else {
+        userMemoriesContext = this.truncate(userMemoriesContext, MAX_MEMORY_CONTEXT)
+      }
+
+      const safeMessage = this.truncate(String(message || ''), 4000)
+      let processedMessage = `[CURRENT DATE & TIME: ${currentDateTime} (${localDateTime})]${userMemoriesContext}${safeMessage}`
       
       if (deepResearchMode) {
         processedMessage = `[CURRENT DATE & TIME: ${currentDateTime} (${localDateTime})]${userMemoriesContext}[COMPREHENSIVE RESEARCH MODE] Please provide a thorough, well-researched response using the comprehensive_search tool if needed: ${message}`
@@ -430,6 +667,17 @@ class AIAgent {
             // Add only highly relevant memories
             userMemoriesContext += `Relevant Information:\n`
             memoryResult.memories.forEach((memory: any) => {
+              // Skip if value looks like a conversation exchange
+              if (memory.value && (
+                memory.value.includes('User:') || 
+                memory.value.includes('Assistant:') ||
+                memory.value.includes('\nUser:') ||
+                memory.value.includes('\nAssistant:')
+              )) {
+                console.log('🚫 [AGENT] Skipping conversation-like memory in streaming context')
+                return
+              }
+              
               // Only include high-relevance memories
               if (!memory.relevanceScore || memory.relevanceScore > 0.7) {
                 userMemoriesContext += `- ${memory.key}: ${memory.value}\n`
@@ -451,16 +699,7 @@ class AIAgent {
         }
       }
 
-      const formattedHistory = chatHistory
-        .slice(-agentConfig.conversationSettings.maxHistoryLength)
-        .map(msg => {
-          if (msg.role === 'user') {
-            return ['human', msg.content]
-          } else if (msg.role === 'assistant') {
-            return ['ai', msg.content]
-          }
-          return ['system', msg.content]
-        })
+      const formattedHistory = this.trimHistory(chatHistory, agentConfig.conversationSettings.maxHistoryLength, 2000)
 
       // Add current date and time to every query
       const now = new Date()
@@ -477,7 +716,24 @@ class AIAgent {
         timeZoneName: 'short'
       })
 
-      let processedMessage = `[CURRENT DATE & TIME: ${currentDateTime} (${localDateTime})]${userMemoriesContext}${message}`
+      // Safety caps for context length
+      const MAX_MEMORY_CONTEXT = 4000
+      const MAX_MEMORY_ITEM = 500
+      if (userMemoriesContext.includes('Relevant Information:')) {
+        const lines = userMemoriesContext.split('\n')
+        let acc = ''
+        for (const line of lines) {
+          const toAdd = this.truncate(line, MAX_MEMORY_ITEM)
+          if ((acc + toAdd + '\n').length > MAX_MEMORY_CONTEXT) break
+          acc += toAdd + '\n'
+        }
+        userMemoriesContext = acc
+      } else {
+        userMemoriesContext = this.truncate(userMemoriesContext, MAX_MEMORY_CONTEXT)
+      }
+
+      const safeMessage = this.truncate(String(message || ''), 4000)
+      let processedMessage = `[CURRENT DATE & TIME: ${currentDateTime} (${localDateTime})]${userMemoriesContext}${safeMessage}`
       
       // Enhanced query analysis thinking
       yield {
@@ -541,9 +797,165 @@ class AIAgent {
         }
       }
       
-      const streamingTools = [
+      const streamingTools: any[] = [
         createWebSearchTool(toolEventCallback),
-        createComprehensiveSearchTool(toolEventCallback)
+        createComprehensiveSearchTool(toolEventCallback),
+        // Image edit (image-to-image)
+        new DynamicStructuredTool({
+          name: 'image_edit',
+          description: 'Edit or transform an existing image (e.g., isolate subject, remove background, blur, crop, recolor). Input JSON must include a clear prompt and one image via imageUrl or imageBase64. Returns Markdown image(s) with edited result.',
+          schema: IMAGE_EDIT_SCHEMA,
+          func: traceable(async (raw: any) => {
+            try {
+              const input = ((): any => (raw && typeof raw === 'object' && 'input' in raw) ? (raw as any).input : raw)()
+              const prompt: string = String(input?.prompt || '')
+              const imageUrl: string | undefined = input?.imageUrl
+              const imageBase64: string | undefined = input?.imageBase64
+              if (!prompt || (!imageUrl && !imageBase64)) return 'Image edit requires a prompt and an imageUrl or imageBase64.'
+              const client = getOpenRouterClient()
+              const content: any[] = [ { type: 'text', text: prompt } ]
+              if (imageUrl) content.push({ type: 'image_url', image_url: { url: imageUrl } })
+              if (imageBase64) content.push({ type: 'image_url', image_url: { url: imageBase64 } })
+              const result = await client.chat.completions.create({
+                model: process.env.OPENROUTER_IMAGE_EDIT_MODEL || OPENROUTER_IMAGE_MODEL,
+                messages: [ { role: 'user', content } ],
+                modalities: ['image', 'text'] as any,
+              } as any)
+              const message: any = result.choices?.[0]?.message
+              const images: any[] = message?.images || []
+              if (!images.length) return 'The image edit model returned no images.'
+              const uploaded = await Promise.all(images.map(async (img: any, i: number) => {
+                const url: string = img?.image_url?.url || ''
+                if (url.startsWith('data:')) {
+                  const parsed = parseDataUrl(url)
+                  if (parsed) {
+                    const ext = extensionForMime(parsed.mime)
+                    const path = `generated/edits/${Date.now()}-${i}.${ext}`
+                    try {
+                      const blobUrl = await uploadToBlob({ path, data: parsed.buffer, contentType: parsed.mime })
+                      return blobUrl
+                    } catch {
+                      return url
+                    }
+                  }
+                }
+                return url
+              }))
+              const md = uploaded.map((u, i) => `![edited image ${i+1}](${u})`).join('\n\n')
+              return md
+            } catch (err: any) {
+              return `Image edit failed: ${err?.message || String(err)}`
+            }
+          }, addTraceMetadata({ tool_type: 'multimodal', capability: 'image_edit' }))
+        }),
+        // Image generation (non-streaming result, but reports as tool usage)
+        new DynamicStructuredTool({
+          name: 'image_generate',
+          description: 'Generate an image when the user explicitly asks for an image or picture. Input can be plain text prompt or JSON {"prompt": string}. Include brief relevant context from the ongoing chat in the prompt. Returns a Markdown image tag with embedded base64 image data. Do not use unless the user requests an image.',
+          schema: IMAGE_GEN_SCHEMA,
+          func: traceable(async (raw: any) => {
+            try {
+              const normalized = ((): any => {
+                if (typeof raw === 'string') return { prompt: raw }
+                if (raw && typeof raw === 'object') {
+                  if ('prompt' in raw) return raw as any
+                  if ('input' in raw) return (raw as any).input
+                }
+                return { prompt: '' }
+              })()
+              const prompt: string = String(normalized.prompt || '')
+              if (!prompt) return 'No prompt provided for image generation.'
+              const client = getOpenRouterClient()
+              const result = await client.chat.completions.create({
+                model: OPENROUTER_IMAGE_MODEL,
+                messages: [ { role: 'user', content: prompt } ],
+                modalities: ['image', 'text'] as any,
+              } as any)
+              const message: any = result.choices?.[0]?.message
+              const images: any[] = message?.images || []
+              if (!images.length) return 'The image model returned no images.'
+
+              const uploaded = await Promise.all(images.map(async (img: any, i: number) => {
+                const url: string = img?.image_url?.url || ''
+                if (url.startsWith('data:')) {
+                  const parsed = parseDataUrl(url)
+                  if (parsed) {
+                    const ext = extensionForMime(parsed.mime)
+                    const path = `generated/${Date.now()}-${i}.${ext}`
+                    try {
+                      const blobUrl = await uploadToBlob({ path, data: parsed.buffer, contentType: parsed.mime })
+                      return blobUrl
+                    } catch (e) {
+                      return url
+                    }
+                  }
+                }
+                return url
+              }))
+
+              const md = uploaded.map((u, i) => `![generated image ${i+1}](${u})`).join('\n\n')
+              return md
+            } catch (err: any) {
+              return `Image generation failed: ${err?.message || String(err)}`
+            }
+          }, addTraceMetadata({ tool_type: 'multimodal', capability: 'image_generate' }))
+        }),
+        // Vision analyze
+        new DynamicStructuredTool({
+          name: 'vision_analyze',
+          description: 'Summarize or describe an image. Input must be JSON: {"prompt": string, "imageUrl"?: string, "imageBase64"?: string}. Include brief relevant chat context in the prompt. Use when the user asks about an image or provides an image URL/data URI. Returns a concise summary/answer.',
+          schema: VISION_INPUT_SCHEMA,
+          func: traceable(async (raw: any) => {
+            try {
+              const input = ((): any => (raw && typeof raw === 'object' && 'input' in raw) ? (raw as any).input : raw)()
+              const prompt: string = input?.prompt ? String(input.prompt) : ''
+              const imageUrl: string | undefined = input?.imageUrl
+              const imageBase64: string | undefined = input?.imageBase64
+              if (!prompt && !imageUrl && !imageBase64) return 'No prompt or image provided.'
+              const client = getOpenRouterClient()
+              const content: any[] = []
+              if (prompt) content.push({ type: 'text', text: prompt })
+              if (imageUrl) content.push({ type: 'image_url', image_url: { url: imageUrl } })
+              if (imageBase64) content.push({ type: 'image_url', image_url: { url: imageBase64 } })
+              const completion = await client.chat.completions.create({
+                model: process.env.OPENROUTER_VISION_MODEL || OPENROUTER_IMAGE_MODEL,
+                messages: [ { role: 'user', content } ],
+              })
+              const text = completion.choices?.[0]?.message?.content || 'No description available.'
+              return text
+            } catch (err: any) {
+              return `Vision analysis failed: ${err?.message || String(err)}`
+            }
+          }, addTraceMetadata({ tool_type: 'multimodal', capability: 'vision_analyze' }))
+        }),
+        // Document summarize
+        new DynamicStructuredTool({
+          name: 'document_summarize',
+          description: 'Summarize a document from a URL. Input must be JSON: {"url": string, "instructions"?: string}. Include any brief context/instructions relevant from the chat. Supports PDF, DOCX, TXT, MD, HTML. Returns a concise summary.',
+          schema: DOC_INPUT_SCHEMA,
+          func: traceable(async (raw: any) => {
+            try {
+              const input = ((): any => (raw && typeof raw === 'object' && 'input' in raw) ? (raw as any).input : raw)()
+              const url: string = input?.url ? String(input.url) : ''
+              const instructions: string = input?.instructions ? String(input.instructions) : 'Provide a concise helpful summary.'
+              if (!url) return 'No URL provided.'
+              const parsed = await parseFromUrl(url)
+              const text = (parsed.text || '').slice(0, 120_000)
+              const client = getOpenRouterClient()
+              const completion = await client.chat.completions.create({
+                model: process.env.OPENROUTER_VISION_MODEL || OPENROUTER_IMAGE_MODEL,
+                messages: [
+                  { role: 'system', content: 'You are a helpful assistant summarizing documents. Be accurate and concise.' },
+                  { role: 'user', content: [ { type: 'text', text: `${instructions}\n\nDocument type: ${parsed.type}\n\nContent:\n${text}` } ] as any },
+                ],
+              })
+              const summary = completion.choices?.[0]?.message?.content || 'No summary available.'
+              return summary
+            } catch (err: any) {
+              return `Document summarization failed: ${err?.message || String(err)}`
+            }
+          }, addTraceMetadata({ tool_type: 'multimodal', capability: 'document_summarize' }))
+        })
       ]
       
       // Set up callback to push events to queue

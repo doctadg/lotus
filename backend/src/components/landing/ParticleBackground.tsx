@@ -32,7 +32,7 @@ export default function ParticleBackground({ className = "" }: ParticleBackgroun
         zIndex: 0,
       },
       detectRetina: true,
-      fpsLimit: 120,
+      fpsLimit: 30,
       interactivity: {
         detectsOn: "window" as const,
         events: {
@@ -65,11 +65,11 @@ export default function ParticleBackground({ className = "" }: ParticleBackgroun
             value: "#ffffff",
           },
           consent: false,
-          distance: 60,
+          distance: 50,
           enable: true,
           frequency: 1,
           opacity: 0.4,
-          width: 2.5,
+          width: 1.2,
           warp: false,
         },
         move: {
@@ -86,7 +86,7 @@ export default function ParticleBackground({ className = "" }: ParticleBackgroun
           density: {
             enable: false,
           },
-          value: 100,
+          value: 45,
         },
         opacity: {
           value: {
@@ -108,33 +108,7 @@ export default function ParticleBackground({ className = "" }: ParticleBackgroun
           value: 1.5,
         },
       },
-      polygon: {
-        draw: {
-          enable: true,
-          stroke: {
-            color: {
-              value: "#ffffff",
-            },
-            width: 1.5,
-            opacity: 0.4,
-          },
-        },
-        enable: true,
-        inline: {
-          arrangement: "equidistant" as const,
-        },
-        move: {
-          radius: 4,
-          type: "path" as const,
-        },
-        scale: 0.4,
-        type: "inline" as const,
-        url: "/lotus.svg",
-        position: {
-          x: 50,
-          y: 50,
-        },
-      },
+      polygon: { enable: false },
     }),
     [],
   )

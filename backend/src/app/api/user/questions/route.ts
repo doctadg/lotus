@@ -1,25 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { authenticateUser } from '@/lib/auth'
+import { auth } from '@clerk/nextjs/server'
+import { syncUserWithDatabase } from '@/lib/sync-user'
 import { getCachedDynamicQuestions } from '@/lib/question-generator'
 import { ApiResponse } from '@/types'
 
 // GET /api/user/questions - Get personalized questions for the user
 export async function GET(request: NextRequest) {
   try {
-    const authData = await authenticateUser(request)
+    const { userId } = await auth()
     
-    if (!authData) {
+    if (!userId) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 })
     }
     
-    const userId = authData.userId
-
-    console.log(`🎯 [API] Generating questions for user: ${userId}`)
+    // Sync user with database if needed
+    const user = await syncUserWithDatabase(userId)
     
-    const questionResult = await getCachedDynamicQuestions(userId)
+    if (!user) {
+      return NextResponse.json<ApiResponse>({
+        success: false,
+        error: 'User sync failed'
+      }, { status: 500 })
+    }
+
+    console.log(`🎯 [API] Generating questions for user: ${user.id}`)
+    
+    const questionResult = await getCachedDynamicQuestions(user.id)
     
     return NextResponse.json<ApiResponse>({
       success: true,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
-import { authenticateUser } from '@/lib/auth'
+import { syncUserWithDatabase } from '@/lib/sync-user'
 import { ApiResponse } from '@/types'
 
 export async function GET(
@@ -9,21 +10,29 @@ export async function GET(
 ) {
   try {
     const { chatId } = await params
-    const authData = await authenticateUser(request)
+    const { userId: clerkUserId } = await auth()
     
-    if (!authData) {
+    if (!clerkUserId) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 })
     }
     
-    const userId = authData.userId
+    // Sync user with database if needed
+    const user = await syncUserWithDatabase(clerkUserId)
+    
+    if (!user) {
+      return NextResponse.json<ApiResponse>({
+        success: false,
+        error: 'User sync failed'
+      }, { status: 500 })
+    }
 
     const chat = await prisma.chat.findFirst({
       where: {
         id: chatId,
-        userId
+        userId: user.id
       },
       include: {
         messages: {
@@ -58,21 +67,30 @@ export async function DELETE(
 ) {
   try {
     const { chatId } = await params
-    const authData = await authenticateUser(request)
+    const { userId: clerkUserId } = await auth()
     
-    if (!authData) {
+    if (!clerkUserId) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 })
     }
     
-    const userId = authData.userId
+    // Sync user with database if needed
+    const user = await syncUserWithDatabase(clerkUserId)
+    
+    if (!user) {
+      return NextResponse.json<ApiResponse>({
+        success: false,
+        error: 'User sync failed'
+      }, { status: 500 })
+    }
 
+    // Verify ownership before deletion
     const chat = await prisma.chat.findFirst({
       where: {
         id: chatId,
-        userId
+        userId: user.id
       }
     })
 
@@ -83,6 +101,7 @@ export async function DELETE(
       }, { status: 404 })
     }
 
+    // Delete the chat (messages will cascade delete)
     await prisma.chat.delete({
       where: { id: chatId }
     })

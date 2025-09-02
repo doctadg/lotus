@@ -54,13 +54,41 @@ EXTRACTION RULES:
 5. Ignore: emotions, temporary states, opinions about current events
 6. Use descriptive keys: "programming_language_preference", "job_title", "timezone"
 
+CRITICAL - NEVER EXTRACT:
+- The conversation itself or dialog exchanges
+- What the user asked or said in this specific conversation
+- What the assistant responded
+- Any text containing "User:", "Assistant:", "Human:", "AI:"
+- Requests, commands, or instructions (like "generate an image", "write code")
+- Responses or outputs (like "here is the image", "I created")
+
+ONLY EXTRACT FACTS ABOUT THE USER:
+- Their persistent preferences (favorite color, preferred tools)
+- Their background (job, skills, location)
+- Their interests and expertise
+- NOT what they asked for in this conversation
+
+EXAMPLES OF WHAT TO EXTRACT:
+User: "I prefer Python for data science projects"
+→ Extract: {{"type": "preference", "key": "programming_language_preference", "value": "Python for data science"}}
+
+User: "I work as a software engineer at Google"
+→ Extract: {{"type": "fact", "key": "job_title", "value": "software engineer"}}
+
+EXAMPLES OF WHAT NOT TO EXTRACT:
+User: "Generate an image of a cat"
+→ DO NOT extract the request itself
+
+User: "Can you help me debug this code?"
+→ DO NOT extract "user asked for debugging help"
+
 CONVERSATION:
 User: {userMessage}
 Assistant: {assistantMessage}
 
 Previous Context: {previousContext}
 
-Extract memories as JSON:
+Extract ONLY persistent facts about the user, NOT the conversation content itself. Return as JSON:
 `)
 
 const contextAnalysisPrompt = PromptTemplate.fromTemplate(`
@@ -93,6 +121,27 @@ CURRENT CONTEXT:
 
 Return updated context as JSON:
 `)
+
+/**
+ * Check if a text looks like a conversation exchange rather than a user fact/preference
+ */
+function isConversationExchange(text: string): boolean {
+  if (!text) return false
+  
+  // Patterns that indicate conversation exchanges
+  const conversationPatterns = [
+    /\bUser:\s/i,
+    /\bAssistant:\s/i,
+    /\bHuman:\s/i,
+    /\bAI:\s/i,
+    /\bBot:\s/i,
+    /^(You|I|We|They) (said|asked|responded|replied|answered|told|mentioned)/i,
+    /^(Say|Tell|Ask|Write|Generate|Create|Make)/i,  // Commands
+    /(Here is|Here's|This is) (the|a|an|your)/i,  // Response patterns
+  ]
+  
+  return conversationPatterns.some(pattern => pattern.test(text))
+}
 
 export interface ExtractedMemory {
   type: 'preference' | 'fact' | 'context' | 'skill'
@@ -163,6 +212,22 @@ export const extractMemoriesFromConversation = traceable(async (
           // Validate memory structure
           if (!memory.type || !memory.key || !memory.value) {
             console.warn('⚠️ [MEMORY TRACE] Skipping invalid memory:', memory)
+            continue
+          }
+
+          // Check if this looks like a conversation exchange
+          if (isConversationExchange(memory.key) || isConversationExchange(memory.value)) {
+            console.warn('🚫 [MEMORY TRACE] Skipping conversation-like memory:', {
+              key: memory.key.substring(0, 50),
+              value: memory.value.substring(0, 50)
+            })
+            continue
+          }
+
+          // Additional check: Skip if value contains newlines with dialog patterns
+          if (memory.value.includes('\n') && 
+              (memory.value.includes('User:') || memory.value.includes('Assistant:'))) {
+            console.warn('🚫 [MEMORY TRACE] Skipping multi-line conversation memory')
             continue
           }
 
@@ -387,8 +452,24 @@ export const getRelevantMemories = traceable(async (
       }))
     ]
 
-    const finalResults = combined.slice(0, limit)
-    console.log(`📊 [MEMORY TRACE] Returning ${finalResults.length} combined results`)
+    // Filter out any conversation-like memories before returning
+    const filtered = combined.filter(memory => {
+      // Skip if the value looks like a conversation
+      if (isConversationExchange(memory.value)) {
+        console.log(`🚫 [MEMORY TRACE] Filtering out conversation-like memory from results`)
+        return false
+      }
+      // Skip if value contains dialog patterns
+      if (memory.value.includes('\n') && 
+          (memory.value.includes('User:') || memory.value.includes('Assistant:'))) {
+        console.log(`🚫 [MEMORY TRACE] Filtering out multi-line conversation from results`)
+        return false
+      }
+      return true
+    })
+    
+    const finalResults = filtered.slice(0, limit)
+    console.log(`📊 [MEMORY TRACE] Returning ${finalResults.length} filtered results (removed ${combined.length - filtered.length} conversation-like memories)`)
     return finalResults
   } catch (error) {
     console.error('❌ [MEMORY TRACE] Error getting relevant memories:', error)

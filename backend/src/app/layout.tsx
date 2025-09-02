@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ClerkProvider } from "@clerk/nextjs";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Providers } from "../lib/providers";
 import "./globals.css";
@@ -70,24 +71,35 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark scroll-smooth">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link rel="preload" href="/lotus.svg" as="image" />
-        <meta name="theme-color" content="#8B5CF6" />
-        <meta name="color-scheme" content="dark" />
-        <link rel="icon" href="/lotus.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/lotus.svg" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-      </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen`}
-      >
-        <Providers>
-          {children}
-        </Providers>
-      </body>
-    </html>
+    <ClerkProvider
+      publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+      appearance={{ variables: { colorPrimary: '#8B5CF6' } }}
+    >
+      <html lang="en" className="scroll-smooth">
+        <head>
+          <link rel="preconnect" href="https://fonts.googleapis.com" />
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+          <link rel="preload" href="/lotus.svg" as="image" />
+          <meta name="theme-color" content="#8B5CF6" />
+          <meta name="color-scheme" content="dark light" />
+          {/* Set initial theme to system preference or saved choice without flash */}
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `(() => { try { const ls = localStorage.getItem('theme'); const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches; const useDark = ls ? ls === 'dark' : prefersDark; document.documentElement.classList.toggle('dark', useDark); } catch (e) {} })();`,
+            }}
+          />
+          <link rel="icon" href="/lotus.svg" type="image/svg+xml" />
+          <link rel="apple-touch-icon" href="/lotus.svg" />
+          <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        </head>
+        <body
+          className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen`}
+        >
+          <Providers>
+            {children}
+          </Providers>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

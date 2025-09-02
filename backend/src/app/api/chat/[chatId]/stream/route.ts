@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
-import { authenticateUser } from '@/lib/auth'
+import { syncUserWithDatabase } from '@/lib/sync-user'
 import { aiAgent } from '@/lib/agent'
 import { trackMessageUsage } from '@/lib/rate-limit'
 
@@ -26,15 +27,23 @@ export async function POST(
   try {
     const { chatId } = await params
     console.log('💬 Chat ID:', chatId)
-    const authData = await authenticateUser(request)
-    console.log('👤 Auth Data:', authData)
     
-    if (!authData) {
+    const { userId: clerkUserId } = await auth()
+    console.log('👤 Clerk User ID:', clerkUserId)
+    
+    if (!clerkUserId) {
       return new Response('Unauthorized', { status: 401 })
     }
     
-    const userId = authData.userId
-    const userEmail = authData.email
+    // Sync user with database if needed
+    const user = await syncUserWithDatabase(clerkUserId)
+    
+    if (!user) {
+      return new Response('User sync failed', { status: 500 })
+    }
+    
+    const userId = user.id
+    const userEmail = user.email
 
     const { content, deepResearchMode = false } = await request.json()
 
@@ -54,40 +63,112 @@ export async function POST(
       return new Response('Chat not found', { status: 404 })
     }
 
-    // Save user message
-    const userMessage = await prisma.message.create({
+    // Check rate limits (streaming responses count as 1 message)
+    const canProceed = await trackMessageUsage(userId)
+    if (!canProceed) {
+      return new Response('Rate limit exceeded. Please upgrade your plan or wait.', { 
+        status: 429 
+      })
+    }
+
+    // Get chat history for context
+    const messages = await prisma.message.findMany({
+      where: { chatId },
+      orderBy: { createdAt: 'asc' },
+      take: 10  // Limit context to last 10 messages for performance
+    })
+
+    // Store user message
+    await prisma.message.create({
       data: {
-        chatId: chatId,
+        chatId,
         role: 'user',
         content
       }
     })
 
-    // Get chat history for context
-    const chatHistory = await prisma.message.findMany({
-      where: { chatId: chatId },
-      orderBy: { createdAt: 'asc' },
-      take: -20
+    // Create assistant message placeholder
+    const assistantMessage = await prisma.message.create({
+      data: {
+        chatId,
+        role: 'assistant',
+        content: '' // Will be updated as stream progresses
+      }
     })
 
     // Create streaming response
-    const encoder = new TextEncoder()
-    
     const stream = new ReadableStream({
-      start(controller) {
-        // Send user message first
-        const userMessageData = JSON.stringify({
-          type: 'user_message',
-          data: userMessage
-        })
-        controller.enqueue(encoder.encode(`data: ${userMessageData}\n\n`))
+      async start(controller) {
+        let fullResponse = ''
+        const encoder = new TextEncoder()
         
-        // Start AI processing
-        processAIResponse(controller, encoder, chatId, content, chatHistory.map(msg => ({
-          role: msg.role,
-          content: msg.content,
-          createdAt: msg.createdAt.toISOString()
-        })), deepResearchMode, userId)
+        try {
+          // Stream messages from the AI agent generator
+          for await (const event of aiAgent.streamMessage(
+            content,
+            messages.map(m => ({
+              role: m.role as 'user' | 'assistant',
+              content: m.content
+            })),
+            userId,
+            deepResearchMode
+          )) {
+            // Handle different event types
+            if (event.type === 'content') {
+              // Send as ai_chunk which the frontend expects
+              fullResponse += event.content || ''
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+                type: 'ai_chunk', 
+                data: { content: event.content } 
+              })}\n\n`))
+            } else if (event.type === 'thinking_stream') {
+              // Send thinking events
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+                type: 'thinking_stream', 
+                data: { 
+                  content: event.content,
+                  metadata: event.metadata 
+                }
+              })}\n\n`))
+            } else if (event.type === 'search_planning' || event.type === 'search_start' || 
+                       event.type === 'search_progress' || event.type === 'search_complete') {
+              // Send search events
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+                type: event.type, 
+                data: { 
+                  content: event.content,
+                  metadata: event.metadata 
+                }
+              })}\n\n`))
+            } else if (event.type === 'error') {
+              console.error('Stream error:', event.content)
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+                type: 'error', 
+                content: event.content 
+              })}\n\n`))
+            } else {
+              // Pass through any other event types
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
+            }
+          }
+
+          // Update the assistant message with the full response
+          if (fullResponse) {
+            await prisma.message.update({
+              where: { id: assistantMessage.id },
+              data: { content: fullResponse }
+            })
+          }
+
+          // Send complete event to stop thinking animation
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'complete' })}\n\n`))
+          // Send done signal
+          controller.enqueue(encoder.encode(`data: [DONE]\n\n`))
+          controller.close()
+        } catch (error) {
+          console.error('Stream error:', error)
+          controller.error(error)
+        }
       }
     })
 
@@ -97,356 +178,10 @@ export async function POST(
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-      }
+      },
     })
   } catch (error) {
-    console.error('Streaming error:', error)
+    console.error('Error in chat stream:', error)
     return new Response('Internal server error', { status: 500 })
-  }
-}
-
-async function processAIResponse(
-  controller: ReadableStreamDefaultController,
-  encoder: TextEncoder,
-  chatId: string,
-  content: string,
-  chatHistory: Array<{ role: string; content: string; createdAt: string }>,
-  deepResearchMode = false,
-  userId?: string
-) {
-  try {
-    // Check rate limit for free users
-    if (userId) {
-      const withinLimit = await trackMessageUsage(userId)
-      if (!withinLimit) {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-          type: 'limit_exceeded',
-          data: { 
-            message: 'You have reached your hourly message limit. Upgrade to Pro for unlimited messages.',
-            metadata: { limitReached: true }
-          }
-        })}\n\n`))
-        controller.close()
-        return
-      }
-    }
-
-    // Check if user is trying to use deep research mode without Pro plan
-    if (deepResearchMode && userId) {
-      const subscription = await prisma.subscription.findUnique({
-        where: { userId }
-      })
-      
-      const isProUser = subscription && subscription.planType === 'pro' && subscription.status === 'active'
-      
-      if (!isProUser) {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-          type: 'error',
-          data: { 
-            message: 'Deep research mode is only available for Pro users. Please upgrade to access this feature.',
-            metadata: { proRequired: true }
-          }
-        })}\n\n`))
-        controller.close()
-        return
-      }
-    }
-
-    // Send typing indicator
-    controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-      type: 'ai_typing',
-      data: { typing: true }
-    })}\n\n`))
-
-    let fullResponse = ''
-
-    // Stream the AI response with enhanced phases
-    console.log('📤 [STREAM] Starting to stream AI response')
-    let eventCount = 0
-    for await (const event of aiAgent.streamMessage(
-      content, // Use original content, not processed
-      chatHistory.map(msg => ({
-        role: msg.role,
-        content: msg.content
-      })),
-      userId,
-      deepResearchMode
-    )) {
-      eventCount++
-      console.log(`📬 [STREAM] Processing event #${eventCount}:`, event.type, event.metadata?.phase || '')
-      switch (event.type) {
-        case 'thinking_stream':
-          // Send continuous thinking updates
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: 'thinking_stream',
-            data: {
-              content: event.content,
-              metadata: event.metadata
-            }
-          })}\n\n`))
-          break
-          
-        case 'memory_access':
-          // Send memory access events
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: 'memory_access',
-            data: {
-              content: event.content,
-              metadata: event.metadata
-            }
-          })}\n\n`))
-          break
-          
-        case 'context_analysis':
-          // Send context analysis events
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: 'context_analysis',
-            data: {
-              content: event.content,
-              metadata: event.metadata
-            }
-          })}\n\n`))
-          break
-          
-        case 'search_planning':
-          // Send search planning events
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: 'search_planning',
-            data: {
-              content: event.content,
-              metadata: event.metadata
-            }
-          })}\n\n`))
-          break
-          
-        case 'search_start':
-          // Send search start events
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: 'search_start',
-            data: {
-              content: event.content,
-              metadata: event.metadata
-            }
-          })}\n\n`))
-          break
-          
-        case 'search_progress':
-          // Send search progress updates
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: 'search_progress',
-            data: {
-              content: event.content,
-              metadata: event.metadata
-            }
-          })}\n\n`))
-          break
-          
-        case 'search_detailed':
-          // Send detailed search events
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: 'search_detailed',
-            data: {
-              content: event.content,
-              metadata: event.metadata
-            }
-          })}\n\n`))
-          break
-          
-        case 'website_scraping':
-          // Send website scraping events
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: 'website_scraping',
-            data: {
-              content: event.content,
-              metadata: event.metadata
-            }
-          })}\n\n`))
-          break
-          
-        case 'search_result_analysis':
-          // Send search result analysis
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: 'search_result_analysis',
-            data: {
-              content: event.content,
-              metadata: event.metadata
-            }
-          })}\n\n`))
-          break
-          
-        case 'context_synthesis':
-          // Send context synthesis events
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: 'context_synthesis',
-            data: {
-              content: event.content,
-              metadata: event.metadata
-            }
-          })}\n\n`))
-          break
-          
-        case 'response_planning':
-          // Send response planning events
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: 'response_planning',
-            data: {
-              content: event.content,
-              metadata: event.metadata
-            }
-          })}\n\n`))
-          break
-          
-        case 'agent_thought':
-          // Send agent reasoning step (backwards compatibility)
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: 'agent_thought',
-            data: { 
-              content: event.content,
-              metadata: event.metadata
-            }
-          })}\n\n`))
-          
-          // Also send as thinking_stream for better UI display
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: 'thinking_stream',
-            data: {
-              content: event.content,
-              metadata: event.metadata || { phase: 'agent_reasoning' }
-            }
-          })}\n\n`))
-          break
-          
-        case 'tool_call':
-          // Send enhanced tool call notification
-          console.log('📡 [STREAM] Sending tool_call event:', event.content, event.metadata)
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: 'tool_call',
-            data: { 
-              tool: event.content,
-              metadata: {
-                ...event.metadata,
-                enhanced: true
-              }
-            }
-          })}\n\n`))
-          break
-          
-        case 'tool_result':
-          // Send enhanced tool result
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: 'tool_result',
-            data: {
-              content: event.content,
-              metadata: {
-                ...event.metadata,
-                enhanced: true
-              }
-            }
-          })}\n\n`))
-          break
-          
-        case 'agent_processing':
-          // Send processing status
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: 'agent_processing',
-            data: {
-              content: event.content,
-              metadata: event.metadata
-            }
-          })}\n\n`))
-          break
-          
-        case 'content':
-          // Stream content chunks
-          fullResponse += event.content || ''
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: 'ai_chunk',
-            data: { content: event.content }
-          })}\n\n`))
-          break
-          
-        case 'complete':
-          // Handle completion with metadata - store metadata for later use
-          if (event.metadata) {
-            // Metadata will be saved with the message
-          }
-          break
-          
-        case 'error':
-          // Handle error
-          fullResponse = event.content || 'An error occurred'
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: 'error',
-            data: { 
-              message: event.content,
-              metadata: event.metadata
-            }
-          })}\n\n`))
-          break
-          
-        // Backwards compatibility
-        case 'thinking':
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: 'ai_thinking',
-            data: { content: event.content }
-          })}\n\n`))
-          break
-          
-        case 'tool_use':
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: 'ai_tool_use',
-            data: { content: event.content, metadata: event.metadata }
-          })}\n\n`))
-          break
-      }
-    }
-
-    // Save AI response (but don't send it again to avoid duplication)
-    const aiMessage = await prisma.message.create({
-      data: {
-        chatId: chatId,
-        role: 'assistant',
-        content: fullResponse,
-        metadata: JSON.parse(JSON.stringify({
-          model: process.env.OPENROUTER_MODEL || 'openai/gpt-oss-20b',
-          streaming: true
-        }))
-      }
-    })
-
-    // Update chat timestamp
-    await prisma.chat.update({
-      where: { id: chatId },
-      data: { updatedAt: new Date() }
-    })
-
-    // Send completion
-    controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-      type: 'complete',
-      data: { success: true }
-    })}\n\n`))
-
-    controller.close()
-  } catch (error) {
-    console.error('AI processing error:', error)
-    
-    // Log detailed error for debugging
-    if (error instanceof Error) {
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      })
-    }
-    
-    // Send error
-    controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-      type: 'error',
-      data: { message: 'Failed to process message' }
-    })}\n\n`))
-    
-    controller.close()
   }
 }
