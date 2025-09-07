@@ -114,12 +114,11 @@ export function useAuth() {
     }
 
     try {
-      // Create the sign up
+      // Create the sign up. Do not send name fields since this instance
+      // rejects first_name/last_name (profile config likely uses full name).
       const result = await signUp.create({
         emailAddress: email,
         password,
-        firstName: name?.split(' ')[0],
-        lastName: name?.split(' ').slice(1).join(' '),
       })
 
       // Handle successful sign up

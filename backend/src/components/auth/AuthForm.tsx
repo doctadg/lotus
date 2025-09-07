@@ -249,6 +249,13 @@ export default function AuthForm({ type }: AuthFormProps) {
               </div>
             )}
 
+            {type === "signup" && (
+              <div className="pt-2 flex justify-center">
+                {/* Smart CAPTCHA (Cloudflare Turnstile) mount point */}
+                <div id="clerk-captcha" />
+              </div>
+            )}
+
             <Button
               type="submit"
               disabled={loading}

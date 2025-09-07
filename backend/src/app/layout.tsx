@@ -75,7 +75,7 @@ export default function RootLayout({
       publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
       appearance={{ variables: { colorPrimary: '#8B5CF6' } }}
     >
-      <html lang="en" className="scroll-smooth">
+      <html lang="en" className="scroll-smooth" suppressHydrationWarning>
         <head>
           <link rel="preconnect" href="https://fonts.googleapis.com" />
           <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
