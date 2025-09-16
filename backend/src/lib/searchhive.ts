@@ -111,6 +111,9 @@ export class SearchHiveClient {
 
   private async makeRequest<T>(endpoint: string, data: Record<string, unknown>): Promise<T> {
     try {
+      const controller = new AbortController()
+      const timeoutMs = Number(process.env.SEARCHHIVE_TIMEOUT_MS || 12000)
+      const timeout = setTimeout(() => controller.abort(), timeoutMs)
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         method: 'POST',
         headers: {
@@ -118,7 +121,9 @@ export class SearchHiveClient {
           'Authorization': `Bearer ${this.apiKey}`,
         },
         body: JSON.stringify(data),
+        signal: controller.signal,
       })
+      clearTimeout(timeout)
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
@@ -179,6 +184,8 @@ export class SearchHiveClient {
 
 export class SearchHiveService {
   private client: SearchHiveClient
+  private searchQueue: Map<string, Promise<SwiftSearchResponse>> = new Map()
+  private scrapeQueue: Map<string, Promise<ScrapeForgeResponse>> = new Map()
 
   constructor() {
     this.client = new SearchHiveClient()
@@ -274,12 +281,12 @@ export class SearchHiveService {
       }
       
       urlsToScrape = urlsToScrape.slice(0, scrapeTop)
-      
-      for (const [index, result] of urlsToScrape.entries()) {
+
+      // Scrape concurrently to reduce latency - now properly parallel
+      const scrapePromises = urlsToScrape.map(async (result, idx) => {
+        const index = idx
         try {
           console.log(`🌐 Scraping: ${result.link}`)
-          
-          // Emit start scraping this specific site
           console.log('🔄 [SEARCHHIVE] Emitting website_scraping event: scraping_start', result.link)
           progressCallback?.({
             type: 'website_scraping',
@@ -292,30 +299,26 @@ export class SearchHiveService {
               totalSites: urlsToScrape.length
             }
           })
-          
+
           const scrapeStartTime = Date.now()
           const scrapeResult = await this.client.scrapeForge({
             url: result.link,
-            render_js: false, // Start with basic scraping
+            render_js: false,
             extract_meta: true,
             extract_links: false,
             extract_images: false
           })
-          
           const scrapeDuration = Date.now() - scrapeStartTime
-          
+
           if (scrapeResult.success && scrapeResult.primary_content) {
             const content = scrapeResult.primary_content
             const extractedText = content.text || content.text_content || 'No content extracted'
-            
             scrapedContent.push({
               url: result.link,
               title: content.title || result.title,
               content: extractedText,
               error: content.error || undefined
             })
-            
-            // Emit successful scraping
             progressCallback?.({
               type: 'website_scraping',
               content: `✅ ${new URL(result.link).hostname} - ${(extractedText.length / 1000).toFixed(1)}k characters extracted`,
@@ -330,14 +333,11 @@ export class SearchHiveService {
               }
             })
           } else {
-            // Silently fall back to snippet without error field
             scrapedContent.push({
               url: result.link,
               title: result.title,
               content: result.snippet
             })
-            
-            // Show as successful retrieval in progress
             progressCallback?.({
               type: 'website_scraping',
               content: `✓ ${new URL(result.link).hostname} - content retrieved`,
@@ -354,8 +354,6 @@ export class SearchHiveService {
           }
         } catch (scrapeError) {
           console.error(`Error scraping ${result.link}:`, scrapeError)
-          
-          // Show as successful with snippet fallback - no error shown to user
           progressCallback?.({
             type: 'website_scraping',
             content: `✓ ${new URL(result.link).hostname} - content retrieved`,
@@ -368,18 +366,16 @@ export class SearchHiveService {
               contentLength: result.snippet.length
             }
           })
-          
-          // Silently use snippet without error field
           scrapedContent.push({
             url: result.link,
             title: result.title,
             content: result.snippet
           })
         }
-        
-        // Small delay between scrapes to be respectful
-        await new Promise(resolve => setTimeout(resolve, 500))
-      }
+      })
+
+      // Execute all scrapes in parallel
+      await Promise.all(scrapePromises)
 
       // Emit completion event - show all as successful
       progressCallback?.({
@@ -411,9 +407,98 @@ export class SearchHiveService {
     progressCallback?: (event: { type: string; content: string; metadata?: any }) => void
   ): Promise<string> {
     console.log(`🔍 Starting comprehensive search for: ${topic}`)
-    
+
     // Use search and scrape with more results for comprehensive coverage
     return this.performSearchAndScrape(`comprehensive analysis: ${topic}`, 8, 5, progressCallback)
+  }
+
+  /**
+   * Execute multiple searches in parallel for better performance
+   */
+  async performParallelSearches(
+    queries: string[],
+    maxResultsPerQuery = 5,
+    scrapeTopPerQuery = 2,
+    progressCallback?: (event: { type: string; content: string; metadata?: any }) => void
+  ): Promise<string[]> {
+    console.log(`🚀 [SEARCHHIVE] Starting ${queries.length} parallel searches`)
+
+    progressCallback?.({
+      type: 'parallel_search_start',
+      content: `Executing ${queries.length} searches simultaneously`,
+      metadata: { queryCount: queries.length, timestamp: Date.now() }
+    })
+
+    // Execute all searches in parallel
+    const searchPromises = queries.map(async (query, index) => {
+      try {
+        // Check if this search is already in progress
+        const cacheKey = `${query}_${maxResultsPerQuery}_${scrapeTopPerQuery}`
+        if (this.searchQueue.has(cacheKey)) {
+          console.log(`🔄 [SEARCHHIVE] Reusing in-progress search for: ${query}`)
+          const result = await this.searchQueue.get(cacheKey)
+          return this.formatSearchAndScrapeResults({
+            query,
+            searchResults: result?.search_results || [],
+            scrapedContent: [],
+            totalResults: result?.results_count || 0,
+            creditsUsed: 0
+          })
+        }
+
+        // Start new search
+        const searchPromise = this.client.swiftSearch({
+          query,
+          auto_scrape_top: scrapeTopPerQuery,
+          max_results: maxResultsPerQuery,
+          include_contacts: false,
+          include_social: false,
+        })
+
+        // Store in queue to prevent duplicates
+        this.searchQueue.set(cacheKey, searchPromise)
+
+        const searchResult = await searchPromise
+
+        // Clean up queue
+        this.searchQueue.delete(cacheKey)
+
+        progressCallback?.({
+          type: 'parallel_search_progress',
+          content: `Search ${index + 1}/${queries.length} completed`,
+          metadata: {
+            queryIndex: index,
+            query,
+            resultsFound: searchResult.results_count,
+            timestamp: Date.now()
+          }
+        })
+
+        return this.formatSearchAndScrapeResults({
+          query,
+          searchResults: searchResult.search_results || [],
+          scrapedContent: searchResult.scraped_content || [],
+          totalResults: searchResult.results_count || 0,
+          creditsUsed: searchResult.credits_used || 0
+        })
+      } catch (error) {
+        console.error(`❌ [SEARCHHIVE] Error in parallel search for "${query}":`, error)
+        return `Error searching for "${query}": ${error instanceof Error ? error.message : 'Unknown error'}`
+      }
+    })
+
+    const results = await Promise.all(searchPromises)
+
+    progressCallback?.({
+      type: 'parallel_search_complete',
+      content: `All ${queries.length} searches completed`,
+      metadata: {
+        totalQueries: queries.length,
+        timestamp: Date.now()
+      }
+    })
+
+    return results
   }
 
   private formatSearchAndScrapeResults(data: {

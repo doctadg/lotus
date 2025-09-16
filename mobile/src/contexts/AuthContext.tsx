@@ -1,131 +1,128 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import React, { createContext, useContext, useEffect, ReactNode } from 'react'
+import { ClerkProvider, useAuth as useClerkAuth, useUser } from '@clerk/clerk-expo'
+import Constants from 'expo-constants'
 import { User } from '../types'
 
 interface AuthContextType {
   user: User | null
-  token: string | null
   isLoading: boolean
-  login: (email: string, password: string) => Promise<void>
-  register: (email: string, password: string, name?: string) => Promise<void>
   logout: () => Promise<void>
   isAuthenticated: boolean
+  // Clerk methods exposed
+  getToken: () => Promise<string | null>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-interface AuthProviderProps {
-  children: ReactNode
-}
+// Inner Auth Provider that uses Clerk hooks
+function InnerAuthProvider({ children }: { children: ReactNode }) {
+  const { getToken, signOut, isSignedIn, isLoaded } = useClerkAuth()
+  const { user: clerkUser } = useUser()
 
-export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<User | null>(null)
-  const [token, setToken] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  // Create user object compatible with existing app from Clerk user
+  const user: User | null = clerkUser ? {
+    id: clerkUser.id,
+    email: clerkUser.primaryEmailAddress?.emailAddress || '',
+    name: clerkUser.fullName || clerkUser.firstName || '',
+    role: 'user'
+  } : null
 
+  // Set up API service token provider when auth state changes
   useEffect(() => {
-    // Check for stored auth data on mount
-    loadStoredAuthData()
-  }, [])
-
-  const loadStoredAuthData = async () => {
-    try {
-      const storedToken = await AsyncStorage.getItem('userToken')
-      const storedUser = await AsyncStorage.getItem('userData')
-
-      console.log('Loading stored auth data:', { 
-        hasToken: !!storedToken, 
-        hasUser: !!storedUser,
-        tokenPreview: storedToken ? storedToken.substring(0, 20) + '...' : null
-      })
-
-      if (storedToken && storedUser) {
-        try {
-          const parsedUser = JSON.parse(storedUser)
-          
-          // Verify token is a proper JWT by checking structure
-          const tokenParts = storedToken.split('.')
-          if (tokenParts.length === 3) {
-            console.log('Valid JWT token found, setting auth state')
-            setToken(storedToken)
-            setUser(parsedUser)
-          } else {
-            console.log('Invalid token format, clearing auth data')
-            await AsyncStorage.removeItem('userToken')
-            await AsyncStorage.removeItem('userData')
-          }
-        } catch (error) {
-          console.error('Error parsing stored user data:', error)
-          // Clear invalid data
-          await AsyncStorage.removeItem('userToken')
-          await AsyncStorage.removeItem('userData')
+    const setupApiTokenProvider = async () => {
+      try {
+        const { apiService } = await import('../lib/api')
+        const clerkJwtTemplate = Constants.expoConfig?.extra?.clerkJwtTemplate as string | undefined
+        if (__DEV__) {
+          console.log('Auth state changed:', { isSignedIn, isLoaded })
         }
-      } else {
-        console.log('No stored auth data found')
+        
+        if (isLoaded) {
+          if (isSignedIn) {
+            if (__DEV__) console.log('Setting up API token provider - user is signed in')
+            // Wrap getToken to allow optional JWT template configuration
+            apiService.setTokenProvider(() => getToken(clerkJwtTemplate ? { template: clerkJwtTemplate } : undefined))
+          } else {
+            if (__DEV__) console.log('Removing API token provider - user not signed in')
+            apiService.removeTokenProvider()
+          }
+        } else {
+          if (__DEV__) console.log('Clerk not loaded yet, keeping current state')
+        }
+      } catch (error) {
+        console.error('Error setting up API token provider:', error)
       }
-    } catch (error) {
-      console.error('Error loading stored auth data:', error)
-    } finally {
-      setIsLoading(false)
     }
-  }
 
-  const login = async (email: string, password: string) => {
-    try {
-      const { apiService } = await import('../lib/api')
-      const { user, token } = await apiService.login(email, password)
-      
-      setToken(token)
-      setUser(user)
-      await AsyncStorage.setItem('userToken', token)
-      await AsyncStorage.setItem('userData', JSON.stringify(user))
-    } catch (error) {
-      console.error('Error during login:', error)
-      throw error
-    }
-  }
-
-  const register = async (email: string, password: string, name?: string) => {
-    try {
-      const { apiService } = await import('../lib/api')
-      const { user, token } = await apiService.register(email, password, name)
-      
-      setToken(token)
-      setUser(user)
-      await AsyncStorage.setItem('userToken', token)
-      await AsyncStorage.setItem('userData', JSON.stringify(user))
-    } catch (error) {
-      console.error('Error during registration:', error)
-      throw error
-    }
-  }
+    setupApiTokenProvider()
+  }, [isSignedIn, isLoaded, getToken])
 
   const logout = async () => {
     try {
-      setToken(null)
-      setUser(null)
-      await AsyncStorage.removeItem('userToken')
-      await AsyncStorage.removeItem('userData')
+      await signOut()
     } catch (error) {
-      console.error('Error clearing auth data:', error)
+      console.error('Error during logout:', error)
       throw error
     }
   }
 
   const value = {
     user,
-    token,
-    isLoading,
-    login,
-    register,
+    isLoading: !isLoaded,
     logout,
-    isAuthenticated: !!token && !!user
+    isAuthenticated: isSignedIn,
+    getToken
   }
 
   return (
     <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
+  )
+}
+
+interface AuthProviderProps {
+  children: ReactNode
+}
+
+export function AuthProvider({ children }: AuthProviderProps) {
+  const publishableKey = Constants.expoConfig?.extra?.clerkPublishableKey
+  const telemetryDisabled = Constants.expoConfig?.extra?.clerkTelemetryDisabled
+
+  if (!publishableKey) {
+    throw new Error('Missing Clerk Publishable Key. Please add it to your app configuration.')
+  }
+
+  // Persist Clerk session securely on device (if expo-secure-store is available)
+  let tokenCache: { getToken: (key: string) => Promise<string | null>; saveToken: (key: string, value: string) => Promise<void> } | undefined
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const SecureStore = require('expo-secure-store') as any
+    const getItemAsync = SecureStore?.getItemAsync
+    const setItemAsync = SecureStore?.setItemAsync
+    if (typeof getItemAsync === 'function' && typeof setItemAsync === 'function') {
+      tokenCache = {
+        getToken: (key: string) => getItemAsync(key),
+        saveToken: (key: string, value: string) => setItemAsync(key, value)
+      }
+    } else {
+      tokenCache = undefined
+    }
+  } catch {
+    // If unavailable, Clerk will fallback to in-memory storage
+    tokenCache = undefined
+  }
+
+  return (
+    <ClerkProvider 
+      publishableKey={publishableKey}
+      tokenCache={tokenCache}
+      telemetry={telemetryDisabled ? { disabled: true } : undefined}
+    >
+      <InnerAuthProvider>
+        {children}
+      </InnerAuthProvider>
+    </ClerkProvider>
   )
 }
 

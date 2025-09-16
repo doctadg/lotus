@@ -1,21 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { authenticateUser } from '@/lib/auth'
+import { auth } from '@clerk/nextjs/server'
+import { syncUserWithDatabase } from '@/lib/sync-user'
 import { prisma } from '@/lib/prisma'
 import { stripe, STRIPE_PLAN_IDS, STRIPE_REDIRECT_URLS } from '@/lib/stripe'
 import { ApiResponse } from '@/types'
 
+export const runtime = 'nodejs'
+
 export async function POST(request: NextRequest) {
   try {
-    const authData = await authenticateUser(request)
-    
-    if (!authData) {
-      return NextResponse.json<ApiResponse>({
-        success: false,
-        error: 'Unauthorized'
-      }, { status: 401 })
+    const { userId: clerkUserId } = await auth()
+    if (!clerkUserId) {
+      return NextResponse.json<ApiResponse>({ success: false, error: 'Unauthorized' }, { status: 401 })
     }
-    
-    const userId = authData.userId
+    const userRecord = await syncUserWithDatabase(clerkUserId)
+    if (!userRecord) {
+      return NextResponse.json<ApiResponse>({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
+    const userId = userRecord.id
 
     // Get user details
     const user = await prisma.user.findUnique({
@@ -36,6 +38,7 @@ export async function POST(request: NextRequest) {
       const customer = await stripe.customers.create({
         email: user.email,
         name: user.name || undefined,
+        metadata: { userId },
       })
       
       stripeCustomerId = customer.id
@@ -59,6 +62,9 @@ export async function POST(request: NextRequest) {
       ],
       success_url: STRIPE_REDIRECT_URLS.SUCCESS,
       cancel_url: STRIPE_REDIRECT_URLS.CANCEL,
+      subscription_data: {
+        metadata: { userId: user.id },
+      },
       metadata: {
         userId: user.id,
       },
@@ -66,7 +72,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json<ApiResponse>({
       success: true,
-      data: { sessionId: session.id }
+      data: { sessionId: session.id, url: (session as any).url || null }
     })
   } catch (error) {
     console.error('Error creating checkout session:', error)

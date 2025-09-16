@@ -8,7 +8,7 @@ import {
   Alert,
   ActivityIndicator
 } from 'react-native'
-import { useAuth } from '../src/hooks/useAuth'
+import { useAuth } from '../src/contexts/AuthContext'
 import { apiService } from '../src/lib/api'
 import { useRouter } from 'expo-router'
 import AuthGuard from '../src/components/AuthGuard'
@@ -18,14 +18,16 @@ import { Card } from '../src/components/ui/Card'
 import { Feather } from '@expo/vector-icons'
 
 export default function MemoriesScreen() {
-  const { user } = useAuth()
+  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth()
   const router = useRouter()
   const [memories, setMemories] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    loadMemories()
-  }, [])
+    if (!isAuthLoading && isAuthenticated) {
+      loadMemories()
+    }
+  }, [isAuthLoading, isAuthenticated])
 
   const loadMemories = async () => {
     if (!user) return

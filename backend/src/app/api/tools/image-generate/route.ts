@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import { getOpenRouterClient, OPENROUTER_IMAGE_MODEL } from '@/lib/openrouter'
 import { parseDataUrl, extensionForMime } from '@/lib/dataurl'
 import { uploadToBlob } from '@/lib/blob'
+import { auth } from '@clerk/nextjs/server'
+import { syncUserWithDatabase } from '@/lib/sync-user'
+import { trackImageGeneration } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -9,6 +12,20 @@ export const runtime = 'nodejs'
 // Body: { prompt: string, model?: string }
 export async function POST(req: Request) {
   try {
+    const { userId: clerkUserId } = await auth()
+    if (!clerkUserId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const user = await syncUserWithDatabase(clerkUserId)
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const allowed = await trackImageGeneration(user.id)
+    if (!allowed) {
+      return NextResponse.json({ 
+        error: 'Free plan image limit reached for today. Upgrade to Pro for unlimited generations.',
+        code: 'FREE_LIMIT_REACHED',
+        upgradeUrl: '/pricing'
+      }, { status: 429 })
+    }
+
     const body = await req.json().catch(() => ({})) as any
     const { prompt, model } = body
     if (!prompt) return NextResponse.json({ error: 'Missing prompt' }, { status: 400 })

@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "android": {
+      "package": "com.doctadg.aichatapp"
+    },
+    "ios": {
+      "bundleIdentifier": "com.doctadg.aichatapp"
+    }
+  }
+}

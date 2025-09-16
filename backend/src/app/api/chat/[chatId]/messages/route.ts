@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { syncUserWithDatabase } from '@/lib/sync-user'
 import { aiAgent } from '@/lib/agent'
+import { trackMessageUsage } from '@/lib/rate-limit'
 import { ApiResponse, SendMessageRequest } from '@/types'
 
 export async function GET(
@@ -12,6 +13,12 @@ export async function GET(
   try {
     const { chatId } = await params
     const { userId: clerkUserId } = await auth()
+
+    // Get pagination parameters from query string
+    const url = new URL(request.url)
+    const page = parseInt(url.searchParams.get('page') || '1', 10)
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 100) // Max 100 messages per page
+    const skip = (page - 1) * limit
     
     if (!clerkUserId) {
       return NextResponse.json<ApiResponse>({
@@ -44,14 +51,37 @@ export async function GET(
       }, { status: 404 })
     }
 
-    const messages = await prisma.message.findMany({
-      where: { chatId: chatId },
-      orderBy: { createdAt: 'asc' }
-    })
+    // Fetch messages with pagination and optimized query
+    const [messages, totalCount] = await Promise.all([
+      prisma.message.findMany({
+        where: { chatId: chatId },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          role: true,
+          content: true,
+          createdAt: true,
+          // Exclude metadata unless needed
+        },
+        skip,
+        take: limit
+      }),
+      prisma.message.count({
+        where: { chatId: chatId }
+      })
+    ])
 
     return NextResponse.json<ApiResponse>({
       success: true,
-      data: messages
+      data: {
+        messages,
+        pagination: {
+          page,
+          limit,
+          total: totalCount,
+          pages: Math.ceil(totalCount / limit)
+        }
+      }
     })
   } catch (error) {
     console.error('Error fetching messages:', error)
@@ -104,12 +134,23 @@ export async function POST(
       }, { status: 404 })
     }
 
-    // Get chat history for context
+    // Rate limit: count this message for free users
+    const ok = await trackMessageUsage(user.id)
+    if (!ok) {
+      return NextResponse.json<ApiResponse>({ success: false, error: 'Rate limit exceeded. Upgrade to Pro for unlimited access.' }, { status: 429 })
+    }
+
+    // Get chat history for context - optimized query
     const messages = await prisma.message.findMany({
       where: { chatId },
-      orderBy: { createdAt: 'asc' },
-      take: 10  // Limit context to last 10 messages for performance
-    })
+      orderBy: { createdAt: 'desc' },
+      take: 10,  // Get last 10 messages
+      select: {
+        role: true,
+        content: true,
+        createdAt: true
+      }
+    }).then(msgs => msgs.reverse()) // Reverse to get chronological order
 
     // Store user message
     const userMessage = await prisma.message.create({

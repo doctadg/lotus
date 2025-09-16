@@ -14,9 +14,10 @@ import {
   Platform,
   Animated,
   Dimensions,
-  Keyboard
+  Keyboard,
+  Image
 } from 'react-native'
-import { useAuth } from '../src/hooks/useAuth'
+import { useAuth } from '../src/contexts/AuthContext'
 import { apiService } from '../src/lib/api'
 import { useRouter } from 'expo-router'
 import AuthGuard from '../src/components/AuthGuard'
@@ -24,6 +25,9 @@ import AgentStatus from '../src/components/AgentStatus'
 import { Feather } from '@expo/vector-icons'
 import { theme } from '../src/constants/theme'
 import { LotusIcon, LotusFullLogo } from '../src/components/Logo'
+import Markdown from '../src/components/Markdown'
+import * as ImagePicker from 'expo-image-picker'
+import * as DocumentPicker from 'expo-document-picker'
 
 interface Message {
   id: string
@@ -40,7 +44,7 @@ interface ChatSession {
 }
 
 export default function HomeScreen() {
-  const { user, logout } = useAuth()
+  const { user, logout, isAuthenticated, isLoading: isAuthLoading } = useAuth()
   const router = useRouter()
   const [messages, setMessages] = useState<Message[]>([])
   const [inputText, setInputText] = useState('')
@@ -49,19 +53,25 @@ export default function HomeScreen() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
-  const [searchMode, setSearchMode] = useState<'simple' | 'deep'>('simple')
+  // Quick mode by default; a separate Deep button triggers deep for a single send
   const [thinkingSteps, setThinkingSteps] = useState<any[]>([])
   const [searchSteps, setSearchSteps] = useState<any[]>([])
   const [currentTools, setCurrentTools] = useState<any[]>([])
   const [agentComplete, setAgentComplete] = useState(false)
+  const [deepMode, setDeepMode] = useState(false)
+  const [attachments, setAttachments] = useState<Array<{ url: string; contentType: string; name: string; kind: 'image' | 'document' }>>([])
+  const [uploading, setUploading] = useState(false)
   const messagesEndRef = useRef<FlatList>(null)
   const inputRef = useRef<TextInput>(null)
   const slideAnim = useRef(new Animated.Value(-300)).current
   const keyboardAnim = useRef(new Animated.Value(0)).current
 
+  // Load chats only after auth is ready and user is signed in
   useEffect(() => {
-    loadChats()
-  }, [])
+    if (!isAuthLoading && isAuthenticated) {
+      loadChats()
+    }
+  }, [isAuthLoading, isAuthenticated])
 
   useEffect(() => {
     Animated.timing(slideAnim, {
@@ -139,10 +149,27 @@ export default function HomeScreen() {
     await loadChatMessages(chatId)
   }
 
-  const sendMessage = async () => {
+  const sendMessage = async (opts?: { deep?: boolean }) => {
     if (!inputText.trim() || isLoading) return
 
-    const messageText = inputText.trim()
+    // Build message text with attachments if present
+    const messageTextRaw = inputText.trim()
+    let messageText = messageTextRaw
+    if (attachments.length > 0) {
+      const blocks: string[] = []
+      for (const att of attachments) {
+        if (att.kind === 'image') blocks.push(`![${att.name}](${att.url})`)
+      }
+      const docs = attachments.filter(a => a.kind === 'document')
+      if (docs.length > 0) {
+        blocks.push('Attachments:')
+        for (const d of docs) {
+          const safeName = d.name.replace(/\]|\[/g, '')
+          blocks.push(`[${safeName}](${d.url})`)
+        }
+      }
+      messageText = [blocks.join('\n\n'), messageTextRaw].filter(Boolean).join('\n\n')
+    }
     setInputText('')
     setIsLoading(true)
     setIsTyping(true)
@@ -175,108 +202,145 @@ export default function HomeScreen() {
       }
       setMessages(prev => [...prev, userMessage])
 
-      // Stream AI response - don't create assistant message until content arrives
+      // Create assistant placeholder immediately so activity can display before chunks
       let assistantMessageContent = ''
-      let assistantMessage: Message | null = null
+      let assistantMessage: Message | null = {
+        id: (Date.now() + 1).toString(),
+        content: '',
+        role: 'assistant',
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, assistantMessage!])
 
       const streamGenerator = apiService.sendMessageStream(chatId, {
         content: messageText,
-        deepResearchMode: searchMode === 'deep'
+        deepResearchMode: opts?.deep ?? deepMode
       })
 
       for await (const event of streamGenerator) {
         // Handle thinking events
-        if (event.type === 'thinking_stream' || event.type === 'memory_access' || 
-            event.type === 'context_analysis' || event.type === 'response_planning') {
+        if ((event as any)?.type === 'thinking_stream' || (event as any)?.type === 'memory_access' || 
+            (event as any)?.type === 'context_analysis' || (event as any)?.type === 'response_planning') {
           const thinkingStep = {
             id: `${event.type}-${Date.now()}-${Math.random()}`,
             type: event.type,
-            content: event.data.content,
+            content: (event as any)?.data?.content ?? (event as any)?.content ?? '',
             timestamp: Date.now()
           }
           setThinkingSteps(prev => [...prev, thinkingStep])
         } 
         // Handle search events
-        else if (event.type === 'search_planning') {
+        else if ((event as any)?.type === 'search_planning') {
           const searchStep = {
             id: `search-plan-${Date.now()}`,
             type: 'planning',
-            tool: event.data.metadata?.tool || 'web_search',
-            content: event.data.content,
+            tool: (event as any)?.data?.metadata?.tool || (event as any)?.tool || 'web_search',
+            content: (event as any)?.data?.content ?? (event as any)?.content ?? '',
             timestamp: Date.now()
           }
           setSearchSteps(prev => [...prev, searchStep])
         }
-        else if (event.type === 'search_start') {
+        else if ((event as any)?.type === 'search_start') {
           const searchStep = {
             id: `search-start-${Date.now()}`,
             type: 'start',
-            tool: event.data.metadata?.tool || 'web_search',
-            content: event.data.content,
+            tool: (event as any)?.data?.metadata?.tool || (event as any)?.tool || 'web_search',
+            content: (event as any)?.data?.content ?? (event as any)?.content ?? '',
             timestamp: Date.now()
           }
           setSearchSteps(prev => [...prev, searchStep])
         }
-        else if (event.type === 'search_progress') {
+        else if ((event as any)?.type === 'search_progress') {
           const searchStep = {
             id: `search-progress-${Date.now()}`,
             type: 'progress',
-            tool: event.data.metadata?.tool || 'web_search',
-            content: event.data.content,
-            progress: event.data.metadata?.progress,
+            tool: (event as any)?.data?.metadata?.tool || (event as any)?.tool || 'web_search',
+            content: (event as any)?.data?.content ?? (event as any)?.content ?? '',
+            progress: (event as any)?.data?.metadata?.progress,
             timestamp: Date.now()
           }
           setSearchSteps(prev => [...prev, searchStep])
         }
-        else if (event.type === 'search_result_analysis' || event.type === 'context_synthesis') {
+        else if (event.type === 'search_complete') {
+          const searchStep = {
+            id: `search-complete-${Date.now()}`,
+            type: 'complete' as const,
+            tool: event.data?.metadata?.tool || 'web_search',
+            content: event.data?.content || 'Search complete',
+            timestamp: Date.now()
+          }
+          setSearchSteps(prev => [...prev, searchStep])
+        }
+        else if ((event as any)?.type === 'search_result_analysis' || (event as any)?.type === 'context_synthesis') {
           const analysisStep = {
             id: `${event.type}-${Date.now()}`,
             type: event.type,
-            content: event.data.content,
+            content: (event as any)?.data?.content ?? (event as any)?.content ?? '',
             timestamp: Date.now()
           }
           setThinkingSteps(prev => [...prev, analysisStep])
         }
+        else if ((event as any)?.type === 'search_detailed') {
+          const phase = (event as any)?.data?.metadata?.phase
+          const mappedType = phase === 'search_start' ? 'start' : phase === 'results_found' ? 'progress' : phase === 'search_complete' ? 'complete' : 'progress'
+          const searchStep = {
+            id: `search-detailed-${Date.now()}`,
+            type: mappedType as any,
+            tool: 'web_search',
+            content: (event as any)?.data?.content ?? (event as any)?.content ?? 'Searching...',
+            progress: (event as any)?.data?.metadata?.progress,
+            timestamp: Date.now()
+          }
+          setSearchSteps(prev => [...prev, searchStep])
+        }
+        else if ((event as any)?.type === 'website_scraping') {
+          const phase = (event as any)?.data?.metadata?.phase
+          const searchStep = {
+            id: `website-scraping-${Date.now()}`,
+            type: 'progress' as const,
+            tool: 'web_search',
+            content: (event as any)?.data?.content ?? (event as any)?.content ?? 'Scraping website',
+            progress: (event as any)?.data?.metadata?.progress,
+            timestamp: Date.now()
+          }
+          setSearchSteps(prev => [...prev, searchStep])
+        }
+        else if ((event as any)?.type === 'agent_thought') {
+          const thinkingStep = {
+            id: `agent-thought-${Date.now()}`,
+            type: 'thinking_stream' as const,
+            content: (event as any)?.data?.content ?? (event as any)?.content ?? '',
+            timestamp: Date.now()
+          }
+          setThinkingSteps(prev => [...prev, thinkingStep])
+        }
         // Handle tool events
-        else if (event.type === 'tool_call') {
+        else if ((event as any)?.type === 'tool_call') {
           setCurrentTools(prev => [
             ...prev.map(t => ({ ...t, status: 'complete' })),
             {
-              tool: event.data.tool,
+              tool: (event as any)?.data?.tool || (event as any)?.tool || 'tool',
               status: 'executing',
-              query: event.data.metadata?.query
+              query: (event as any)?.data?.metadata?.query
             }
           ])
         }
-        else if (event.type === 'tool_result') {
+        else if ((event as any)?.type === 'tool_result') {
           setCurrentTools(prev => 
             prev.map(t => 
-              t.tool === event.data.metadata?.tool
-                ? { ...t, status: 'complete', resultSize: event.data.metadata?.result_size }
+              t.tool === ((event as any)?.data?.metadata?.tool || (event as any)?.tool)
+                ? { ...t, status: 'complete', resultSize: (event as any)?.data?.metadata?.result_size }
                 : t
             )
           )
         }
         // Handle content streaming
-        else if (event.type === 'ai_chunk') {
-          // Clear all agent activities when AI starts responding
-          setThinkingSteps([])
-          setSearchSteps([])
-          setCurrentTools([])
-          setAgentComplete(true)
+        else if (event.type === 'ai_chunk' || event.type === 'content') {
+          // Keep activity visible during streaming; don't mark complete yet
+          setAgentComplete(false)
           
-          // Create assistant message on first chunk
-          if (!assistantMessage) {
-            assistantMessage = {
-              id: (Date.now() + 1).toString(),
-              content: '',
-              role: 'assistant',
-              timestamp: new Date()
-            }
-            setMessages(prev => [...prev, assistantMessage!])
-          }
-          
-          assistantMessageContent += event.data.content || ''
+          const chunk = (event as any)?.data?.content ?? (event as any)?.content ?? ''
+          assistantMessageContent += chunk
           setMessages(prev => 
             prev.map(msg => 
               msg.id === assistantMessage!.id 
@@ -284,8 +348,9 @@ export default function HomeScreen() {
                 : msg
             )
           )
-        } else if (event.type === 'ai_message_complete') {
-          assistantMessageContent = event.data.content
+        } else if (event.type === 'ai_message_complete' || event.type === 'complete') {
+          assistantMessageContent = (event as any)?.data?.content ?? assistantMessageContent
+          setAgentComplete(true)
           if (assistantMessage) {
             setMessages(prev => 
               prev.map(msg => 
@@ -297,7 +362,8 @@ export default function HomeScreen() {
           }
         } else if (event.type === 'error') {
           setAgentComplete(true)
-          throw new Error(event.data.message)
+          const msg = (event as any)?.data?.message || (event as any)?.data?.content || (event as any)?.content || 'Stream error'
+          throw new Error(msg)
         } else if (event.type === 'complete') {
           setAgentComplete(true)
           break
@@ -311,6 +377,42 @@ export default function HomeScreen() {
     } finally {
       setIsLoading(false)
       setIsTyping(false)
+      setAttachments([])
+    }
+  }
+
+  const pickImage = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+      if (perm.status !== 'granted') return
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.9 })
+      if (result.canceled || result.assets?.length === 0) return
+      const asset = result.assets[0]
+      if (!asset.uri) return
+      setUploading(true)
+      const info = await apiService.uploadFile({ uri: asset.uri, name: asset.fileName || 'image.jpg', type: asset.mimeType || 'image/jpeg' })
+      setAttachments(prev => [...prev, { ...info, kind: 'image' }])
+    } catch (e) {
+      console.error('Image pick/upload error', e)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const pickDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true })
+      if (result.canceled || !result.assets || result.assets.length === 0) return
+      const file = result.assets[0]
+      if (!file.uri) return
+      setUploading(true)
+      const info = await apiService.uploadFile({ uri: file.uri, name: file.name || 'document', type: file.mimeType || 'application/octet-stream' })
+      const kind: 'image' | 'document' = (info.contentType || '').startsWith('image/') ? 'image' : 'document'
+      setAttachments(prev => [...prev, { ...info, kind }])
+    } catch (e) {
+      console.error('Document pick/upload error', e)
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -415,9 +517,13 @@ export default function HomeScreen() {
               keyExtractor={(item) => item.id}
               renderItem={({ item, index }) => (
                 <View>
-                  <View style={[styles.messageContainer, item.role === 'user' ? styles.userMessage : styles.assistantMessage]}>
-                    <Text style={styles.messageText}>{item.content}</Text>
-                  </View>
+              <View style={[styles.messageContainer, item.role === 'user' ? styles.userMessage : styles.assistantMessage]}>
+                {item.role === 'assistant' ? (
+                  <Markdown content={item.content} />
+                ) : (
+                  <Text style={styles.messageText}>{item.content}</Text>
+                )}
+              </View>
                   
                   {/* Show agent status after the last message and only if there's agent activity */}
                   {index === messages.length - 1 && 
@@ -443,40 +549,59 @@ export default function HomeScreen() {
             transform: [{ translateY: keyboardAnim }]
           }
         ]}>
-            {/* Search Mode Toggle */}
-          <View style={styles.modeToggle}>
-            <TouchableOpacity
-              style={[styles.modeButton, searchMode === 'simple' && styles.modeButtonActive]}
-              onPress={() => setSearchMode('simple')}
-            >
-              <Feather name="search" size={12} color={searchMode === 'simple' ? theme.colors.text : theme.colors.textSecondary} />
-              <Text style={[styles.modeButtonText, searchMode === 'simple' && styles.modeButtonTextActive]}>Quick</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.modeButton, searchMode === 'deep' && styles.modeButtonActive]}
-              onPress={() => setSearchMode('deep')}
-            >
-              <Feather name="zap" size={12} color={searchMode === 'deep' ? theme.colors.text : theme.colors.textSecondary} />
-              <Text style={[styles.modeButtonText, searchMode === 'deep' && styles.modeButtonTextActive]}>Deep</Text>
-            </TouchableOpacity>
-          </View>
+          {/* Attachments preview stays above input; controls move inside input */}
 
-          {/* Input */}
+          {/* Attachments preview */}
+          {attachments.length > 0 && (
+            <View style={{ paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.sm, gap: theme.spacing.sm }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {attachments.map((att) => (
+                  <View key={att.url} style={{ marginRight: theme.spacing.sm }}>
+                    {att.kind === 'image' ? (
+                      <View style={{ position: 'relative' }}>
+                        <Image source={{ uri: att.url }} style={{ width: 60, height: 60, borderRadius: 8 }} />
+                        <TouchableOpacity style={{ position: 'absolute', top: -6, right: -6, backgroundColor: '#0008', borderRadius: 10, padding: 2 }} onPress={() => setAttachments(prev => prev.filter(a => a.url !== att.url))}>
+                          <Feather name="x" size={12} color={theme.colors.text} />
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity onPress={() => setAttachments(prev => prev.filter(a => a.url !== att.url))} style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.border }}>
+                        <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>{att.name}</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Input with inline controls: + | text | Deep | Send */}
           <View style={styles.inputContainer}>
+            <TouchableOpacity style={[styles.addButton, { marginRight: theme.spacing.sm }]} onPress={pickImage} onLongPress={pickDocument} disabled={isLoading || uploading}>
+              <Feather name="plus" size={16} color={theme.colors.textSecondary} />
+            </TouchableOpacity>
             <TextInput
               ref={inputRef}
               style={styles.textInput}
               value={inputText}
               onChangeText={setInputText}
-              placeholder="Message Lotus..."
+              placeholder={uploading ? 'Uploading…' : 'Message Lotus...'}
               placeholderTextColor="#ffffff60"
               multiline
-              editable={!isLoading}
+              editable={!isLoading && !uploading}
             />
             <TouchableOpacity
-              style={[styles.sendButton, (!inputText.trim() || isLoading) && styles.sendButtonDisabled]}
-              onPress={sendMessage}
-              disabled={!inputText.trim() || isLoading}
+              style={[styles.deepButton, { marginRight: theme.spacing.sm }, deepMode ? styles.deepButtonActive : null]}
+              onPress={() => setDeepMode(v => !v)}
+              disabled={isLoading}
+            >
+              <Feather name="zap" size={12} color={deepMode ? theme.colors.text : theme.colors.textSecondary} />
+              <Text style={[styles.deepButtonText, deepMode ? styles.deepButtonTextActive : null]}>Deep</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.sendButton, (!inputText.trim() && attachments.length === 0) || isLoading ? styles.sendButtonDisabled : null]}
+              onPress={() => sendMessage()}
+              disabled={(!inputText.trim() && attachments.length === 0) || isLoading}
             >
               {isLoading ? (
                 <ActivityIndicator size="small" color={theme.colors.text} />
@@ -592,8 +717,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: theme.spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    borderBottomWidth: 0,
     paddingTop: theme.spacing['4xl']
   },
   headerLogoContainer: {
@@ -611,6 +735,54 @@ const styles = StyleSheet.create({
   },
   headerSpacer: {
     width: 24
+  },
+  modeActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.sm
+  },
+  modeHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    opacity: 0.7
+  },
+  modeHintText: {
+    color: theme.colors.textSecondary,
+    fontSize: theme.typography.fontSize.xs,
+    fontFamily: theme.typography.fontFamily.regular
+  },
+  deepButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    backgroundColor: theme.colors.surface,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: theme.borderRadius.md
+  },
+  deepButtonActive: {
+    backgroundColor: '#5b21b6'
+  },
+  deepButtonText: {
+    color: theme.colors.text,
+    fontSize: theme.typography.fontSize.xs,
+    fontFamily: theme.typography.fontFamily.medium
+  },
+  deepButtonTextActive: {
+    color: '#fff'
+  },
+  addButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.surface,
   },
   messagesContainer: {
     flex: 1,

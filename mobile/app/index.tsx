@@ -1,13 +1,13 @@
 import React from 'react'
 import { View, ActivityIndicator, StyleSheet } from 'react-native'
 import { Redirect } from 'expo-router'
-import { useAuth } from '../src/hooks/useAuth'
+import { useAuth } from '@clerk/clerk-expo'
 
 export default function IndexScreen() {
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isSignedIn, isLoaded } = useAuth()
   
   // Show loading spinner while checking authentication
-  if (isLoading) {
+  if (!isLoaded) {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color="#6366f1" />
@@ -16,7 +16,7 @@ export default function IndexScreen() {
   }
   
   // Redirect to home screen if authenticated, otherwise to signup
-  if (isAuthenticated) {
+  if (isSignedIn) {
     return <Redirect href="/home" />
   } else {
     return <Redirect href="/signup" />

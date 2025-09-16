@@ -7,7 +7,7 @@ import {
   ScrollView,
   Alert
 } from 'react-native'
-import { useAuth } from '../src/hooks/useAuth'
+import { useAuth } from '../src/contexts/AuthContext'
 import { apiService } from '../src/lib/api'
 import { useRouter } from 'expo-router'
 import AuthGuard from '../src/components/AuthGuard'
@@ -19,15 +19,17 @@ import { Feather } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 
 export default function SubscriptionScreen() {
-  const { user } = useAuth()
+  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth()
   const router = useRouter()
   const [subscription, setSubscription] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const isSubscribed = subscription?.planType === 'pro'
 
   React.useEffect(() => {
-    loadSubscription()
-  }, [])
+    if (!isAuthLoading && isAuthenticated) {
+      loadSubscription()
+    }
+  }, [isAuthLoading, isAuthenticated])
 
   const loadSubscription = async () => {
     if (!user) return

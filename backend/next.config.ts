@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   transpilePackages: ['three'],
+  eslint: {
+    // Only run ESLint on the actual lint command, not during build
+    ignoreDuringBuilds: true,
+  },
   images: {
     remotePatterns: [
       {

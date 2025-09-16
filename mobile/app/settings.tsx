@@ -8,7 +8,7 @@ import {
   Alert,
   Switch
 } from 'react-native'
-import { useAuth } from '../src/hooks/useAuth'
+import { useAuth } from '../src/contexts/AuthContext'
 import { useRouter } from 'expo-router'
 import AuthGuard from '../src/components/AuthGuard'
 import Navigation from '../src/components/Navigation'

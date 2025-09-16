@@ -86,13 +86,31 @@ export default function SettingsPage() {
       if (response.ok) {
         const data = await response.json()
         // Redirect to Stripe checkout
-        window.location.href = data.data.url
+        const url = data?.data?.url
+        if (url) {
+          window.location.href = url
+        } else {
+          setMessage('Unable to start checkout. Please try again.')
+        }
       } else {
         setMessage('Error creating checkout session')
       }
     } catch (error) {
       setMessage('Error creating checkout session')
       console.error('Error creating checkout session:', error)
+    }
+  }
+
+  const handleManageBilling = async () => {
+    try {
+      const response = await fetch('/api/stripe/portal', { method: 'POST' })
+      if (response.ok) {
+        const data = await response.json()
+        const url = data?.data?.url
+        if (url) window.location.href = url
+      }
+    } catch (e) {
+      console.error('Error opening billing portal:', e)
     }
   }
 
@@ -205,12 +223,17 @@ export default function SettingsPage() {
               )}
 
               {isProUser && (
-                <div className="text-sm text-gray-400">
-                  <p className="mb-2">Thank you for supporting Lotus!</p>
-                  <p>Status: {subscription?.status}</p>
-                  {subscription?.currentPeriodEnd && (
-                    <p>Renews: {new Date(subscription.currentPeriodEnd).toLocaleDateString()}</p>
-                  )}
+                <div className="text-sm text-gray-400 space-y-3">
+                  <div>
+                    <p className="mb-2">Thank you for supporting Lotus!</p>
+                    <p>Status: {subscription?.status}</p>
+                    {subscription?.currentPeriodEnd && (
+                      <p>Renews: {new Date(subscription.currentPeriodEnd).toLocaleDateString()}</p>
+                    )}
+                  </div>
+                  <Button onClick={handleManageBilling} className="w-full bg-white/10 border-white/20 text-white hover:bg-white/20">
+                    Manage Billing
+                  </Button>
                 </div>
               )}
             </CardContent>

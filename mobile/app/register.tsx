@@ -5,13 +5,12 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   ScrollView
 } from 'react-native'
-import { useAuth } from '../src/hooks/useAuth'
+import { useSignUp } from '@clerk/clerk-expo'
 import { useRouter } from 'expo-router'
 
 export default function RegisterScreen() {
@@ -23,18 +22,22 @@ export default function RegisterScreen() {
   })
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const { register } = useAuth()
+  const [pendingVerification, setPendingVerification] = useState(false)
+  const [code, setCode] = useState('')
+  const { signUp, isLoaded } = useSignUp()
   const router = useRouter()
 
   const handleSubmit = async () => {
+    if (!isLoaded) return
+
     // Validation
     if (!formData.email.trim() || !formData.password.trim()) {
       setError('Email and password are required')
       return
     }
 
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters long')
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters long')
       return
     }
 
@@ -47,11 +50,45 @@ export default function RegisterScreen() {
     setIsLoading(true)
 
     try {
-      await register(formData.email, formData.password, formData.name || undefined)
-      router.replace('/home')
+      const result = await signUp.create({
+        emailAddress: formData.email,
+        password: formData.password,
+        firstName: formData.name.split(' ')[0] || '',
+        lastName: formData.name.split(' ').slice(1).join(' ') || undefined
+      })
+
+      // Send verification email
+      await signUp.prepareEmailAddressVerification({ strategy: 'email_code' })
+      setPendingVerification(true)
     } catch (err: any) {
-      console.error('Registration error:', err)
-      setError(err.message || 'Registration failed. Please try again.')
+      console.error('Sign-up error:', err)
+      setError(err.errors?.[0]?.message || 'Registration failed. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleVerifyCode = async () => {
+    if (!isLoaded) return
+
+    setError('')
+    setIsLoading(true)
+
+    try {
+      const completeSignUp = await signUp.attemptEmailAddressVerification({
+        code
+      })
+
+      if (completeSignUp.status === 'complete') {
+        // Clerk will automatically activate the session
+        console.log('Registration verification successful')
+        router.replace('/home')
+      } else {
+        setError('Verification incomplete. Please try again.')
+      }
+    } catch (err: any) {
+      console.error('Verification error:', err)
+      setError(err.errors?.[0]?.message || 'Verification failed. Please try again.')
     } finally {
       setIsLoading(false)
     }

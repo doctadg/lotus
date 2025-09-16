@@ -27,7 +27,7 @@ const IMAGE_EDIT_SCHEMA = z.union([
   z.object({ input: z.object({ prompt: z.string(), imageUrl: z.string().url().optional(), imageBase64: z.string().optional() }) })
 ])
 import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts'
-import { traceable } from 'langsmith/traceable'
+import { maybeTraceable, isTracingEnabled } from './tracing'
 import { Client } from 'langsmith'
 import agentConfig from '../../config/agent-prompts.json'
 import { searchHiveService } from './searchhive'
@@ -43,7 +43,7 @@ import { StreamingCallbackHandler, StreamingEvent } from './streaming-callback'
 
 config({ path: path.join(process.cwd(), '.env') })
 
-// Initialize LangSmith client for enhanced tracing
+// Optional LangSmith client (only used when tracing is enabled)
 const langsmithClient = new Client({
   apiUrl: process.env.LANGSMITH_ENDPOINT || 'https://api.smith.langchain.com',
   apiKey: process.env.LANGSMITH_API_KEY,
@@ -65,7 +65,7 @@ const addTraceMetadata = (metadata: Record<string, any>) => {
 const createWebSearchTool = (eventCallback?: (event: any) => void) => new DynamicTool({
   name: 'web_search',
   description: 'Intelligently search the web with automatic query analysis, caching, and optimized search strategies. Uses ML-driven query classification to determine optimal search depth and sources needed.',
-  func: traceable(async (query: string) => {
+  func: maybeTraceable(async (query: string) => {
     try {
       console.log(`🧠 [TRACE] Intelligent Web Search called with query: "${query}"`)
       const startTime = Date.now()
@@ -103,7 +103,7 @@ const webSearchTool = createWebSearchTool()
 const createComprehensiveSearchTool = (eventCallback?: (event: any) => void) => new DynamicTool({
   name: 'comprehensive_search',
   description: 'Perform progressive comprehensive research with quality assessment. Starts with moderate search and escalates to deep research if needed. Automatically determines optimal search strategy.',
-  func: traceable(async (topic: string) => {
+  func: maybeTraceable(async (topic: string) => {
     try {
       console.log(`🔬 [TRACE] Progressive Search Tool called with topic: "${topic}"`)
       const startTime = Date.now()
@@ -141,6 +141,8 @@ class AIAgent {
   private agent: AgentExecutor | null = null
   private streamingAgent: AgentExecutor | null = null
   private tools = [webSearchTool, comprehensiveSearchTool]
+  private initialized = false
+  private initPromise: Promise<void> | null = null
 
   constructor() {
     
@@ -193,7 +195,8 @@ class AIAgent {
       },
     })
 
-    this.initializeAgent()
+    // Defer initialization until needed
+    // this.initializeAgent()
   }
 
   // Helper: clamp long strings to avoid context overflows
@@ -219,36 +222,86 @@ class AIAgent {
   }
 
 
+  private async ensureInitialized(): Promise<void> {
+    if (this.initialized) return
+    if (this.initPromise) return this.initPromise
+
+    this.initPromise = this.initializeAgent()
+    await this.initPromise
+    this.initialized = true
+  }
+
   private async initializeAgent() {
+    console.log('🚀 [AGENT] Initializing agent and tools...')
     // Augment tools with multimodal/image/document tools (no change to primary chat model)
 
     const multimodalTools: any[] = [
       // Image edit tool using OpenRouter (image-to-image via text + source image)
       new DynamicStructuredTool({
         name: 'image_edit',
-        description: 'Edit or transform an existing image (e.g., isolate subject, remove background, blur, crop, recolor). Input JSON must include a clear prompt and one image via imageUrl or imageBase64. Returns Markdown image(s) with edited result.',
+        description: 'Edit or transform an existing image (e.g., isolate subject, remove background, blur, crop, recolor). Input JSON must include a clear prompt and one image via imageUrl or imageBase64. If no imageUrl/imageBase64 is provided but the prompt references "this image", "that image", or "the image", it will use the most recent image from the conversation. Returns Markdown image(s) with edited result.',
         schema: IMAGE_EDIT_SCHEMA,
-        func: traceable(async (raw: any) => {
+        func: maybeTraceable(async (raw: any) => {
           try {
             const input = ((): any => (raw && typeof raw === 'object' && 'input' in raw) ? (raw as any).input : raw)()
-            const prompt: string = String(input?.prompt || '')
-            const imageUrl: string | undefined = input?.imageUrl
-            const imageBase64: string | undefined = input?.imageBase64
-            if (!prompt || (!imageUrl && !imageBase64)) {
-              return 'Image edit requires a prompt and an imageUrl or imageBase64.'
+            let prompt: string = String(input?.prompt || '')
+            let imageUrl: string | undefined = input?.imageUrl
+            let imageBase64: string | undefined = input?.imageBase64
+
+            if (!prompt) {
+              return 'Image edit requires a prompt describing the desired changes.'
             }
+
+            // If no image is provided but prompt references an image, extract from available images context
+            if (!imageUrl && !imageBase64) {
+              const promptLower = prompt.toLowerCase()
+              if (promptLower.includes('this image') || promptLower.includes('that image') ||
+                  promptLower.includes('the image') || promptLower.includes('it ') ||
+                  promptLower.includes('edit') || promptLower.includes('modify')) {
+
+                // Look for available images in the conversation context
+                // This will be provided via the enhanced content from image context manager
+                const imageRegex = /Image \d+:\s*\n- URL: (https?:\/\/[^\s\n]+)/g
+                let match
+                const availableImages: string[] = []
+
+                // Extract from the full conversation context (this is a bit hacky but works)
+                const fullContext = JSON.stringify(arguments)
+                while ((match = imageRegex.exec(fullContext)) !== null) {
+                  availableImages.push(match[1])
+                }
+
+                if (availableImages.length > 0) {
+                  imageUrl = availableImages[availableImages.length - 1] // Use most recent
+                  console.log(`🖼️ [IMAGE_EDIT] Using context image: ${imageUrl}`)
+                }
+              }
+            }
+
+            if (!imageUrl && !imageBase64) {
+              return 'Image edit requires an image. Please provide an imageUrl, imageBase64, or ensure there are recent images in the conversation to reference.'
+            }
+
+            // Enhance prompt for better editing results
+            if (prompt.length < 300) {
+              prompt = `Edit this image: ${prompt}. Maintain the overall composition and quality while making the requested changes.`
+            }
+
             const client = getOpenRouterClient()
             const content: any[] = [ { type: 'text', text: prompt } ]
             if (imageUrl) content.push({ type: 'image_url', image_url: { url: imageUrl } })
             if (imageBase64) content.push({ type: 'image_url', image_url: { url: imageBase64 } })
+
             const result = await client.chat.completions.create({
               model: process.env.OPENROUTER_IMAGE_EDIT_MODEL || OPENROUTER_IMAGE_MODEL,
               messages: [ { role: 'user', content } ],
               modalities: ['image', 'text'] as any,
             } as any)
+
             const message: any = result.choices?.[0]?.message
             const images: any[] = message?.images || []
             if (!images.length) return 'The image edit model returned no images.'
+
             const uploaded = await Promise.all(images.map(async (img: any, i: number) => {
               const url: string = img?.image_url?.url || ''
               if (url.startsWith('data:')) {
@@ -266,6 +319,7 @@ class AIAgent {
               }
               return url
             }))
+
             const md = uploaded.map((u, i) => `![edited image ${i+1}](${u})`).join('\n\n')
             return md
           } catch (err: any) {
@@ -276,9 +330,9 @@ class AIAgent {
       // Image generation tool using OpenRouter image-capable model
       new DynamicStructuredTool({
         name: 'image_generate',
-        description: 'Generate an image when the user explicitly asks for an image or picture. Input can be plain text prompt or JSON {"prompt": string}. Include brief relevant context from the ongoing chat in the prompt. Returns a Markdown image tag with embedded base64 image data. Do not use unless the user requests an image.',
+        description: 'Generate an image when the user explicitly asks for an image or picture. Input can be plain text prompt or JSON {"prompt": string}. The prompt will automatically include context from recent conversation images when relevant. Returns a Markdown image tag with embedded base64 image data. Do not use unless the user requests an image.',
         schema: IMAGE_GEN_SCHEMA,
-        func: traceable(async (raw: any) => {
+        func: maybeTraceable(async (raw: any) => {
           try {
             const normalized = ((): any => {
               if (typeof raw === 'string') return { prompt: raw }
@@ -288,8 +342,14 @@ class AIAgent {
               }
               return { prompt: '' }
             })()
-            const prompt: string = String(normalized.prompt || '')
+            let prompt: string = String(normalized.prompt || '')
             if (!prompt) return 'No prompt provided for image generation.'
+
+            // Enhance prompt with conversation context for better generation
+            if (prompt.length < 500) { // Only enhance shorter prompts to avoid token limits
+              prompt = `Generate an image based on this description: ${prompt}. Create a high-quality, detailed image that matches the described style and content.`
+            }
+
             const client = getOpenRouterClient()
             const result = await client.chat.completions.create({
               model: OPENROUTER_IMAGE_MODEL,
@@ -332,7 +392,7 @@ class AIAgent {
         name: 'vision_analyze',
         description: 'Summarize or describe an image. Input must be JSON: {"prompt": string, "imageUrl"?: string, "imageBase64"?: string}. Include brief relevant chat context in the prompt. Use when the user asks about an image or provides an image URL/data URI. Returns a concise summary/answer.',
         schema: VISION_INPUT_SCHEMA,
-        func: traceable(async (raw: any) => {
+        func: maybeTraceable(async (raw: any) => {
           try {
             const input = ((): any => (raw && typeof raw === 'object' && 'input' in raw) ? (raw as any).input : raw)()
             const prompt: string = input?.prompt ? String(input.prompt) : ''
@@ -361,7 +421,7 @@ class AIAgent {
         name: 'document_summarize',
         description: 'Summarize a document from a URL. Input must be JSON: {"url": string, "instructions"?: string}. Include any brief context/instructions relevant from the chat. Supports PDF, DOCX, TXT, MD, HTML. Returns a concise summary.',
         schema: DOC_INPUT_SCHEMA,
-        func: traceable(async (raw: any) => {
+        func: maybeTraceable(async (raw: any) => {
           try {
             const input = ((): any => (raw && typeof raw === 'object' && 'input' in raw) ? (raw as any).input : raw)()
             const url: string = input?.url ? String(input.url) : ''
@@ -405,7 +465,7 @@ class AIAgent {
       agent,
       tools: this.tools,
       verbose: process.env.NODE_ENV === 'development',
-      maxIterations: 75
+      maxIterations: Number(process.env.AGENT_MAX_ITERATIONS || 6)
     })
 
     // Create streaming agent with callback handler
@@ -420,8 +480,39 @@ class AIAgent {
       tools: this.tools,
       verbose: process.env.NODE_ENV === 'development',
       returnIntermediateSteps: true,
-      maxIterations: 75
+      maxIterations: Number(process.env.AGENT_MAX_ITERATIONS || 6)
     })
+  }
+
+  // Fast-path detection for simple queries
+  private isSimpleQuery(query: string): { isSimple: boolean; type: string; response?: string } {
+    const trimmed = query.trim().toLowerCase()
+
+    // Greetings
+    if (/^(hi|hello|hey|yo|sup|howdy|greetings?)[\.!?\s]*$/.test(trimmed)) {
+      return { isSimple: true, type: 'greeting', response: 'Hello! How can I help you today?' }
+    }
+    if (/^(good\s+(morning|afternoon|evening|day|night))[\.!?\s]*$/.test(trimmed)) {
+      return { isSimple: true, type: 'greeting', response: 'Good day! What can I assist you with?' }
+    }
+
+    // Simple math
+    if (/^[\d\s\+\-\*\/\(\)\^]+$/.test(trimmed)) {
+      try {
+        // Safe math evaluation for simple expressions
+        const result = Function('"use strict"; return (' + trimmed.replace(/\^/g, '**') + ')')();
+        return { isSimple: true, type: 'math', response: String(result) }
+      } catch {
+        return { isSimple: false, type: 'unknown' }
+      }
+    }
+
+    // Simple yes/no questions about basic facts
+    if (/^(is|are|was|were|does|do|did|can|could|will|would|should)\s+\w+\s+\w+[\.?\s]*$/.test(trimmed) && trimmed.length < 50) {
+      return { isSimple: false, type: 'factual' } // Let agent handle these but flag as simple
+    }
+
+    return { isSimple: false, type: 'unknown' }
   }
 
   async processMessage(
@@ -433,8 +524,25 @@ class AIAgent {
     content: string
     metadata?: Record<string, unknown>
   }> {
+    // Check for fast-path simple queries first
+    const simpleCheck = this.isSimpleQuery(message)
+    if (simpleCheck.isSimple && simpleCheck.response) {
+      console.log(`⚡ [AGENT] Fast-path response for ${simpleCheck.type} query`)
+      return {
+        content: simpleCheck.response,
+        metadata: {
+          fast_path: true,
+          query_type: simpleCheck.type,
+          execution_time_ms: 0
+        }
+      }
+    }
+
+    // Ensure agent is initialized for non-simple queries
+    await this.ensureInitialized()
+
     if (!this.agent) {
-      await this.initializeAgent()
+      throw new Error('Agent initialization failed')
     }
 
     try {
@@ -443,11 +551,20 @@ class AIAgent {
       let userMemoriesContext = ''
       let memoryResult: any = null
       
+      // Skip memory retrieval for simple/fast queries
+      const skipMemory = simpleCheck.type === 'greeting' || simpleCheck.type === 'math' ||
+                         simpleCheck.type === 'factual' || !userId
+
       // Run query analysis and memory retrieval in parallel if userId is provided
       const operations = []
-      
-      if (userId) {
+
+      if (userId && !skipMemory) {
         console.log(`🧠 [TRACE] Starting parallel memory retrieval for user: ${userId}`)
+      } else if (skipMemory && userId) {
+        console.log(`⚡ [TRACE] Skipping memory retrieval for ${simpleCheck.type} query`)
+      }
+
+      if (userId && !skipMemory) {
         operations.push(
           adaptiveMemory.retrieveAdaptiveMemories(userId, message)
             .then(result => ({ type: 'memory', data: result }))
@@ -599,18 +716,47 @@ class AIAgent {
   ): AsyncGenerator<{ type: string; content?: string; metadata?: any }, void, unknown> {
     try {
       console.log('🤖 [AGENT] Starting streamMessage for query:', message.substring(0, 100))
-      // Initial thinking stream
+
+      // Check for fast-path simple queries first
+      const simpleCheck = this.isSimpleQuery(message)
+      if (simpleCheck.isSimple && simpleCheck.response) {
+        console.log(`⚡ [AGENT] Fast-path streaming response for ${simpleCheck.type} query`)
+        // Stream the response immediately without any processing
+        yield {
+          type: 'content',
+          content: simpleCheck.response,
+          metadata: {
+            fast_path: true,
+            query_type: simpleCheck.type
+          }
+        }
+        yield {
+          type: 'complete',
+          metadata: {
+            fast_path: true,
+            query_type: simpleCheck.type,
+            execution_time_ms: 0
+          }
+        }
+        return
+      }
+
+      // Initial thinking stream for non-simple queries
       yield {
         type: 'thinking_stream',
-        content: 'Initializing analysis of your query...',
+        content: 'Analyzing your query...',
         metadata: { phase: 'initialization', timestamp: Date.now() }
       }
       
+      // Skip memory retrieval for simple/fast queries
+      const skipMemory = simpleCheck.type === 'greeting' || simpleCheck.type === 'math' ||
+                         simpleCheck.type === 'factual' || !userId
+
       // Get user memories if userId is provided
       let userMemoriesContext = ''
       const userProfile: any = null
-      
-      if (userId) {
+
+      if (userId && !skipMemory) {
         yield {
           type: 'thinking_stream',
           content: 'Accessing your personal context and memories...',
@@ -773,9 +919,11 @@ class AIAgent {
       console.log(`🤖 [TRACE] Invoking agent with ${formattedHistory.length} history messages`)
       const agentStartTime = Date.now()
       
-      // Initialize agents if needed
+      // Ensure agent is initialized
+      await this.ensureInitialized()
+
       if (!this.streamingAgent) {
-        await this.initializeAgent()
+        throw new Error('Streaming agent initialization failed')
       }
       
       // Create event queue for real-time streaming
@@ -803,27 +951,67 @@ class AIAgent {
         // Image edit (image-to-image)
         new DynamicStructuredTool({
           name: 'image_edit',
-          description: 'Edit or transform an existing image (e.g., isolate subject, remove background, blur, crop, recolor). Input JSON must include a clear prompt and one image via imageUrl or imageBase64. Returns Markdown image(s) with edited result.',
+          description: 'Edit or transform an existing image (e.g., isolate subject, remove background, blur, crop, recolor). Input JSON must include a clear prompt and one image via imageUrl or imageBase64. If no imageUrl/imageBase64 is provided but the prompt references "this image", "that image", or "the image", it will use the most recent image from the conversation. Returns Markdown image(s) with edited result.',
           schema: IMAGE_EDIT_SCHEMA,
-          func: traceable(async (raw: any) => {
+          func: maybeTraceable(async (raw: any) => {
             try {
               const input = ((): any => (raw && typeof raw === 'object' && 'input' in raw) ? (raw as any).input : raw)()
-              const prompt: string = String(input?.prompt || '')
-              const imageUrl: string | undefined = input?.imageUrl
-              const imageBase64: string | undefined = input?.imageBase64
-              if (!prompt || (!imageUrl && !imageBase64)) return 'Image edit requires a prompt and an imageUrl or imageBase64.'
+              let prompt: string = String(input?.prompt || '')
+              let imageUrl: string | undefined = input?.imageUrl
+              let imageBase64: string | undefined = input?.imageBase64
+
+              if (!prompt) {
+                return 'Image edit requires a prompt describing the desired changes.'
+              }
+
+              // If no image is provided but prompt references an image, extract from available images context
+              if (!imageUrl && !imageBase64) {
+                const promptLower = prompt.toLowerCase()
+                if (promptLower.includes('this image') || promptLower.includes('that image') ||
+                    promptLower.includes('the image') || promptLower.includes('it ') ||
+                    promptLower.includes('edit') || promptLower.includes('modify')) {
+
+                  // Look for available images in the conversation context
+                  const imageRegex = /Image \d+:\s*\n- URL: (https?:\/\/[^\s\n]+)/g
+                  let match
+                  const availableImages: string[] = []
+
+                  const fullContext = JSON.stringify(arguments)
+                  while ((match = imageRegex.exec(fullContext)) !== null) {
+                    availableImages.push(match[1])
+                  }
+
+                  if (availableImages.length > 0) {
+                    imageUrl = availableImages[availableImages.length - 1] // Use most recent
+                    console.log(`🖼️ [IMAGE_EDIT_STREAM] Using context image: ${imageUrl}`)
+                  }
+                }
+              }
+
+              if (!imageUrl && !imageBase64) {
+                return 'Image edit requires an image. Please provide an imageUrl, imageBase64, or ensure there are recent images in the conversation to reference.'
+              }
+
+              // Enhance prompt for better editing results
+              if (prompt.length < 300) {
+                prompt = `Edit this image: ${prompt}. Maintain the overall composition and quality while making the requested changes.`
+              }
+
               const client = getOpenRouterClient()
               const content: any[] = [ { type: 'text', text: prompt } ]
               if (imageUrl) content.push({ type: 'image_url', image_url: { url: imageUrl } })
               if (imageBase64) content.push({ type: 'image_url', image_url: { url: imageBase64 } })
+
               const result = await client.chat.completions.create({
                 model: process.env.OPENROUTER_IMAGE_EDIT_MODEL || OPENROUTER_IMAGE_MODEL,
                 messages: [ { role: 'user', content } ],
                 modalities: ['image', 'text'] as any,
               } as any)
+
               const message: any = result.choices?.[0]?.message
               const images: any[] = message?.images || []
               if (!images.length) return 'The image edit model returned no images.'
+
               const uploaded = await Promise.all(images.map(async (img: any, i: number) => {
                 const url: string = img?.image_url?.url || ''
                 if (url.startsWith('data:')) {
@@ -841,6 +1029,7 @@ class AIAgent {
                 }
                 return url
               }))
+
               const md = uploaded.map((u, i) => `![edited image ${i+1}](${u})`).join('\n\n')
               return md
             } catch (err: any) {
@@ -853,7 +1042,7 @@ class AIAgent {
           name: 'image_generate',
           description: 'Generate an image when the user explicitly asks for an image or picture. Input can be plain text prompt or JSON {"prompt": string}. Include brief relevant context from the ongoing chat in the prompt. Returns a Markdown image tag with embedded base64 image data. Do not use unless the user requests an image.',
           schema: IMAGE_GEN_SCHEMA,
-          func: traceable(async (raw: any) => {
+          func: maybeTraceable(async (raw: any) => {
             try {
               const normalized = ((): any => {
                 if (typeof raw === 'string') return { prompt: raw }
@@ -905,7 +1094,7 @@ class AIAgent {
           name: 'vision_analyze',
           description: 'Summarize or describe an image. Input must be JSON: {"prompt": string, "imageUrl"?: string, "imageBase64"?: string}. Include brief relevant chat context in the prompt. Use when the user asks about an image or provides an image URL/data URI. Returns a concise summary/answer.',
           schema: VISION_INPUT_SCHEMA,
-          func: traceable(async (raw: any) => {
+          func: maybeTraceable(async (raw: any) => {
             try {
               const input = ((): any => (raw && typeof raw === 'object' && 'input' in raw) ? (raw as any).input : raw)()
               const prompt: string = input?.prompt ? String(input.prompt) : ''
@@ -933,7 +1122,7 @@ class AIAgent {
           name: 'document_summarize',
           description: 'Summarize a document from a URL. Input must be JSON: {"url": string, "instructions"?: string}. Include any brief context/instructions relevant from the chat. Supports PDF, DOCX, TXT, MD, HTML. Returns a concise summary.',
           schema: DOC_INPUT_SCHEMA,
-          func: traceable(async (raw: any) => {
+          func: maybeTraceable(async (raw: any) => {
             try {
               const input = ((): any => (raw && typeof raw === 'object' && 'input' in raw) ? (raw as any).input : raw)()
               const url: string = input?.url ? String(input.url) : ''
@@ -990,7 +1179,7 @@ class AIAgent {
         tools: streamingTools,
         verbose: process.env.NODE_ENV === 'development',
         returnIntermediateSteps: true,
-        maxIterations: 75
+        maxIterations: Number(process.env.AGENT_MAX_ITERATIONS || 6)
       })
 
       // Start agent execution in background
@@ -1037,8 +1226,7 @@ class AIAgent {
         // Yield the event immediately
         yield event
         
-        // Add small delay to prevent overwhelming the stream
-        await new Promise(resolve => setTimeout(resolve, 10))
+        // No artificial delay - stream as fast as possible
       }
       
       // Wait for agent to complete and get result
@@ -1093,7 +1281,7 @@ class AIAgent {
       }
       
       // Stream the response in optimized chunks for faster display
-      const chunkSize = 15 // Smaller chunks for faster streaming
+      const chunkSize = 100 // Increased chunk size for less overhead
       const content = result.output || ''
       
       console.log('📝 [AGENT] Streaming response content, length:', content.length)
@@ -1112,11 +1300,8 @@ class AIAgent {
             }
           }
           
-          // Minimal delay for optimal streaming performance
-          if (i < content.length - chunkSize) {
-            await new Promise(resolve => setTimeout(resolve, 2))
-          }
-        }
+          // No artificial delay between chunks
+      }
       } else {
         console.error('❌ [AGENT] No content to stream! Result:', result)
         yield {
@@ -1161,24 +1346,27 @@ class AIAgent {
 
 const aiAgent = new AIAgent()
 
-// Wrap methods with LangSmith tracing
-aiAgent.processMessage = traceable(aiAgent.processMessage.bind(aiAgent), { 
-  name: "processMessage",
-  ...addTraceMetadata({ 
-    operation_type: "chat_completion",
-    has_tools: true,
-    has_memory: true 
+// Optionally wrap with LangSmith tracing if enabled
+if (isTracingEnabled()) {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { traceable } = require('langsmith/traceable')
+  aiAgent.processMessage = traceable(aiAgent.processMessage.bind(aiAgent), { 
+    name: "processMessage",
+    ...addTraceMetadata({ 
+      operation_type: "chat_completion",
+      has_tools: true,
+      has_memory: true 
+    })
   })
-})
-
-aiAgent.streamMessage = traceable(aiAgent.streamMessage.bind(aiAgent), { 
-  name: "streamMessage",
-  ...addTraceMetadata({ 
-    operation_type: "chat_streaming",
-    has_tools: true,
-    has_memory: true 
+  aiAgent.streamMessage = traceable(aiAgent.streamMessage.bind(aiAgent), { 
+    name: "streamMessage",
+    ...addTraceMetadata({ 
+      operation_type: "chat_streaming",
+      has_tools: true,
+      has_memory: true 
+    })
   })
-})
+}
 
 export { aiAgent }
 export default AIAgent

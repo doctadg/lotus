@@ -41,15 +41,15 @@ export interface SearchResult {
 export class IntelligentSearchService {
   // Track recent queries to avoid duplication
   private recentQueries = new Map<string, { result: string; timestamp: number; hash: string }>()
-  private readonly RECENT_QUERY_WINDOW = 5 * 60 * 1000 // 5 minutes
-  private readonly MAX_RECENT_QUERIES = 20
+  private readonly RECENT_QUERY_WINDOW = 10 * 60 * 1000 // Increased to 10 minutes
+  private readonly MAX_RECENT_QUERIES = 50 // Increased cache size
   
   async search(query: string, options: SearchOptions = {}): Promise<SearchResult> {
     const startTime = Date.now()
     const timer = metrics.startTimer('intelligent_search')
-    
+
     try {
-      // Step 0: Check for recent duplicate queries first
+      // Step 0: Check for recent duplicate queries first (increased window)
       const recentResult = this.checkRecentQueries(query)
       if (recentResult && !options.forceSearch) {
         console.log(`🔄 [INTELLIGENT_SEARCH] Found recent identical/similar query, returning cached result`)
@@ -97,8 +97,8 @@ export class IntelligentSearchService {
       let cachedResult = null
       
       if (!options.forceSearch) {
-        console.log(`🔍 [INTELLIGENT_SEARCH] Checking cache with similarity threshold 0.65...`)
-        cachedResult = searchCache.get(query, 0.65) // Lowered from 0.8
+        console.log(`🔍 [INTELLIGENT_SEARCH] Checking cache with similarity threshold 0.60...`)
+        cachedResult = searchCache.get(query, 0.60) // Lowered further for better cache hits
         
         // If cache hit, check if it's still fresh enough for this query type
         if (cachedResult && options.maxCacheAge) {

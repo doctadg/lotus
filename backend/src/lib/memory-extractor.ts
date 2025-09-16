@@ -2,9 +2,10 @@ import { ChatOpenAI } from '@langchain/openai'
 import { PromptTemplate } from '@langchain/core/prompts'
 import { JsonOutputParser } from '@langchain/core/output_parsers'
 import { storeUserMemory, updateUserContext, storeEmbedding } from './embeddings'
+import { memoryRetrievalCache } from './memory-cache'
 import { groqCircuitBreaker } from './circuit-breaker'
 import { trackMemoryExtraction } from './metrics'
-import { traceable } from 'langsmith/traceable'
+import { maybeTraceable } from './tracing'
 
 const llm = new ChatOpenAI({
   model: 'openai/gpt-oss-20b',
@@ -162,7 +163,7 @@ export interface UserContextUpdate {
 /**
  * Extract memories from a single conversation exchange with enhanced error handling
  */
-export const extractMemoriesFromConversation = traceable(async (
+export const extractMemoriesFromConversation = maybeTraceable(async (
   userId: string,
   userMessage: string,
   assistantMessage: string,
@@ -351,7 +352,7 @@ export async function analyzeConversationHistory(
 /**
  * Process a message and extract memories in the background
  */
-export const processMessageForMemories = traceable(async (
+export const processMessageForMemories = maybeTraceable(async (
   userId: string,
   userMessage: string,
   assistantMessage: string,
@@ -400,7 +401,7 @@ export const processMessageForMemories = traceable(async (
 /**
  * Get relevant memories for a user query
  */
-export const getRelevantMemories = traceable(async (
+export const getRelevantMemories = maybeTraceable(async (
   userId: string,
   query: string,
   limit: number = 5
@@ -412,28 +413,34 @@ export const getRelevantMemories = traceable(async (
   similarity?: number
 }>> => {
   try {
+    // Short-TTL in-process cache to avoid repeated DB+embedding for similar prompts
+    const cacheKey = `${userId}::${query.trim().toLowerCase()}::${limit}`
+    const cached = memoryRetrievalCache.get(cacheKey)
+    if (cached) {
+      return cached
+    }
     console.log(`🔍 [MEMORY TRACE] Searching memories for user ${userId}, query: "${query}", limit: ${limit}`)
-    
     const { searchSimilarMemories } = await import('./embeddings')
-    
-    const semanticResults = await searchSimilarMemories(userId, query, 0.7, limit)
-    console.log(`🧠 [MEMORY TRACE] Found ${semanticResults.length} semantic results`)
-    
-    // Also get structured memories
     const { prisma } = await import('./prisma')
-    const structuredMemories = await prisma.userMemory.findMany({
-      where: {
-        userId,
-        OR: [
-          { key: { contains: query, mode: 'insensitive' } },
-          { value: { contains: query, mode: 'insensitive' } },
-          { category: { contains: query, mode: 'insensitive' } }
-        ]
-      },
-      orderBy: { confidence: 'desc' },
-      take: limit
-    })
-    console.log(`📝 [MEMORY TRACE] Found ${structuredMemories.length} structured memories`)
+
+    // Run semantic vector search and structured lookup in parallel
+    const [semanticResults, structuredMemories] = await Promise.all([
+      searchSimilarMemories(userId, query, 0.7, limit),
+      prisma.userMemory.findMany({
+        where: {
+          userId,
+          OR: [
+            { key: { contains: query, mode: 'insensitive' } },
+            { value: { contains: query, mode: 'insensitive' } },
+            { category: { contains: query, mode: 'insensitive' } }
+          ]
+        },
+        orderBy: { confidence: 'desc' },
+        take: Math.min(limit, 5),
+        select: { type: true, key: true, value: true, confidence: true },
+      })
+    ])
+    console.log(`🧠 [MEMORY TRACE] Found ${semanticResults.length} semantic, ${structuredMemories.length} structured`)
 
     // Combine and deduplicate results
     const combined = [
@@ -469,6 +476,7 @@ export const getRelevantMemories = traceable(async (
     })
     
     const finalResults = filtered.slice(0, limit)
+    memoryRetrievalCache.set(cacheKey, finalResults)
     console.log(`📊 [MEMORY TRACE] Returning ${finalResults.length} filtered results (removed ${combined.length - filtered.length} conversation-like memories)`)
     return finalResults
   } catch (error) {

@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma'
 import Stripe from 'stripe'
 
 // Disable Next.js body parsing for Stripe webhooks
+export const runtime = 'nodejs'
+
 export const config = {
   api: {
     bodyParser: false,
@@ -31,9 +33,21 @@ export async function POST(request: NextRequest) {
       case 'customer.subscription.updated':
         const subscription = event.data.object as Stripe.Subscription
         
+        // Resolve userId from metadata or customer mapping
+        let userId = (subscription.metadata as any)?.userId as string | undefined
+        if (!userId) {
+          const userByCustomer = await prisma.user.findFirst({ where: { stripeCustomerId: subscription.customer as string } })
+          if (userByCustomer) userId = userByCustomer.id
+        }
+
+        if (!userId) {
+          console.warn('Stripe webhook: could not resolve userId for subscription', subscription.id)
+          break
+        }
+
         // Update or create subscription in database
         await prisma.subscription.upsert({
-          where: { userId: subscription.metadata.userId },
+          where: { userId },
           update: {
             status: subscription.status,
             stripeSubscriptionId: subscription.id,
@@ -42,7 +56,7 @@ export async function POST(request: NextRequest) {
             planType: 'pro', // Assuming all subscriptions are for the Pro plan
           },
           create: {
-            userId: subscription.metadata.userId,
+            userId,
             stripeCustomerId: subscription.customer as string,
             stripeSubscriptionId: subscription.id,
             status: subscription.status,
@@ -54,7 +68,7 @@ export async function POST(request: NextRequest) {
         
         // Also update user's stripeCustomerId if not already set
         await prisma.user.update({
-          where: { id: subscription.metadata.userId },
+          where: { id: userId },
           data: { stripeCustomerId: subscription.customer as string },
         })
         

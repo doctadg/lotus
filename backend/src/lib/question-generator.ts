@@ -11,12 +11,13 @@ import { prisma } from './prisma'
 import { groqCircuitBreaker } from './circuit-breaker'
 import { traceable } from 'langsmith/traceable'
 
+// Use a faster model for question generation
 const llm = new ChatOpenAI({
-  model: 'openai/gpt-oss-20b',
+  model: 'openai/gpt-3.5-turbo', // Faster model for quick generation
   temperature: 0.3,
   apiKey: process.env.OPENROUTER_API_KEY,
-  maxRetries: 3,
-  timeout: 30000,
+  maxRetries: 2, // Reduced retries
+  timeout: 10000, // Reduced timeout
   configuration: {
     baseURL: 'https://openrouter.ai/api/v1',
     defaultHeaders: {
@@ -106,26 +107,26 @@ export const generateDynamicQuestions = traceable(async (
   userId: string
 ): Promise<QuestionGenerationResult> => {
   console.log(`🎯 [QUESTION_GEN] Generating dynamic questions for user: ${userId}`)
-  
+
   try {
-    // Get user memories and context
-    console.log(`🧠 [QUESTION_GEN] Retrieving user memories and context`)
-    const memoryResult = await adaptiveMemory.retrieveAdaptiveMemories(
-      userId, 
-      "generate personalized questions", // Generic query to get diverse memories
-      undefined
-    )
+    // Run memory retrieval in parallel for faster loading
+    const [memoryResult, recentRaw] = await Promise.all([
+      // Get adaptive memories
+      adaptiveMemory.retrieveAdaptiveMemories(
+        userId,
+        "generate personalized questions",
+        undefined
+      ),
+      // Get recent memories directly
+      prisma.userMemory.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 8, // Reduced to speed up
+        select: { type: true, key: true, value: true, confidence: true }
+      })
+    ])
 
-    console.log(`📚 [QUESTION_GEN] Found ${memoryResult.memories.length} memories`)
-
-    // Also fetch the most recent memories explicitly to prioritize recency
-    console.log(`⏱️  [QUESTION_GEN] Retrieving recent memories to prioritize recency`)
-    const recentRaw = await prisma.userMemory.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      take: 12,
-      select: { type: true, key: true, value: true, confidence: true, createdAt: true }
-    })
+    console.log(`📚 [QUESTION_GEN] Found ${memoryResult.memories.length} adaptive + ${recentRaw.length} recent memories`)
 
     // Filter out conversation-like entries
     const recentFiltered = recentRaw.filter(m => {
@@ -158,16 +159,26 @@ export const generateDynamicQuestions = traceable(async (
 
     console.log(`🎨 [QUESTION_GEN] Generating personalized questions using AI`)
     
-    const maxRetries = 2
+    // Skip AI generation if we have very few memories - use smart fallback
+    if (memoryResult.memories.length < 3 && recentFiltered.length < 2) {
+      console.log(`⚡ [QUESTION_GEN] Using smart fallback for sparse memories`)
+      return {
+        questions: fallbackQuestions,
+        isPersonalized: false,
+        source: 'fallback'
+      }
+    }
+
+    const maxRetries = 1 // Reduced retries for faster response
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const chain = questionGenerationPrompt.pipe(llm).pipe(parser)
-        
+
         const result = await groqCircuitBreaker.execute(
           async () => await chain.invoke({
-            memories: memoriesText,
-            recentMemories: recentMemoriesText,
-            userContext: contextText
+            memories: memoriesText.slice(0, 1500), // Limit context size
+            recentMemories: recentMemoriesText.slice(0, 1000),
+            userContext: contextText.slice(0, 500)
           }),
           async () => {
             console.warn('Question generation fallback: using fallback questions due to API failure')
@@ -247,7 +258,7 @@ export function getQuestionIcon(category: string): string {
  * Generate questions with caching for better performance
  */
 const questionCache = new Map<string, { questions: QuestionGenerationResult; timestamp: number }>()
-const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+const CACHE_DURATION = 15 * 60 * 1000 // 15 minutes - increased cache duration
 
 export const getCachedDynamicQuestions = async (userId: string): Promise<QuestionGenerationResult> => {
   const cacheKey = `questions_${userId}`

@@ -18,6 +18,10 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# Prebuild (CNG) - uncomment below to ignore native folders for EAS builds  
+# /android
+# /ios
+
 # Metro
 .metro-health-check*
 
@@ -35,3 +39,8 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+
+# Expo
+.expo
+dist/
+web-build/

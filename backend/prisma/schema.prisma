@@ -27,6 +27,8 @@ model User {
   embeddings    UserEmbedding[]
   subscription  Subscription?
   messageUsage  MessageUsage[]
+  imageUsage    ImageUsage[]
+  deepResearchUsage DeepResearchUsage[]
   adminActions  AdminAction[]
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -35,13 +37,14 @@ model User {
 }
 
 model Chat {
-  id        String    @id @default(cuid())
-  userId    String
-  title     String?
-  messages  Message[]
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id           String         @id @default(cuid())
+  userId       String
+  title        String?
+  messages     Message[]
+  imageContexts ImageContext[]
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 
   @@map("chats")
 }
@@ -52,10 +55,29 @@ model Message {
   role      String   // 'user' | 'assistant' | 'system'
   content   String
   metadata  Json?
+  images    Json?    // Array of image objects: [{ url: string, type: 'user'|'generated', description?: string }]
   chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
   @@map("messages")
+}
+
+model ImageContext {
+  id          String   @id @default(cuid())
+  chatId      String
+  messageId   String   // The message containing the image
+  imageUrl    String   // URL of the image
+  imageType   String   // 'user_upload' | 'agent_generated' | 'agent_edited'
+  description String?  // AI-generated description for context matching
+  topics      String[] // Extracted topics/keywords for relevance matching
+  isActive    Boolean  @default(true) // Whether this image is still relevant for context
+  chat        Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([chatId, createdAt])
+  @@index([chatId, isActive])
+  @@map("image_contexts")
 }
 
 model UserMemory {
@@ -133,6 +155,32 @@ model MessageUsage {
 
   @@unique([userId, hour])
   @@map("message_usage")
+}
+
+model ImageUsage {
+  id        String   @id @default(cuid())
+  userId    String
+  day       DateTime // timestamp rounded to the day (00:00)
+  count     Int      @default(0)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, day])
+  @@map("image_usage")
+}
+
+model DeepResearchUsage {
+  id        String   @id @default(cuid())
+  userId    String
+  day       DateTime // timestamp rounded to the day (00:00)
+  count     Int      @default(0)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, day])
+  @@map("deep_research_usage")
 }
 
 model AdminAction {

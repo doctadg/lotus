@@ -8,22 +8,24 @@ import {
   Alert,
   TextInput
 } from 'react-native'
-import { useAuth } from '../src/hooks/useAuth'
+import { useAuth } from '../src/contexts/AuthContext'
 import { apiService } from '../src/lib/api'
 import { useRouter } from 'expo-router'
 import AuthGuard from '../src/components/AuthGuard'
 import Navigation from '../src/components/Navigation'
 
 export default function QuestionsScreen() {
-  const { user } = useAuth()
+  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth()
   const router = useRouter()
   const [questions, setQuestions] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isPersonalized, setIsPersonalized] = useState(false)
 
   useEffect(() => {
-    loadQuestions()
-  }, [])
+    if (!isAuthLoading && isAuthenticated) {
+      loadQuestions()
+    }
+  }, [isAuthLoading, isAuthenticated])
 
   const loadQuestions = async () => {
     if (!user) return

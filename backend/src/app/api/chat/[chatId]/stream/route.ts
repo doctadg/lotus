@@ -3,7 +3,9 @@ import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { syncUserWithDatabase } from '@/lib/sync-user'
 import { aiAgent } from '@/lib/agent'
-import { trackMessageUsage } from '@/lib/rate-limit'
+import { trackMessageUsage, trackDeepResearchUsage } from '@/lib/rate-limit'
+import { imageContextManager } from '@/lib/image-context-manager'
+import { extractUserImageUrls, extractImageUrlsFromContent } from '@/lib/image-utils'
 
 
 // Add OPTIONS handler for CORS preflight
@@ -63,7 +65,15 @@ export async function POST(
       return new Response('Chat not found', { status: 404 })
     }
 
-    // Check rate limits (streaming responses count as 1 message)
+    // If requesting deep research, enforce daily limit for free users
+    if (deepResearchMode) {
+      const ok = await trackDeepResearchUsage(userId)
+      if (!ok) {
+        return new Response('You have reached today\'s Deep Research limit on the free plan. Upgrade to Pro for unlimited deep research.', { status: 429 })
+      }
+    }
+
+    // Check message rate limits (streaming responses count as 1 message)
     const canProceed = await trackMessageUsage(userId)
     if (!canProceed) {
       return new Response('Rate limit exceeded. Please upgrade your plan or wait.', { 
@@ -78,14 +88,28 @@ export async function POST(
       take: 10  // Limit context to last 10 messages for performance
     })
 
+    // Extract images from user message
+    const userImages = extractUserImageUrls(content)
+    const userImageData = userImages.map(url => ({
+      url,
+      type: 'user_upload' as const,
+      description: undefined
+    }))
+
     // Store user message
-    await prisma.message.create({
+    const userMessage = await prisma.message.create({
       data: {
         chatId,
         role: 'user',
-        content
+        content,
+        images: userImageData.length > 0 ? userImageData : undefined
       }
     })
+
+    // Store image context for user message if it contains images
+    if (userImages.length > 0) {
+      await imageContextManager.storeImageContext(chatId, userMessage.id, content, 'user')
+    }
 
     // Create assistant message placeholder
     const assistantMessage = await prisma.message.create({
@@ -96,16 +120,20 @@ export async function POST(
       }
     })
 
+    // Get relevant image context for the agent
+    const imageContext = await imageContextManager.getImageContextForPrompt(chatId, content, 3)
+    const enhancedContent = imageContext + content
+
     // Create streaming response
     const stream = new ReadableStream({
       async start(controller) {
         let fullResponse = ''
         const encoder = new TextEncoder()
-        
+
         try {
-          // Stream messages from the AI agent generator
+          // Stream messages from the AI agent generator with image context
           for await (const event of aiAgent.streamMessage(
-            content,
+            enhancedContent,
             messages.map(m => ({
               role: m.role as 'user' | 'assistant',
               content: m.content
@@ -152,12 +180,33 @@ export async function POST(
             }
           }
 
-          // Update the assistant message with the full response
+          // Update the assistant message with the full response and track images
           if (fullResponse) {
+            // Extract generated images from the response
+            const generatedImages = extractImageUrlsFromContent(fullResponse)
+            const generatedImageData = generatedImages.map(url => ({
+              url,
+              type: 'agent_generated' as const,
+              description: undefined
+            }))
+
             await prisma.message.update({
               where: { id: assistantMessage.id },
-              data: { content: fullResponse }
+              data: {
+                content: fullResponse,
+                images: generatedImageData.length > 0 ? generatedImageData : undefined
+              }
             })
+
+            // Store image context for assistant message if it contains images
+            if (generatedImages.length > 0) {
+              await imageContextManager.storeImageContext(chatId, assistantMessage.id, fullResponse, 'assistant')
+            }
+
+            // Cleanup old images periodically (every ~10 messages)
+            if (Math.random() < 0.1) {
+              await imageContextManager.cleanupOldImages(chatId, 7) // Keep images for 7 days
+            }
           }
 
           // Send complete event to stop thinking animation

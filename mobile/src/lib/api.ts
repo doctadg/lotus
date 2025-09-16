@@ -1,11 +1,11 @@
 import axios, { AxiosInstance } from 'axios'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { ApiResponse, Chat, Message, User, SendMessageRequest, CreateChatRequest } from '../types'
 import Constants from 'expo-constants'
 
 class ApiService {
   private api: AxiosInstance
   private baseURL = Constants.expoConfig?.extra?.apiUrl || 'https://lotus-backend.vercel.app/api'
+  private tokenProvider: (() => Promise<string | null>) | null = null
 
   constructor() {
     this.api = axios.create({
@@ -18,77 +18,91 @@ class ApiService {
 
     // Add auth interceptor
     this.api.interceptors.request.use(async (config) => {
-      const token = await AsyncStorage.getItem('userToken')
-      if (token) {
-        const tokenParts = token.split('.')
-        console.log('API Request:', {
-          url: config.url,
-          method: config.method,
-          hasToken: !!token,
-          tokenStructure: `${tokenParts.length} parts`,
-          tokenPreview: token.substring(0, 20) + '...'
-        })
-        config.headers.Authorization = `Bearer ${token}`
-      } else {
-        console.log('API Request without token:', config.url)
+      try {
+        if (this.tokenProvider) {
+          const token = await this.tokenProvider()
+          if (token) {
+            if (__DEV__) {
+              console.log('API Request:', {
+                url: config.url,
+                method: config.method,
+                hasToken: true
+              })
+            }
+            config.headers.Authorization = `Bearer ${token}`
+          } else {
+            if (__DEV__) console.log('API Request: token provider returned null')
+          }
+        } else {
+          if (__DEV__) console.log('API Request: no token provider set')
+        }
+      } catch (error) {
+        if (__DEV__) console.error('Error getting token for API request:', error)
       }
+      
       return config
     })
 
     // Add response interceptor for error handling
     this.api.interceptors.response.use(
       (response) => {
-        console.log('API Response:', {
-          url: response.config.url,
-          status: response.status,
-          success: response.data?.success
-        })
+        if (__DEV__) {
+          console.log('API Response:', {
+            url: response.config.url,
+            status: response.status,
+            success: response.data?.success
+          })
+        }
         return response
       },
       (error) => {
-        console.error('API Error:', {
-          url: error.config?.url,
-          status: error.response?.status,
-          data: error.response?.data,
-          message: error.message
-        })
+        if (__DEV__) {
+          console.error('API Error:', {
+            url: error.config?.url,
+            status: error.response?.status,
+            data: error.response?.data,
+            message: error.message
+          })
+        }
         return Promise.reject(error)
       }
     )
   }
 
-  // Auth methods
-  async login(email: string, password: string): Promise<{ user: User; token: string }> {
-    const response = await this.api.post<ApiResponse<{ user: User; token: string }>>('/auth/login', {
-      email,
-      password
-    })
-    
-    if (response.data.success && response.data.data) {
-      const { user, token } = response.data.data
-      await AsyncStorage.setItem('userToken', token)
-      await AsyncStorage.setItem('userData', JSON.stringify(user))
-      return { user, token }
+  async getSubscription(): Promise<{ planType: string; status: string | null; currentPeriodEnd: string | null }> {
+    const res = await this.api.get<ApiResponse<{ subscription: any }>>('/user/subscription')
+    const sub = res.data?.data?.subscription
+    if (!sub) throw new Error('Failed to load subscription')
+    return {
+      planType: String(sub.planType || 'free'),
+      status: sub.status || null,
+      currentPeriodEnd: sub.currentPeriodEnd || null,
     }
-    
-    throw new Error(response.data.error || 'Login failed')
   }
 
-  async register(email: string, password: string, name?: string): Promise<{ user: User; token: string }> {
-    const response = await this.api.post<ApiResponse<{ user: User; token: string }>>('/auth/register', {
-      email,
-      password,
-      name
-    })
-    
-    if (response.data.success && response.data.data) {
-      const { user, token } = response.data.data
-      await AsyncStorage.setItem('userToken', token)
-      await AsyncStorage.setItem('userData', JSON.stringify(user))
-      return { user, token }
-    }
-    
-    throw new Error(response.data.error || 'Registration failed')
+  // Billing
+  async createCheckout(): Promise<{ url: string }> {
+    const res = await this.api.post<ApiResponse<{ sessionId?: string; url?: string }>>('/stripe/checkout', {})
+    const url = res.data?.data?.url
+    if (!url) throw new Error('Failed to start checkout')
+    return { url }
+  }
+
+  async createBillingPortal(): Promise<{ url: string }> {
+    const res = await this.api.post<ApiResponse<{ url: string }>>('/stripe/portal', {})
+    const url = res.data?.data?.url
+    if (!url) throw new Error('Failed to open billing portal')
+    return { url }
+  }
+
+  // Set token provider function
+  setTokenProvider(tokenProvider: () => Promise<string | null>) {
+    this.tokenProvider = tokenProvider
+  }
+
+  // Remove token provider
+  removeTokenProvider() {
+    this.tokenProvider = null
   }
 
   async getUserProfile(): Promise<User> {
@@ -152,10 +166,11 @@ class ApiService {
   }
 
   async sendMessage(chatId: string, data: SendMessageRequest): Promise<{ userMessage: Message; aiMessage: Message }> {
-    const response = await this.api.post<ApiResponse<{ userMessage: Message; aiMessage: Message }>>(`/chat/${chatId}/messages`, data)
+    const response = await this.api.post<ApiResponse<{ userMessage: Message; assistantMessage: Message }>>(`/chat/${chatId}/messages`, data)
     
     if (response.data.success && response.data.data) {
-      return response.data.data
+      const { userMessage, assistantMessage } = response.data.data
+      return { userMessage, aiMessage: assistantMessage }
     }
     
     throw new Error(response.data.error || 'Failed to send message')
@@ -169,7 +184,16 @@ class ApiService {
           'search_start' | 'search_progress' | 'search_result_analysis' | 'context_synthesis' | 'response_planning'
     data: any
   }, void, unknown> {
-    const token = await AsyncStorage.getItem('userToken')
+    let token: string | null = null
+    
+    try {
+      if (this.tokenProvider) {
+        token = await this.tokenProvider()
+      }
+    } catch (error) {
+      console.error('Error getting token for streaming:', error)
+    }
+    
     if (!token) {
       throw new Error('No authentication token')
     }
@@ -211,19 +235,64 @@ class ApiService {
         for (let i = 0; i < lines.length - 1; i++) {
           const line = lines[i]
           if (line.trim().startsWith('data: ')) {
-            const data = line.slice(6).trim()
-            if (data) {
-              try {
-                const eventData = JSON.parse(data)
-                if (resolveNext) {
-                  resolveNext(eventData)
-                  resolveNext = null
-                } else {
-                  eventQueue.push(eventData)
-                }
-              } catch (error) {
-                console.error('Error parsing SSE data:', error, 'Line:', line)
+            const payload = line.slice(6).trim()
+            if (!payload) continue
+
+            // Handle OpenAI-style terminator
+            if (payload === '[DONE]' || payload === '[done]') {
+              const doneEvent = { type: 'complete', data: null }
+              if (resolveNext) { resolveNext(doneEvent); resolveNext = null } else { eventQueue.push(doneEvent) }
+              continue
+            }
+
+            let parsed: any
+            try {
+              parsed = JSON.parse(payload)
+            } catch (error) {
+              if (__DEV__) console.error('Error parsing SSE data:', error, 'Line:', line)
+              continue
+            }
+
+            // Normalize a variety of possible streaming payloads into our event shape
+            const normalize = (raw: any) => {
+              // If already in our expected shape
+              if (raw && typeof raw.type === 'string') return raw
+
+              // OpenAI chat.completions.stream style
+              const oaChoice = raw?.choices?.[0]
+              const deltaText = oaChoice?.delta?.content || oaChoice?.delta?.text
+              if (typeof deltaText === 'string' && deltaText.length > 0) {
+                return { type: 'ai_chunk', data: { content: deltaText } }
               }
+              if (oaChoice?.finish_reason) {
+                return { type: 'complete', data: { reason: oaChoice.finish_reason } }
+              }
+
+              // Simple message envelope
+              if (typeof raw?.content === 'string') {
+                return { type: 'ai_chunk', data: { content: raw.content } }
+              }
+
+              // Image payloads
+              const imageUrl = raw?.image_url || raw?.url || raw?.data?.image_url
+              if (imageUrl) {
+                return { type: 'ai_image', data: { url: imageUrl, alt: raw?.alt } }
+              }
+
+              // Tool/function call payloads
+              if (raw?.tool_call || raw?.function_call) {
+                return { type: 'tool_call', data: raw }
+              }
+
+              return { type: 'unknown', data: raw }
+            }
+
+            const eventData = normalize(parsed)
+            if (resolveNext) {
+              resolveNext(eventData)
+              resolveNext = null
+            } else {
+              eventQueue.push(eventData)
             }
           }
         }
@@ -247,18 +316,17 @@ class ApiService {
           
           // Process any remaining buffer
           if (buffer.trim().startsWith('data: ')) {
-            const data = buffer.slice(6).trim()
-            if (data) {
+            const payload = buffer.slice(6).trim()
+            if (payload === '[DONE]' || payload === '[done]') {
+              const doneEvent = { type: 'complete', data: null }
+              if (resolveNext) { resolveNext(doneEvent); resolveNext = null } else { eventQueue.push(doneEvent) }
+            } else if (payload) {
               try {
-                const eventData = JSON.parse(data)
-                if (resolveNext) {
-                  resolveNext(eventData)
-                  resolveNext = null
-                } else {
-                  eventQueue.push(eventData)
-                }
+                const parsed = JSON.parse(payload)
+                const eventData = { type: 'unknown', data: parsed }
+                if (resolveNext) { resolveNext(eventData); resolveNext = null } else { eventQueue.push(eventData) }
               } catch (error) {
-                console.error('Error parsing final SSE data:', error)
+                if (__DEV__) console.error('Error parsing final SSE data:', error)
               }
             }
           }
@@ -319,6 +387,37 @@ class ApiService {
         }
       }
     }
+  }
+
+  // Upload a file via multipart/form-data, returns public URL
+  async uploadFile(file: { uri: string; name: string; type: string }): Promise<{ url: string; contentType: string; name: string }> {
+    const uploadUrl = `${this.baseURL}/tools/upload`
+    // Build FormData for React Native
+    const form = new FormData()
+    // @ts-ignore - React Native's FormData accepts this shape
+    form.append('file', { uri: file.uri, name: file.name, type: file.type })
+
+    // Get token if available
+    let token: string | null = null
+    try {
+      if (this.tokenProvider) token = await this.tokenProvider()
+    } catch {}
+
+    const res = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        // Do NOT set Content-Type so RN sets proper boundary
+        Accept: 'application/json'
+      },
+      body: form as any
+    })
+
+    if (!res.ok) {
+      throw new Error(`Upload failed with status ${res.status}`)
+    }
+    const data = await res.json()
+    return { url: data.url, contentType: data.contentType, name: data.name }
   }
 
   // Context methods

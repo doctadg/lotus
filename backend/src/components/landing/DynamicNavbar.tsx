@@ -1,15 +1,17 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { ArrowRight, Menu, X, Sun, Moon } from "lucide-react"
+import { ArrowRight, Menu, X, Sun, Moon, ChevronDown, Brain, ImageIcon, Layers } from "lucide-react"
 import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs"
 
 export default function DynamicNavbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [featuresDropdownOpen, setFeaturesDropdownOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [dark, setDark] = useState<boolean | null>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -25,6 +27,17 @@ export default function DynamicNavbar() {
     const ls = localStorage.getItem('theme')
     if (ls) setDark(ls === 'dark')
     else setDark(document.documentElement.classList.contains('dark'))
+  }, [])
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setFeaturesDropdownOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
   const toggleTheme = () => {
@@ -54,16 +67,75 @@ export default function DynamicNavbar() {
 
         {/* Desktop Navigation */}
         <div className="hidden md:flex items-center space-x-8">
-          {["Product", "Templates", "Use Cases", "Pricing", "Docs"].map((item) => (
-            <Link
-              key={item}
-              href="#"
-              className="relative text-neutral-700 hover:text-neutral-900 dark:text-white/80 dark:hover:text-white text-sm font-medium transition-all duration-300 group"
+          {/* Features Dropdown */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setFeaturesDropdownOpen(!featuresDropdownOpen)}
+              className="flex items-center text-neutral-700 hover:text-neutral-900 dark:text-white/80 dark:hover:text-white text-sm font-medium transition-all duration-300 group"
             >
-              {item}
-              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-400 to-purple-400 transition-all duration-300 group-hover:w-full"></span>
-            </Link>
-          ))}
+              Features
+              <ChevronDown className={`ml-1 w-4 h-4 transition-transform duration-200 ${featuresDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Dropdown Menu */}
+            {featuresDropdownOpen && (
+              <div className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-black/90 backdrop-blur-xl border dark:border-white/10 border-black/10 rounded-xl shadow-2xl py-2 z-50">
+                <Link
+                  href="/features"
+                  className="flex items-center px-4 py-3 text-neutral-700 dark:text-white/80 hover:text-neutral-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-all duration-200"
+                  onClick={() => setFeaturesDropdownOpen(false)}
+                >
+                  <Layers className="w-4 h-4 mr-3 text-neutral-500 dark:text-white/50" />
+                  <div>
+                    <div className="font-medium text-sm">All Features</div>
+                    <div className="text-xs text-neutral-500 dark:text-white/50">Complete overview</div>
+                  </div>
+                </Link>
+                <Link
+                  href="/features/memory"
+                  className="flex items-center px-4 py-3 text-neutral-700 dark:text-white/80 hover:text-neutral-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-all duration-200"
+                  onClick={() => setFeaturesDropdownOpen(false)}
+                >
+                  <Brain className="w-4 h-4 mr-3 text-neutral-500 dark:text-white/50" />
+                  <div>
+                    <div className="font-medium text-sm">AI Memory</div>
+                    <div className="text-xs text-neutral-500 dark:text-white/50">Persistent context</div>
+                  </div>
+                </Link>
+                <Link
+                  href="/features/images"
+                  className="flex items-center px-4 py-3 text-neutral-700 dark:text-white/80 hover:text-neutral-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-all duration-200"
+                  onClick={() => setFeaturesDropdownOpen(false)}
+                >
+                  <ImageIcon className="w-4 h-4 mr-3 text-neutral-500 dark:text-white/50" />
+                  <div>
+                    <div className="font-medium text-sm">Image Tools</div>
+                    <div className="text-xs text-neutral-500 dark:text-white/50">Generate & edit</div>
+                  </div>
+                </Link>
+              </div>
+            )}
+          </div>
+
+          {/* Other Nav Links */}
+          <Link
+            href="/blog"
+            className="text-neutral-700 hover:text-neutral-900 dark:text-white/80 dark:hover:text-white text-sm font-medium transition-all duration-300"
+          >
+            Blog
+          </Link>
+          <Link
+            href="/research"
+            className="text-neutral-700 hover:text-neutral-900 dark:text-white/80 dark:hover:text-white text-sm font-medium transition-all duration-300"
+          >
+            Research
+          </Link>
+          <Link
+            href="/pricing"
+            className="text-neutral-700 hover:text-neutral-900 dark:text-white/80 dark:hover:text-white text-sm font-medium transition-all duration-300"
+          >
+            Pricing
+          </Link>
         </div>
 
         {/* Desktop CTA */}
@@ -93,14 +165,13 @@ export default function DynamicNavbar() {
           <SignedOut>
             <Link href="/register">
               <Button
-                className="relative overflow-hidden transition-all duration-300 hover:-translate-y-0.5 hover:scale-105 dark:bg-white/10 dark:hover:bg-white/20 bg-black/5 hover:bg-black/10 dark:border-white/20 border-black/20 text-neutral-900 dark:text-white backdrop-blur-sm"
+                className="relative overflow-hidden transition-all duration-300 hover:-translate-y-1 premium-button text-sm font-bold"
                 size="sm"
               >
                 <span className="relative z-10 flex items-center">
-                  Get Started
+                  Start Free Trial
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </span>
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-400/20 to-purple-400/20 opacity-0 hover:opacity-100 transition-opacity duration-300"></div>
               </Button>
             </Link>
           </SignedOut>
@@ -133,16 +204,35 @@ export default function DynamicNavbar() {
       >
         <div className="mt-4 p-6 dark:bg-black/60 bg-white/80 backdrop-blur-xl rounded-2xl border dark:border-white/10 border-black/10 shadow-2xl">
           <div className="flex flex-col space-y-4">
-            {["Product", "Templates", "Use Cases", "Pricing", "Docs"].map((item, index) => (
-              <Link
-                key={item}
-                href="#"
-                className="text-neutral-700 hover:text-neutral-900 dark:text-white/80 dark:hover:text-white text-sm font-medium transition-all duration-300 hover:translate-x-2"
-                style={{ animationDelay: `${index * 100}ms` }}
-              >
-                {item}
-              </Link>
-            ))}
+            {/* Mobile Navigation Links */}
+            <Link
+              href="/features"
+              className="text-neutral-700 hover:text-neutral-900 dark:text-white/80 dark:hover:text-white text-sm font-medium transition-all duration-300 hover:translate-x-2"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Features
+            </Link>
+            <Link
+              href="/blog"
+              className="text-neutral-700 hover:text-neutral-900 dark:text-white/80 dark:hover:text-white text-sm font-medium transition-all duration-300 hover:translate-x-2"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Blog
+            </Link>
+            <Link
+              href="/research"
+              className="text-neutral-700 hover:text-neutral-900 dark:text-white/80 dark:hover:text-white text-sm font-medium transition-all duration-300 hover:translate-x-2"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Research
+            </Link>
+            <Link
+              href="/pricing"
+              className="text-neutral-700 hover:text-neutral-900 dark:text-white/80 dark:hover:text-white text-sm font-medium transition-all duration-300 hover:translate-x-2"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Pricing
+            </Link>
             <hr className="border-white/20 my-2" />
             <SignedOut>
               <Link href="/login">
@@ -152,10 +242,10 @@ export default function DynamicNavbar() {
               </Link>
               <Link href="/register">
                 <Button
-                  className="mt-2 bg-gradient-to-r from-blue-500/90 to-purple-500/90 hover:from-blue-500 hover:to-purple-500 border dark:border-white/20 border-black/20 text-white backdrop-blur-sm w-full justify-center transition-all duration-300 hover:scale-105"
+                  className="mt-2 premium-button w-full justify-center font-bold"
                   size="sm"
                 >
-                  Get Started
+                  Start Free Trial
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>

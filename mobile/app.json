@@ -31,28 +31,19 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
       "apiUrl": "https://lotus-backend.vercel.app/api",
+      "clerkPublishableKey": "pk_test_bGl2aW5nLWxpb25maXNoLTcuY2xlcmsuYWNjb3VudHMuZGV2JA",
+      "clerkTelemetryDisabled": true,
       "router": {},
       "eas": {
         "projectId": "92585cdf-ae7f-4056-a671-a073a540f93a"
-      }
-    },
-    "build": {
-      "preview": {
-        "android": {
-          "buildType": "apk"
-        }
-      },
-      "production": {
-        "android": {
-          "buildType": "aab"
-        }
       }
     },
     "owner": "doctadg"

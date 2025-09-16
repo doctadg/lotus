@@ -1,15 +1,14 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   View,
   Text,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   TouchableOpacity
 } from 'react-native'
-import { useAuth } from '../src/hooks/useAuth'
+import { useSignUp, useAuth } from '@clerk/clerk-expo'
 import { useRouter } from 'expo-router'
 import { theme } from '../src/constants/theme'
 import { LotusIcon } from '../src/components/Logo'
@@ -26,18 +25,30 @@ export default function SignupScreen() {
   })
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const { register } = useAuth()
+  const [pendingVerification, setPendingVerification] = useState(false)
+  const [code, setCode] = useState('')
+  const { signUp, isLoaded, setActive } = useSignUp()
+  const { isSignedIn } = useAuth()
   const router = useRouter()
 
+  // Redirect to home if already signed in
+  useEffect(() => {
+    if (isSignedIn) {
+      router.replace('/home')
+    }
+  }, [isSignedIn, router])
+
   const handleSubmit = async () => {
+    if (!isLoaded) return
+
     // Validation
     if (!formData.email.trim() || !formData.password.trim()) {
       setError('Email and password are required')
       return
     }
 
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters long')
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters long')
       return
     }
 
@@ -50,11 +61,46 @@ export default function SignupScreen() {
     setIsLoading(true)
 
     try {
-      await register(formData.email, formData.password, formData.name || undefined)
-      router.replace('/home')
+      const result = await signUp.create({
+        emailAddress: formData.email,
+        password: formData.password,
+        firstName: formData.name.split(' ')[0] || '',
+        lastName: formData.name.split(' ').slice(1).join(' ') || undefined
+      })
+
+      // Send verification email
+      await signUp.prepareEmailAddressVerification({ strategy: 'email_code' })
+      setPendingVerification(true)
     } catch (err: any) {
-      console.error('Signup error:', err)
-      setError(err.message || 'Signup failed. Please try again.')
+      console.error('Sign-up error:', err)
+      setError(err.errors?.[0]?.message || 'Sign-up failed. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleVerifyCode = async () => {
+    if (!isLoaded) return
+
+    setError('')
+    setIsLoading(true)
+
+    try {
+      const completeSignUp = await signUp.attemptEmailAddressVerification({
+        code
+      })
+
+      if (completeSignUp.status === 'complete') {
+        console.log('Sign-up verification successful')
+        // Activate session explicitly so isSignedIn flips to true
+        await setActive({ session: completeSignUp.createdSessionId })
+        // AuthContext will attach token provider once signed in
+      } else {
+        setError('Verification incomplete. Please try again.')
+      }
+    } catch (err: any) {
+      console.error('Verification error:', err)
+      setError(err.errors?.[0]?.message || 'Verification failed. Please try again.')
     } finally {
       setIsLoading(false)
     }
@@ -67,6 +113,70 @@ export default function SignupScreen() {
     }))
     // Clear error when user starts typing
     if (error) setError('')
+  }
+
+  if (pendingVerification) {
+    return (
+      <KeyboardAvoidingView 
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          <View style={styles.content}>
+            {/* Header */}
+            <View style={styles.header}>
+              <TouchableOpacity 
+                style={styles.backButton}
+                onPress={() => setPendingVerification(false)}
+              >
+                <Feather name="arrow-left" size={24} color={theme.colors.text} />
+              </TouchableOpacity>
+              <LotusIcon size={60} color={theme.colors.text} />
+              <Text style={styles.title}>Verify Email</Text>
+              <Text style={styles.subtitle}>We sent a verification code to {formData.email}</Text>
+            </View>
+
+            {/* Verification Form */}
+            <View style={styles.form}>
+              <Input
+                placeholder="Enter 6-digit code"
+                value={code}
+                onChangeText={setCode}
+                keyboardType="number-pad"
+                autoCapitalize="none"
+                maxLength={6}
+              />
+
+              {error && (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              )}
+
+              <Button
+                onPress={handleVerifyCode}
+                loading={isLoading}
+                disabled={isLoading || code.length < 6}
+                size="lg"
+                fullWidth
+              >
+                Verify Email
+              </Button>
+            </View>
+
+            {/* Back to Registration */}
+            <TouchableOpacity 
+              style={styles.switchContainer}
+              onPress={() => setPendingVerification(false)}
+            >
+              <Text style={styles.switchText}>
+                Didn't receive the code? <Text style={styles.switchLink}>Go back</Text>
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    )
   }
 
   return (
@@ -108,7 +218,7 @@ export default function SignupScreen() {
             />
 
             <Input
-              placeholder="Password"
+              placeholder="Password (min 8 characters)"
               value={formData.password}
               onChangeText={(value) => handleInputChange('password', value)}
               secureTextEntry

@@ -9,6 +9,22 @@ import { SignedIn, SignedOut } from '@clerk/nextjs'
 
 export default function PricingPage() {
   const [isAnnual, setIsAnnual] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  const startCheckout = async () => {
+    try {
+      setLoading(true)
+      const res = await fetch('/api/stripe/checkout', { method: 'POST' })
+      if (!res.ok) throw new Error('Failed to start checkout')
+      const data = await res.json()
+      const url = data?.data?.url
+      if (url) window.location.href = url
+    } catch (e) {
+      console.error('Pricing checkout error:', e)
+    } finally {
+      setLoading(false)
+    }
+  }
   
   const plans = [
     {
@@ -242,12 +258,10 @@ export default function PricingPage() {
             </Link>
           </SignedOut>
           <SignedIn>
-            <Link href="/settings">
-              <Button className="bg-gradient-to-r from-purple-500 to-violet-500 hover:from-purple-600 hover:to-violet-600 text-white">
-                <Crown className="w-5 h-5 mr-2" />
-                Manage Plan
-              </Button>
-            </Link>
+            <Button onClick={startCheckout} disabled={loading} className="bg-gradient-to-r from-purple-500 to-violet-500 hover:from-purple-600 hover:to-violet-600 text-white">
+              <Crown className="w-5 h-5 mr-2" />
+              {loading ? 'Opening…' : 'Upgrade Now'}
+            </Button>
           </SignedIn>
         </div>
       </div>

@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react'
 import { Stack } from 'expo-router'
-import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { AuthProvider } from '../src/contexts/AuthContext'
 import * as Font from 'expo-font'
 import * as SplashScreen from 'expo-splash-screen'
@@ -36,23 +35,21 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <Stack>
-          <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="home" options={{ headerShown: false }} />
-          <Stack.Screen name="login" options={{ headerShown: false }} />
-          <Stack.Screen name="register" options={{ headerShown: false }} />
-          <Stack.Screen name="signup" options={{ headerShown: false }} />
-          <Stack.Screen name="profile" options={{ headerShown: false }} />
-          <Stack.Screen name="memories" options={{ headerShown: false }} />
-          <Stack.Screen name="memory/[id]" options={{ headerShown: false }} />
-          <Stack.Screen name="subscription" options={{ headerShown: false }} />
-          <Stack.Screen name="context" options={{ headerShown: false }} />
-          <Stack.Screen name="questions" options={{ headerShown: false }} />
-          <Stack.Screen name="settings" options={{ headerShown: false }} />
-        </Stack>
-      </AuthProvider>
-    </SafeAreaProvider>
+    <AuthProvider>
+      <Stack>
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="home" options={{ headerShown: false }} />
+        <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen name="register" options={{ headerShown: false }} />
+        <Stack.Screen name="signup" options={{ headerShown: false }} />
+        <Stack.Screen name="profile" options={{ headerShown: false }} />
+        <Stack.Screen name="memories" options={{ headerShown: false }} />
+        <Stack.Screen name="memory/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="subscription" options={{ headerShown: false }} />
+        <Stack.Screen name="context" options={{ headerShown: false }} />
+        <Stack.Screen name="questions" options={{ headerShown: false }} />
+        <Stack.Screen name="settings" options={{ headerShown: false }} />
+      </Stack>
+    </AuthProvider>
   )
 }

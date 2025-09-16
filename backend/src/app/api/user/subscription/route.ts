@@ -1,20 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { authenticateUser } from '@/lib/auth'
+import { auth } from '@clerk/nextjs/server'
+import { syncUserWithDatabase } from '@/lib/sync-user'
 import { prisma } from '@/lib/prisma'
 import { ApiResponse } from '@/types'
 
 export async function GET(request: NextRequest) {
   try {
-    const authData = await authenticateUser(request)
-    
-    if (!authData) {
-      return NextResponse.json<ApiResponse>({
-        success: false,
-        error: 'Unauthorized'
-      }, { status: 401 })
+    const { userId: clerkUserId } = await auth()
+    if (!clerkUserId) {
+      return NextResponse.json<ApiResponse>({ success: false, error: 'Unauthorized' }, { status: 401 })
     }
-    
-    const userId = authData.userId
+    const user = await syncUserWithDatabase(clerkUserId)
+    if (!user) {
+      return NextResponse.json<ApiResponse>({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
+    const userId = user.id
 
     // Get user's subscription status
     const subscription = await prisma.subscription.findUnique({

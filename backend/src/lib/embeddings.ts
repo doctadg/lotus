@@ -4,10 +4,13 @@ import { embeddingCache } from './embedding-cache'
 import { openaiEmbeddingsCircuitBreaker } from './circuit-breaker'
 import { trackEmbeddingGeneration, trackVectorSearch, trackCacheAccess } from './metrics'
 
+// Embedding model tuned for latency by default
+const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'text-embedding-3-small'
+
 // Initialize OpenAI embeddings directly (not through OpenRouter)
 const embeddings = new OpenAIEmbeddings({
   openAIApiKey: process.env.OPENAI_API_KEY,
-  model: 'text-embedding-ada-002'
+  model: EMBEDDING_MODEL
 })
 
 export interface MemoryEmbedding {
@@ -24,8 +27,10 @@ export interface MemoryEmbedding {
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
   return trackEmbeddingGeneration(async () => {
+    // Lightweight normalization to improve cache hits without changing semantics
+    const normalized = text.trim().replace(/\s+/g, ' ')
     // First check cache
-    const cachedEmbedding = await embeddingCache.get(text, 'text-embedding-ada-002')
+    const cachedEmbedding = await embeddingCache.get(normalized, EMBEDDING_MODEL)
     if (cachedEmbedding) {
       trackCacheAccess(true) // Cache hit
       return cachedEmbedding
@@ -36,7 +41,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     // Generate new embedding with circuit breaker protection
     try {
       const embedding = await openaiEmbeddingsCircuitBreaker.execute(
-        async () => await embeddings.embedQuery(text),
+        async () => await embeddings.embedQuery(normalized),
         // Fallback: return null instead of throwing
         async () => {
           console.warn('Embeddings circuit breaker open, service degraded for:', text.substring(0, 50))
@@ -46,7 +51,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 
       if (embedding) {
         // Cache the result
-        await embeddingCache.set(text, embedding, 'text-embedding-ada-002')
+        await embeddingCache.set(normalized, embedding, EMBEDDING_MODEL)
         return embedding
       } else {
         // Service is degraded, return a placeholder embedding or throw
@@ -168,6 +173,13 @@ export async function searchSimilarMemories(
             }
           },
           take: Math.min(limit, 5), // Limit fallback results
+          select: {
+            id: true,
+            content: true,
+            type: true,
+            metadata: true,
+            createdAt: true,
+          },
           orderBy: {
             createdAt: 'desc'
           }

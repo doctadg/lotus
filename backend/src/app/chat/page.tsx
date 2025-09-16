@@ -6,6 +6,8 @@ import { Menu, Plus, Trash2, Send, Search, BookOpen, Sparkles, FileText, Image a
 import { AgentActivity } from '../../components/chat/AgentActivity'
 import { MessageRenderer } from '../../components/chat/MessageRenderer'
 import { useAuth } from '../../hooks/useAuth'
+import UpgradeModal from '@/components/billing/UpgradeModal'
+import { useSubscription } from '@/hooks/useSubscription'
 
 type Role = 'user' | 'assistant'
 
@@ -71,6 +73,8 @@ function ChatLayout() {
   const [agentComplete, setAgentComplete] = useState(false)
   const [currentTools, setCurrentTools] = useState<{ tool: string; status: 'executing' | 'complete' | 'error'; query?: string; resultSize?: number; duration?: number }[]>([])
   const [deepMode, setDeepMode] = useState(false)
+  const [showUpgrade, setShowUpgrade] = useState(false)
+  const { isPro } = useSubscription()
   // UI-only agent selector
   const agentOptions = [
     { id: 'general', label: 'General Assistant' },
@@ -179,24 +183,46 @@ function ChatLayout() {
 
   const loadChats = async () => {
     try {
-      const res = await fetch('/api/chat', {
-      })
+      const res = await fetch('/api/chat', {})
       if (res.ok) {
         const data = await res.json()
-        setSessions(data.data || [])
+        console.log('Chat API response:', data) // Debug log
+        // Handle both old and new API response formats
+        if (Array.isArray(data.data)) {
+          // Old format: data.data is directly the array
+          setSessions(data.data || [])
+        } else if (data.data?.chats && Array.isArray(data.data.chats)) {
+          // New format: data.data has chats and pagination
+          setSessions(data.data.chats)
+        } else {
+          console.warn('Unexpected chat data format:', data)
+          setSessions([])
+        }
+      } else {
+        console.error('Failed to load chats:', res.status)
+        setSessions([])
       }
     } catch (e) {
       console.error('Failed to load chats', e)
+      setSessions([])
     }
   }
 
   const loadMessages = async (chatId: string) => {
     try {
-      const res = await fetch(`/api/chat/${chatId}/messages`, {
-      })
+      const res = await fetch(`/api/chat/${chatId}/messages?limit=100`, {})
       if (res.ok) {
         const data = await res.json()
-        const msgs: Message[] = (data.data || []).map((m: any) => ({
+        // Handle both old and new API response formats
+        let rawMessages = []
+        if (Array.isArray(data.data)) {
+          // Old format: data.data is directly the array
+          rawMessages = data.data || []
+        } else if (data.data?.messages) {
+          // New format: data.data has messages and pagination
+          rawMessages = data.data.messages || []
+        }
+        const msgs: Message[] = rawMessages.map((m: any) => ({
           id: m.id,
           role: m.role,
           content: m.content,
@@ -338,6 +364,14 @@ function ChatLayout() {
         if (res.status === 401) {
           console.error('Unauthorized - please refresh the page')
           setMessages((prev) => prev.map((m, i) => (i === prev.length - 1 && m.role === 'assistant' && !m.content ? { ...m, content: 'Authentication error. Please refresh the page.' } : m)))
+          return
+        }
+        if (res.status === 429) {
+          const text = await res.text().catch(() => '')
+          const msg = text || 'You have reached the free plan limit. Upgrade to Pro for unlimited access.'
+          setMessages((prev) => prev.map((m, i) => (i === prev.length - 1 && m.role === 'assistant' && !m.content ? { ...m, content: `${msg} \n\nUpgrade: ${window.location.origin}/pricing` } : m)))
+          setSending(false)
+          setShowUpgrade(true)
           return
         }
         throw new Error('Failed to send message')
@@ -592,7 +626,7 @@ function ChatLayout() {
         </button>
       </div>
       <div className="flex-1 overflow-y-auto px-1 py-2 space-y-1">
-        {sessions.map((s) => (
+        {(sessions || []).map((s) => (
           <div
             key={s.id}
             onClick={() => selectChat(s.id)}
@@ -850,7 +884,7 @@ function ChatLayout() {
                   
                         <div className="flex items-center gap-1.5">
                           <button
-                            onClick={() => setDeepMode(v => !v)}
+                            onClick={() => { if (!isPro) { setShowUpgrade(true); return } setDeepMode(v => !v) }}
                             className={`w-auto px-2 h-8 rounded-full border flex items-center gap-1 justify-center text-xs transition ${
                               deepMode
                                 ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-white border-transparent'
@@ -1071,7 +1105,7 @@ function ChatLayout() {
                   
                   <div className="flex items-center gap-1.5">
                     <button
-                      onClick={() => setDeepMode(v => !v)}
+                      onClick={() => { if (!isPro) { setShowUpgrade(true); return } setDeepMode(v => !v) }}
                       className={`w-auto px-2 h-8 rounded-full border flex items-center gap-1 justify-center text-xs transition ${
                         deepMode
                           ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-white border-transparent'
@@ -1105,6 +1139,7 @@ function ChatLayout() {
       </div>
 
       {/* Removed timeline drawer; AgentActivity is always visible above messages */}
+      <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} />
     </div>
   )
 }

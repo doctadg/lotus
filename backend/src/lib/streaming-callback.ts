@@ -14,6 +14,7 @@ export class StreamingCallbackHandler extends BaseCallbackHandler {
   name = 'StreamingCallbackHandler'
   private eventQueue: StreamingEvent[] = []
   private eventCallback: ((event: StreamingEvent) => void) | null = null
+  private currentTool: string | null = null
 
   constructor() {
     super()
@@ -230,6 +231,9 @@ export class StreamingCallbackHandler extends BaseCallbackHandler {
       })
     }
 
+    // Track current tool for result emission
+    this.currentTool = tool.name
+
     // Emit tool call event
     this.emitEvent({
       type: 'tool_call',
@@ -305,6 +309,7 @@ export class StreamingCallbackHandler extends BaseCallbackHandler {
       type: 'search_result_analysis',
       content: `Analyzing ${sourcesCount} sources and ${(output.length / 1000).toFixed(1)}k characters of information...`,
       metadata: {
+        tool: this.currentTool,
         resultSize: output.length,
         sourcesCount,
         hasRecentData: hasRecent,
@@ -324,6 +329,7 @@ export class StreamingCallbackHandler extends BaseCallbackHandler {
       type: 'tool_result',
       content: `${qualityAssessment} - Ready to synthesize comprehensive response`,
       metadata: {
+        tool: this.currentTool,
         status: hasError ? 'error' : 'complete',
         result_size: output.length,
         sources_analyzed: sourcesCount,
@@ -333,6 +339,9 @@ export class StreamingCallbackHandler extends BaseCallbackHandler {
         timestamp: Date.now()
       }
     })
+
+    // Reset current tool when finished
+    this.currentTool = null
   }
 
   async handleToolError(err: any, runId?: string, parentRunId?: string) {

@@ -7,7 +7,7 @@ import {
   Alert,
   ScrollView
 } from 'react-native'
-import { useAuth } from '../src/hooks/useAuth'
+import { useAuth } from '../src/contexts/AuthContext'
 import { apiService } from '../src/lib/api'
 import { useRouter } from 'expo-router'
 import AuthGuard from '../src/components/AuthGuard'

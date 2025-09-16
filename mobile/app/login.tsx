@@ -1,15 +1,14 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   View,
   Text,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   TouchableOpacity
 } from 'react-native'
-import { useAuth } from '../src/hooks/useAuth'
+import { useSignIn, useAuth } from '@clerk/clerk-expo'
 import { useRouter } from 'expo-router'
 import { theme } from '../src/constants/theme'
 import { LotusIcon } from '../src/components/Logo'
@@ -23,10 +22,21 @@ export default function LoginScreen() {
   })
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const { login } = useAuth()
+  const { signIn, isLoaded, setActive } = useSignIn()
+  const { isSignedIn } = useAuth()
   const router = useRouter()
 
+  // Redirect to home if already signed in
+  useEffect(() => {
+    if (isSignedIn) {
+      console.log('User is signed in, redirecting to home...')
+      router.replace('/home')
+    }
+  }, [isSignedIn, router])
+
   const handleSubmit = async () => {
+    if (!isLoaded) return
+
     if (!formData.email.trim() || !formData.password.trim()) {
       setError('Please fill in all fields')
       return
@@ -36,11 +46,22 @@ export default function LoginScreen() {
     setIsLoading(true)
 
     try {
-      await login(formData.email, formData.password)
-      router.replace('/home')
+      const result = await signIn.create({
+        identifier: formData.email,
+        password: formData.password
+      })
+
+      if (result.status === 'complete') {
+        console.log('Sign-in successful')
+        // Activate the created session explicitly
+        await setActive({ session: result.createdSessionId })
+        // Navigation is handled by isSignedIn effect
+      } else {
+        setError('Sign-in incomplete. Please check your credentials.')
+      }
     } catch (err: any) {
-      console.error('Login error:', err)
-      setError(err.message || 'Login failed. Please try again.')
+      console.error('Sign-in error:', err)
+      setError(err.errors?.[0]?.message || 'Sign-in failed. Please try again.')
     } finally {
       setIsLoading(false)
     }

@@ -32,25 +32,25 @@ export interface CacheStats {
 
 export class SearchCache {
   private cache = new Map<string, CachedSearchResult>()
-  private maxEntries = 1000
-  private defaultTTL = 5 * 60 * 1000 // 5 minutes default
+  private maxEntries = 2000 // Increased cache size
+  private defaultTTL = 10 * 60 * 1000 // 10 minutes default (increased)
   private stats = {
     hits: 0,
     misses: 0,
     evictions: 0
   }
 
-  // TTL configuration based on query type
+  // TTL configuration based on query type (increased for better cache reuse)
   private readonly ttlConfig = {
-    breaking_news: 2 * 60 * 1000,      // 2 minutes
-    current_prices: 3 * 60 * 1000,     // 3 minutes  
-    weather: 5 * 60 * 1000,            // 5 minutes
-    stock_market: 5 * 60 * 1000,       // 5 minutes
-    research: 15 * 60 * 1000,          // 15 minutes
-    comparison: 10 * 60 * 1000,        // 10 minutes
-    factual: 30 * 60 * 1000,           // 30 minutes
-    howto: 60 * 60 * 1000,             // 1 hour
-    general: 10 * 60 * 1000            // 10 minutes
+    breaking_news: 5 * 60 * 1000,      // 5 minutes (increased)
+    current_prices: 5 * 60 * 1000,     // 5 minutes (increased)
+    weather: 10 * 60 * 1000,           // 10 minutes (increased)
+    stock_market: 10 * 60 * 1000,      // 10 minutes (increased)
+    research: 30 * 60 * 1000,          // 30 minutes (increased)
+    comparison: 20 * 60 * 1000,        // 20 minutes (increased)
+    factual: 60 * 60 * 1000,           // 60 minutes (increased)
+    howto: 2 * 60 * 60 * 1000,         // 2 hours (increased)
+    general: 20 * 60 * 1000            // 20 minutes (increased)
   }
 
   set(
@@ -237,16 +237,23 @@ export class SearchCache {
   }
 
   private calculateSimilarity(
-    query: string, 
-    queryWords: string[], 
-    queryTags: string[], 
+    query: string,
+    queryWords: string[],
+    queryTags: string[],
     cached: CachedSearchResult
   ): number {
     const cachedWords = this.normalizeQuery(cached.query).split(' ')
-    
-    // Word overlap similarity
-    const commonWords = queryWords.filter(word => 
-      cachedWords.some(cw => cw.includes(word) || word.includes(cw))
+
+    // Enhanced word overlap similarity with fuzzy matching
+    const commonWords = queryWords.filter(word => {
+      // Exact match or substring match
+      return cachedWords.some(cw =>
+        cw === word || // Exact match
+        (word.length > 3 && cw.includes(word)) || // Substring for longer words
+        (cw.length > 3 && word.includes(cw)) || // Reverse substring
+        this.areSimilarWords(word, cw) // Fuzzy similarity
+      )
+    }
     )
     const wordSimilarity = commonWords.length / Math.max(queryWords.length, cachedWords.length)
     
@@ -268,6 +275,24 @@ export class SearchCache {
       .replace(/[^\w\s]/g, '')
       .replace(/\s+/g, ' ')
       .trim()
+  }
+
+  // Helper for fuzzy word matching
+  private areSimilarWords(word1: string, word2: string): boolean {
+    // Skip short words
+    if (word1.length < 4 || word2.length < 4) return false
+
+    // Quick check: if length difference is too big, they're not similar
+    if (Math.abs(word1.length - word2.length) > 2) return false
+
+    // Simple character overlap check
+    const chars1 = new Set(word1.split(''))
+    const chars2 = new Set(word2.split(''))
+    const commonChars = [...chars1].filter(c => chars2.has(c))
+
+    // If they share most characters, they might be similar
+    const similarity = (commonChars.length * 2) / (word1.length + word2.length)
+    return similarity > 0.75
   }
 
   private evictOldEntries(): void {
