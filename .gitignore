@@ -140,3 +140,8 @@ VERCEL_ENV_SETUP.md
 test-*.js
 backend/test-*.js
 **/test-*.js
+
+# Large build files
+*.apk
+mobile.zip
+mobile/build-*.apk
