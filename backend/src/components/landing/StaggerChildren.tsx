@@ -40,11 +40,7 @@ export default function StaggerChildren({
     visible: {
       opacity: 1,
       y: 0,
-      scale: 1,
-      transition: {
-        duration,
-        ease: [0.4, 0, 0.2, 1]
-      }
+      scale: 1
     }
   }
 

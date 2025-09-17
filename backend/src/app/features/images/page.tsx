@@ -1,5 +1,3 @@
-"use client"
-
 import Link from 'next/link'
 import { ImageIcon, Wand2, Palette, Zap, CheckCircle, ArrowRight, Layers, Brush, Sparkles } from 'lucide-react'
 import PageLayout from '@/components/layout/PageLayout'

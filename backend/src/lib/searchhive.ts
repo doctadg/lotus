@@ -477,7 +477,14 @@ export class SearchHiveService {
         return this.formatSearchAndScrapeResults({
           query,
           searchResults: searchResult.search_results || [],
-          scrapedContent: searchResult.scraped_content || [],
+          scrapedContent: (searchResult.scraped_content || [])
+            .filter(item => item.content)
+            .map(item => ({
+              url: item.url,
+              title: item.title,
+              content: item.content!,
+              error: item.error || undefined
+            })),
           totalResults: searchResult.results_count || 0,
           creditsUsed: searchResult.credits_used || 0
         })

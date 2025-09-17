@@ -4,7 +4,7 @@ import Stripe from 'stripe'
 // In production, this should be stored in environment variables
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dummy_key_for_build', {
   // Use a valid, stable API version; omit to use your account's default.
-  apiVersion: '2024-06-20',
+  apiVersion: '2025-07-30.basil',
   typescript: true,
 })
 

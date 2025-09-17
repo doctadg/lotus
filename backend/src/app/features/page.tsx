@@ -1,5 +1,3 @@
-"use client"
-
 import Link from 'next/link'
 import { Brain, ImageIcon, Zap, Shield, Heart, Layers, ArrowRight, CheckCircle } from 'lucide-react'
 import PageLayout from '@/components/layout/PageLayout'

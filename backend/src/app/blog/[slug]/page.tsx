@@ -1,45 +1,28 @@
-"use client"
-
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { Calendar, Clock, User, Tag, ArrowLeft, Share2 } from 'lucide-react'
+import { Calendar, Clock, User, Tag } from 'lucide-react'
 import PageLayout from '@/components/layout/PageLayout'
 import BlogCard from '@/components/blog/BlogCard'
 import FadeInView from '@/components/landing/FadeInView'
 import StaggerChildren from '@/components/landing/StaggerChildren'
+import ShareButton from '@/components/blog/ShareButton'
 import { getBlogPost, getRelatedPosts, blogPosts } from '@/lib/blog-posts'
-import { Button } from '@/components/ui/button'
 
 interface BlogPostPageProps {
-  params: {
+  params: Promise<{
     slug: string
-  }
+  }>
 }
 
-export default function BlogPostPage({ params }: BlogPostPageProps) {
-  const post = getBlogPost(params.slug)
+export default async function BlogPostPage({ params }: BlogPostPageProps) {
+  const { slug } = await params
+  const post = getBlogPost(slug)
 
   if (!post) {
     notFound()
   }
 
   const relatedPosts = getRelatedPosts(post, 3)
-
-  const shareUrl = typeof window !== 'undefined' ? window.location.href : ''
-  const shareText = `Check out this article: ${post.title}`
-
-  const handleShare = () => {
-    if (navigator.share) {
-      navigator.share({
-        title: post.title,
-        text: shareText,
-        url: shareUrl,
-      })
-    } else {
-      navigator.clipboard.writeText(shareUrl)
-      // You could add a toast notification here
-    }
-  }
 
   return (
     <PageLayout
@@ -109,15 +92,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
             )}
 
             {/* Share Button */}
-            <Button
-              onClick={handleShare}
-              variant="outline"
-              size="sm"
-              className="inline-flex items-center space-x-2"
-            >
-              <Share2 className="w-4 h-4" />
-              <span>Share Article</span>
-            </Button>
+            <ShareButton title={post.title} />
           </div>
         </FadeInView>
 
@@ -196,7 +171,8 @@ export async function generateStaticParams() {
 
 // Generate metadata for each blog post
 export async function generateMetadata({ params }: BlogPostPageProps) {
-  const post = getBlogPost(params.slug)
+  const { slug } = await params
+  const post = getBlogPost(slug)
 
   if (!post) {
     return {

@@ -1,5 +1,3 @@
-"use client"
-
 import Link from 'next/link'
 import { Brain, Clock, Users, Zap, CheckCircle, ArrowRight, RefreshCw, Database, Shield } from 'lucide-react'
 import PageLayout from '@/components/layout/PageLayout'

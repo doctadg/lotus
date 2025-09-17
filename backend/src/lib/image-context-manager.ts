@@ -102,7 +102,10 @@ export class ImageContextManager {
           case 'specific':
           case 'edit':
             // Return the most recent images, prioritizing generated ones for editing
-            relevantImages = recentImages
+            relevantImages = recentImages.map(img => ({
+              ...img,
+              description: img.description || undefined
+            }))
               .sort((a, b) => {
                 if (reference.referenceType === 'edit') {
                   // Prioritize generated images for editing
@@ -116,19 +119,28 @@ export class ImageContextManager {
 
           case 'previous':
             // Return recent images in chronological order
-            relevantImages = recentImages
+            relevantImages = recentImages.map(img => ({
+              ...img,
+              description: img.description || undefined
+            }))
               .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
               .slice(0, maxImages)
             break
 
           default:
             // Use relevance scoring
-            relevantImages = sortImagesByRelevance(queryText, recentImages)
+            relevantImages = sortImagesByRelevance(queryText, recentImages.map(img => ({
+              ...img,
+              description: img.description || undefined
+            })))
               .slice(0, maxImages)
         }
       } else {
         // No strong reference - use intelligent relevance scoring
-        relevantImages = sortImagesByRelevance(queryText, recentImages)
+        relevantImages = sortImagesByRelevance(queryText, recentImages.map(img => ({
+          ...img,
+          description: img.description || undefined
+        })))
           .slice(0, maxImages)
       }
 
