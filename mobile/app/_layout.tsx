@@ -30,26 +30,26 @@ export default function RootLayout() {
     loadFonts()
   }, [])
 
-  if (!fontsLoaded) {
-    return <View style={{ flex: 1, backgroundColor: '#141414' }} />
-  }
-
   return (
     <AuthProvider>
-      <Stack>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="home" options={{ headerShown: false }} />
-        <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="register" options={{ headerShown: false }} />
-        <Stack.Screen name="signup" options={{ headerShown: false }} />
-        <Stack.Screen name="profile" options={{ headerShown: false }} />
-        <Stack.Screen name="memories" options={{ headerShown: false }} />
-        <Stack.Screen name="memory/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="subscription" options={{ headerShown: false }} />
-        <Stack.Screen name="context" options={{ headerShown: false }} />
-        <Stack.Screen name="questions" options={{ headerShown: false }} />
-        <Stack.Screen name="settings" options={{ headerShown: false }} />
-      </Stack>
+      {!fontsLoaded ? (
+        <View style={{ flex: 1, backgroundColor: '#141414' }} />
+      ) : (
+        <Stack>
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="home" options={{ headerShown: false }} />
+          <Stack.Screen name="login" options={{ headerShown: false }} />
+          <Stack.Screen name="register" options={{ headerShown: false }} />
+          <Stack.Screen name="signup" options={{ headerShown: false }} />
+          <Stack.Screen name="profile" options={{ headerShown: false }} />
+          <Stack.Screen name="memories" options={{ headerShown: false }} />
+          <Stack.Screen name="memory/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="subscription" options={{ headerShown: false }} />
+          <Stack.Screen name="context" options={{ headerShown: false }} />
+          <Stack.Screen name="questions" options={{ headerShown: false }} />
+          <Stack.Screen name="settings" options={{ headerShown: false }} />
+        </Stack>
+      )}
     </AuthProvider>
   )
 }
