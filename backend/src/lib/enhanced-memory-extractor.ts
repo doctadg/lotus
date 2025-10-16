@@ -131,7 +131,7 @@ Extract memories in the following JSON format:
 export const extractEnhancedMemories = maybeTraceable(
   'enhanced-memory-extraction',
   async (conversation: string, userMessage: string, assistantResponse: string) => {
-    return trackMemoryExtraction('enhanced', async () => {
+    return trackMemoryExtraction(async () => {
       try {
         const chain = enhancedMemoryExtractionPrompt.pipe(llm).pipe(new JsonOutputParser())
         
@@ -296,14 +296,14 @@ async function processCognitivePatterns(
         id: patternData.id,
         userId,
         patternType: patternData.patternType,
-        description: patternData.description,
-        evidence: patternData.evidence || [],
+        patternValue: patternData.patternValue || patternData.description,
         confidence: patternData.confidence || 0.5,
-        firstObserved: new Date(),
+        evidence: patternData.evidence,
         lastObserved: new Date(),
-        frequency: 1,
-        contexts: patternData.contexts || [],
-        impact: patternData.impact || 'medium',
+        observationCount: 1,
+        strength: patternData.confidence || 0.5,
+        context: patternData.contexts?.join(', '),
+
         createdAt: new Date(),
         updatedAt: new Date()
       })
