@@ -1,15 +1,34 @@
 import { prisma } from '@/lib/prisma'
+import { getUserSubscriptionStatus } from '@/lib/subscription-status'
 
 const FREE_HOURLY_MESSAGE_LIMIT = Number(process.env.FREE_HOURLY_MESSAGE_LIMIT || 15)
 const FREE_DAILY_IMAGE_LIMIT = Number(process.env.FREE_DAILY_IMAGE_LIMIT || 3)
 const FREE_DAILY_DEEP_RESEARCH_LIMIT = Number(process.env.FREE_DAILY_DEEP_RESEARCH_LIMIT || 2)
 
+/**
+ * Check if user is on free tier
+ * Uses hybrid subscription logic: checks RevenueCat (mobile) and Clerk (web) billing
+ */
 async function isFreeUser(userId: string): Promise<boolean> {
   try {
+    // Check hybrid subscription status (RevenueCat + Clerk)
+    const subscriptionStatus = await getUserSubscriptionStatus()
+
+    // If user has Pro from any source (RevenueCat or Clerk), they're not free
+    if (subscriptionStatus.isPro) {
+      console.log(`[Rate Limit] User has Pro subscription from ${subscriptionStatus.source}`)
+      return false
+    }
+
+    // Fallback: check database subscription table
     const sub = await prisma.subscription.findUnique({ where: { userId } })
-    return !sub || sub.planType === 'free' || sub.status !== 'active'
+    const isFree = !sub || sub.planType === 'free' || sub.status !== 'active'
+
+    console.log(`[Rate Limit] User is ${isFree ? 'free' : 'pro'} based on database subscription`)
+    return isFree
   } catch (e) {
     console.error('Error checking subscription plan:', e)
+    // If there's an error, default to free tier for safety
     return true
   }
 }

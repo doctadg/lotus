@@ -6,6 +6,7 @@ import { aiAgent } from '@/lib/agent'
 import { trackMessageUsage, trackDeepResearchUsage } from '@/lib/rate-limit'
 import { imageContextManager } from '@/lib/image-context-manager'
 import { extractUserImageUrls, extractImageUrlsFromContent } from '@/lib/image-utils'
+import { hasUnlimitedMessages, canUseDeepResearch } from '@/lib/clerk-billing'
 
 
 // Add OPTIONS handler for CORS preflight
@@ -65,20 +66,70 @@ export async function POST(
       return new Response('Chat not found', { status: 404 })
     }
 
-    // If requesting deep research, enforce daily limit for free users
+    // Check if user has access to deep research via hybrid subscription (RevenueCat or Clerk)
     if (deepResearchMode) {
-      const ok = await trackDeepResearchUsage(userId)
-      if (!ok) {
-        return new Response('You have reached today\'s Deep Research limit on the free plan. Upgrade to Pro for unlimited deep research.', { status: 429 })
+      console.log(`🔍 [Deep Research Check] User ${clerkUserId} requesting deep research`)
+      const hasDeepResearch = await canUseDeepResearch()
+      console.log(`📊 [Deep Research Check] Result: ${hasDeepResearch}`)
+
+      if (!hasDeepResearch) {
+        console.log(`❌ [Deep Research Check] Denying access - user does not have Pro subscription`)
+        return new Response(
+          JSON.stringify({
+            error: 'Deep Research is a Pro feature',
+            message: 'Upgrade to Pro to access Deep Research mode with comprehensive sources and enhanced analysis.',
+            upgradeUrl: '/pricing'
+          }),
+          {
+            status: 403,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        )
+      }
+
+      console.log(`✅ [Deep Research Check] Access granted - user has Pro subscription`)
+
+      // Track usage for analytics (even for Pro users)
+      const canProceed = await trackDeepResearchUsage(userId)
+      console.log(`📊 [Deep Research Usage] Usage tracked, can proceed: ${canProceed}`)
+
+      if (!canProceed) {
+        console.log(`❌ [Deep Research Usage] Daily limit reached for user`)
+        return new Response(
+          JSON.stringify({
+            error: 'Daily limit reached',
+            message: 'You have reached today\'s Deep Research limit on the free plan. Upgrade to Pro for unlimited deep research.',
+            upgradeUrl: '/pricing'
+          }),
+          {
+            status: 429,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        )
       }
     }
 
-    // Check message rate limits (streaming responses count as 1 message)
-    const canProceed = await trackMessageUsage(userId)
-    if (!canProceed) {
-      return new Response('Rate limit exceeded. Please upgrade your plan or wait.', { 
-        status: 429 
-      })
+    // Check message rate limits using Clerk billing
+    const hasUnlimited = await hasUnlimitedMessages()
+    if (!hasUnlimited) {
+      // Free users: check rate limits
+      const canProceed = await trackMessageUsage(userId)
+      if (!canProceed) {
+        return new Response(
+          JSON.stringify({
+            error: 'Rate limit exceeded',
+            message: 'You have reached your message limit for this hour. Upgrade to Pro for unlimited messages.',
+            upgradeUrl: '/pricing'
+          }),
+          {
+            status: 429,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        )
+      }
+    } else {
+      // Pro users: still track usage for analytics, but don't enforce limits
+      await trackMessageUsage(userId)
     }
 
     // Get chat history for context
