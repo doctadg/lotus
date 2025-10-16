@@ -9,10 +9,6 @@
       "distribution": "internal",
       "android": {
         "image": "latest"
-      },
-      "env": {
-        "ANDROID_HOME": "/opt/android-sdk-linux",
-        "ANDROID_SDK_ROOT": "/opt/android-sdk-linux"
       }
     },
     "preview": {
@@ -21,20 +17,12 @@
         "buildType": "apk",
         "gradleCommand": ":app:assembleRelease"
       },
-      "env": {
-        "ANDROID_HOME": "/home/d/Android/Sdk",
-        "ANDROID_SDK_ROOT": "/home/d/Android/Sdk"
-      },
       "autoIncrement": true
     },
     "production": {
       "android": {
         "buildType": "app-bundle",
         "image": "latest"
-      },
-      "env": {
-        "ANDROID_HOME": "/opt/android-sdk-linux",
-        "ANDROID_SDK_ROOT": "/opt/android-sdk-linux"
       },
       "autoIncrement": true
     }

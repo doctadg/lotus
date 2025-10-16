@@ -19,8 +19,8 @@ if (typeof global.TextEncoder === 'undefined') {
 }
 
 // Ensure crypto is available for uuid and other crypto operations
-if (typeof global.crypto === 'undefined') {
-  const crypto = require('crypto')
-  global.crypto = crypto
-  global.crypto.getRandomValues = crypto.getRandomValues || crypto.randomFillSync
-}
+// if (typeof global.crypto === 'undefined') {
+//   const crypto = require('crypto')
+//   global.crypto = crypto
+//   global.crypto.getRandomValues = crypto.getRandomValues || crypto.randomFillSync
+// }

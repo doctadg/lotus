@@ -44,3 +44,5 @@ yarn-error.*
 .expo
 dist/
 web-build/
+
+android/local.properties
