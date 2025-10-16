@@ -50,7 +50,7 @@ async function checkRevenueCatSubscription(
       return {
         isPro: true,
         source: 'revenuecat',
-        expiresAt: new Date(rcSub.expiresAt),
+        expiresAt: rcSub.expiresAt ? new Date(rcSub.expiresAt) : null,
         platform: rcSub.platform,
         willRenew: rcSub.willRenew,
         isInTrialPeriod: rcSub.isInTrialPeriod,
