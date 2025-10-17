@@ -1,11 +1,14 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert
+  Alert,
+  Linking,
+  Platform,
+  ActivityIndicator,
 } from 'react-native'
 import { useAuth } from '../src/contexts/AuthContext'
 import { apiService } from '../src/lib/api'
@@ -17,30 +20,57 @@ import { Card } from '../src/components/ui/Card'
 import { Button } from '../src/components/ui/Button'
 import { Feather } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
+import { useAuth as useClerkAuth } from '@clerk/clerk-expo'
+import { isProUser, getPlanFeatures, getFeatureDisplayName } from '../src/lib/billing'
+import {
+  getCustomerInfo,
+  manageSubscription,
+  restorePurchases,
+  getSubscriptionExpiration,
+  willRenew,
+  getSubscriptionPlatform,
+  isCustomerInfoPro,
+} from '../src/lib/revenuecat'
+import type { CustomerInfo } from 'react-native-purchases'
 
 export default function SubscriptionScreen() {
-  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth()
+  const { user, isAuthenticated, isLoading: isAuthLoading, hasRevenueCatPro, refreshSubscriptionStatus, isRevenueCatReady } = useAuth()
+  const { has } = useClerkAuth()
   const router = useRouter()
-  const [subscription, setSubscription] = useState<any>(null)
+  const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const isSubscribed = subscription?.planType === 'pro'
+  const [isRestoring, setIsRestoring] = useState(false)
+  const isPro = hasRevenueCatPro || isProUser(has)
 
-  React.useEffect(() => {
-    if (!isAuthLoading && isAuthenticated) {
+  useEffect(() => {
+    if (!isAuthLoading && isAuthenticated && isRevenueCatReady) {
       loadSubscription()
     }
-  }, [isAuthLoading, isAuthenticated])
+  }, [isAuthLoading, isAuthenticated, isRevenueCatReady])
+
+  useEffect(() => {
+    // Refresh when coming back to this screen
+    const unsubscribe = router.addListener('focus', () => {
+      loadSubscription()
+    })
+
+    return unsubscribe
+  }, [])
 
   const loadSubscription = async () => {
     if (!user) return
-    
+
     try {
-      const subscriptionData = await apiService.getUserSubscription()
-      setSubscription(subscriptionData)
+      setIsLoading(true)
+
+      // Get RevenueCat customer info
+      const info = await getCustomerInfo()
+      setCustomerInfo(info)
+
+      // Refresh subscription status in auth context
+      await refreshSubscriptionStatus()
     } catch (error) {
       console.error('Error loading subscription:', error)
-      // Set default free plan for new users
-      setSubscription({ planType: 'free', status: null })
     } finally {
       setIsLoading(false)
     }
@@ -48,21 +78,75 @@ export default function SubscriptionScreen() {
 
   const handleSubscribe = async () => {
     if (!user) return
-    
-    Alert.alert(
-      'Subscribe to Pro',
-      'Subscription management will be integrated with Stripe in production',
-      [
-        {
-          text: 'OK',
-          onPress: () => {
-            // In production, this would redirect to Stripe Checkout
-            console.log('Would redirect to Stripe Checkout')
-          }
+
+    // Navigate to native paywall screen
+    router.push('/paywall')
+  }
+
+  const handleManageBilling = async () => {
+    try {
+      if (!hasRevenueCatPro) {
+        // If not subscribed via RevenueCat, open web billing
+        if (Platform.OS === 'web') {
+          router.push('/settings')
+        } else {
+          const url = 'https://lotus-backend.vercel.app/settings'
+          await Linking.openURL(url)
         }
-      ]
+      } else {
+        // Open native subscription management
+        await manageSubscription()
+      }
+    } catch (error) {
+      console.error('Error opening subscription management:', error)
+      Alert.alert('Error', 'Unable to open subscription management. Please try again.')
+    }
+  }
+
+  const handleRestore = async () => {
+    setIsRestoring(true)
+
+    try {
+      const { customerInfo: restoredInfo, error } = await restorePurchases()
+
+      if (error) {
+        Alert.alert('Restore Failed', error.message || 'Unable to restore purchases.')
+        return
+      }
+
+      if (restoredInfo) {
+        setCustomerInfo(restoredInfo)
+        await refreshSubscriptionStatus()
+
+        const hasPro = isCustomerInfoPro(restoredInfo)
+
+        if (hasPro) {
+          Alert.alert('Success', 'Your purchases have been restored!')
+        } else {
+          Alert.alert('No Purchases Found', "We couldn't find any previous purchases to restore.")
+        }
+      }
+    } catch (error: any) {
+      console.error('Restore error:', error)
+      Alert.alert('Error', 'Something went wrong. Please try again.')
+    } finally {
+      setIsRestoring(false)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <AuthGuard>
+        <View style={[styles.container, styles.centered]}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      </AuthGuard>
     )
   }
+
+  const expirationDate = getSubscriptionExpiration(customerInfo)
+  const willAutoRenew = willRenew(customerInfo)
+  const platform = getSubscriptionPlatform(customerInfo)
 
   return (
     <AuthGuard>
@@ -75,13 +159,60 @@ export default function SubscriptionScreen() {
           {/* Current Plan */}
           <Card style={styles.currentPlanCard}>
             <View style={styles.planHeader}>
-              <Feather name="package" size={24} color={theme.colors.textSecondary} />
+              {isPro ? (
+                <Feather name="star" size={24} color={theme.colors.primary} />
+              ) : (
+                <Feather name="package" size={24} color={theme.colors.textSecondary} />
+              )}
               <Text style={styles.currentPlanLabel}>Current Plan</Text>
             </View>
-            <Text style={styles.currentPlanName}>Free Plan</Text>
-            <Text style={styles.planDescription}>
-              Basic access to Lotus AI features
+            <Text style={styles.currentPlanName}>
+              {isPro ? 'Pro Plan' : 'Free Plan'}
             </Text>
+            <Text style={styles.planDescription}>
+              {isPro
+                ? 'Unlimited access to all Lotus AI features'
+                : 'Basic access to Lotus AI features'}
+            </Text>
+
+            {isPro && (
+              <>
+                <View style={styles.featuresList}>
+                  {getPlanFeatures('pro').map((feature, index) => (
+                    <View key={index} style={styles.featureItem}>
+                      <Feather name="check" size={14} color={theme.colors.success} />
+                      <Text style={styles.featureText}>
+                        {getFeatureDisplayName(feature)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+
+                {/* Subscription Details */}
+                {hasRevenueCatPro && expirationDate && (
+                  <View style={styles.subscriptionDetails}>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Platform</Text>
+                      <Text style={styles.detailValue}>{platform || 'N/A'}</Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Status</Text>
+                      <Text style={[styles.detailValue, styles.activeStatus]}>
+                        {willAutoRenew ? 'Active (Auto-renewing)' : 'Active (Expires)'}
+                      </Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>
+                        {willAutoRenew ? 'Renews' : 'Expires'}
+                      </Text>
+                      <Text style={styles.detailValue}>
+                        {expirationDate.toLocaleDateString()}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </>
+            )}
           </Card>
 
           {/* Pro Plan */}
@@ -124,15 +255,65 @@ export default function SubscriptionScreen() {
             </View>
           </LinearGradient>
 
-          <Button
-            onPress={handleSubscribe}
-            loading={isLoading}
-            disabled={isLoading || isSubscribed}
-            size="lg"
-            fullWidth
-          >
-            {isLoading ? 'Processing...' : isSubscribed ? 'Subscribed' : 'Upgrade to Pro'}
-          </Button>
+          {!isPro && (
+            <Button
+              onPress={handleSubscribe}
+              loading={isLoading}
+              disabled={isLoading}
+              size="lg"
+              fullWidth
+            >
+              Upgrade to Pro
+            </Button>
+          )}
+
+          {isPro && (
+            <View style={{ gap: theme.spacing.md }}>
+              <Button
+                onPress={handleManageBilling}
+                variant="outline"
+                size="lg"
+                fullWidth
+              >
+                <Feather name="settings" size={16} color={theme.colors.text} />
+                <Text> Manage Subscription</Text>
+              </Button>
+
+              {!hasRevenueCatPro && (
+                <View style={styles.infoBox}>
+                  <Text style={styles.infoText}>
+                    You're subscribed via web. Manage through your Clerk account.
+                  </Text>
+                </View>
+              )}
+
+              {hasRevenueCatPro && (
+                <View style={styles.infoBox}>
+                  <Text style={styles.infoText}>
+                    Manage your subscription through {Platform.OS === 'ios' ? 'iOS Settings' : 'Google Play'}.
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Restore Purchases Button */}
+          {!isPro && (
+            <TouchableOpacity
+              onPress={handleRestore}
+              disabled={isRestoring}
+              style={styles.restoreButton}
+            >
+              {isRestoring ? (
+                <ActivityIndicator size="small" color={theme.colors.textSecondary} />
+              ) : (
+                <>
+                  <Feather name="refresh-cw" size={16} color={theme.colors.textSecondary} />
+                  <Text style={styles.restoreButtonText}>Restore Purchases</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
       <Navigation />
@@ -232,5 +413,59 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.regular,
     color: theme.colors.text,
     flex: 1
-  }
+  },
+  infoBox: {
+    padding: theme.spacing.md,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.md,
+  },
+  infoText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.regular,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: theme.typography.fontSize.sm * theme.typography.lineHeight.relaxed,
+  },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  subscriptionDetails: {
+    marginTop: theme.spacing.lg,
+    paddingTop: theme.spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    gap: theme.spacing.md,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  detailLabel: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.regular,
+    color: theme.colors.textSecondary,
+  },
+  detailValue: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.medium,
+    color: theme.colors.text,
+  },
+  activeStatus: {
+    color: theme.colors.success,
+  },
+  restoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.sm,
+    padding: theme.spacing.md,
+    marginTop: theme.spacing.lg,
+  },
+  restoreButtonText: {
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.medium,
+    color: theme.colors.textSecondary,
+  },
 })

@@ -48,6 +48,8 @@ export default function RootLayout() {
           <Stack.Screen name="context" options={{ headerShown: false }} />
           <Stack.Screen name="questions" options={{ headerShown: false }} />
           <Stack.Screen name="settings" options={{ headerShown: false }} />
+          <Stack.Screen name="paywall" options={{ headerShown: false }} />
+          <Stack.Screen name="pricing" options={{ headerShown: false }} />
         </Stack>
       )}
     </AuthProvider>

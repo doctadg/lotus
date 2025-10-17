@@ -156,12 +156,13 @@ class ApiService {
 
   // Message methods
   async getMessages(chatId: string): Promise<Message[]> {
-    const response = await this.api.get<ApiResponse<Message[]>>(`/chat/${chatId}/messages`)
-    
+    const response = await this.api.get<ApiResponse<{ messages: Message[]; pagination: any }>>(`/chat/${chatId}/messages`)
+
     if (response.data.success && response.data.data) {
-      return response.data.data
+      // Extract messages array from the paginated response
+      return response.data.data.messages || []
     }
-    
+
     throw new Error(response.data.error || 'Failed to get messages')
   }
 
@@ -501,12 +502,45 @@ class ApiService {
   // Subscription methods
   async getUserSubscription(): Promise<any> {
     const response = await this.api.get<ApiResponse<{ subscription: any }>>('/user/subscription')
-    
+
     if (response.data.success && response.data.data) {
       return response.data.data.subscription
     }
-    
+
     throw new Error(response.data.error || 'Failed to get subscription')
+  }
+
+  /**
+   * Sync RevenueCat subscription status with backend
+   * Call this after purchases, restores, or on app startup
+   */
+  async syncRevenueCatSubscription(data: {
+    isPro: boolean
+    customerInfo: {
+      originalAppUserId: string
+      activeSubscriptions: string[]
+      entitlements: string[]
+    } | null
+  }): Promise<void> {
+    try {
+      if (__DEV__) {
+        console.log('📤 Syncing RevenueCat subscription with backend:', data)
+      }
+
+      const response = await this.api.post<ApiResponse>('/revenuecat/sync', data)
+
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to sync subscription')
+      }
+
+      if (__DEV__) {
+        console.log('✅ Subscription synced successfully')
+      }
+    } catch (error) {
+      console.error('❌ Failed to sync subscription with backend:', error)
+      // Don't throw - sync failures shouldn't block the app
+      // The webhook will eventually sync it
+    }
   }
 
   // Utility methods

@@ -185,7 +185,7 @@ export class SearchHiveClient {
 export class SearchHiveService {
   private client: SearchHiveClient
   private searchQueue: Map<string, Promise<SwiftSearchResponse>> = new Map()
-  private scrapeQueue: Map<string, Promise<ScrapeForgeResponse>> = new Map()
+  private scrapeQueue: Map<string, Promise<{url: string; title: string; content: string; error?: string}>> = new Map()
 
   constructor() {
     this.client = new SearchHiveClient()
@@ -282,100 +282,51 @@ export class SearchHiveService {
       
       urlsToScrape = urlsToScrape.slice(0, scrapeTop)
 
-      // Scrape concurrently to reduce latency - now properly parallel
+      // Scrape with TRUE maximum parallelization - fire all requests at once!
+      console.log(`🚀 [SEARCHHIVE] Starting TRUE parallel scraping of ${urlsToScrape.length} URLs simultaneously`)
+      
+      // Create all scrape promises and execute them ALL at once
       const scrapePromises = urlsToScrape.map(async (result, idx) => {
         const index = idx
+        
+        // Check if already in progress
+        if (this.scrapeQueue.has(result.link)) {
+          console.log(`🔄 [SEARCHHIVE] Reusing in-progress scrape for: ${result.link}`)
+          return this.scrapeQueue.get(result.link)
+        }
+        
+        const scrapePromise = this.performSingleScrape(result, index, urlsToScrape.length, progressCallback)
+        this.scrapeQueue.set(result.link, scrapePromise)
+        
         try {
-          console.log(`🌐 Scraping: ${result.link}`)
-          console.log('🔄 [SEARCHHIVE] Emitting website_scraping event: scraping_start', result.link)
-          progressCallback?.({
-            type: 'website_scraping',
-            content: `Extracting content from ${new URL(result.link).hostname}`,
-            metadata: { 
-              phase: 'scraping_start',
-              url: result.link,
-              title: result.title,
-              siteIndex: index + 1,
-              totalSites: urlsToScrape.length
-            }
-          })
-
-          const scrapeStartTime = Date.now()
-          const scrapeResult = await this.client.scrapeForge({
-            url: result.link,
-            render_js: false,
-            extract_meta: true,
-            extract_links: false,
-            extract_images: false
-          })
-          const scrapeDuration = Date.now() - scrapeStartTime
-
-          if (scrapeResult.success && scrapeResult.primary_content) {
-            const content = scrapeResult.primary_content
-            const extractedText = content.text || content.text_content || 'No content extracted'
-            scrapedContent.push({
-              url: result.link,
-              title: content.title || result.title,
-              content: extractedText,
-              error: content.error || undefined
-            })
-            progressCallback?.({
-              type: 'website_scraping',
-              content: `✅ ${new URL(result.link).hostname} - ${(extractedText.length / 1000).toFixed(1)}k characters extracted`,
-              metadata: { 
-                phase: 'scraping_success',
-                url: result.link,
-                title: content.title || result.title,
-                contentLength: extractedText.length,
-                duration: scrapeDuration,
-                siteIndex: index + 1,
-                totalSites: urlsToScrape.length
-              }
-            })
-          } else {
-            scrapedContent.push({
-              url: result.link,
-              title: result.title,
-              content: result.snippet
-            })
-            progressCallback?.({
-              type: 'website_scraping',
-              content: `✓ ${new URL(result.link).hostname} - content retrieved`,
-              metadata: { 
-                phase: 'scraping_success',
-                url: result.link,
-                title: result.title,
-                duration: scrapeDuration,
-                siteIndex: index + 1,
-                totalSites: urlsToScrape.length,
-                contentLength: result.snippet.length
-              }
-            })
-          }
-        } catch (scrapeError) {
-          console.error(`Error scraping ${result.link}:`, scrapeError)
-          progressCallback?.({
-            type: 'website_scraping',
-            content: `✓ ${new URL(result.link).hostname} - content retrieved`,
-            metadata: { 
-              phase: 'scraping_success',
-              url: result.link,
-              title: result.title,
-              siteIndex: index + 1,
-              totalSites: urlsToScrape.length,
-              contentLength: result.snippet.length
-            }
-          })
-          scrapedContent.push({
-            url: result.link,
-            title: result.title,
-            content: result.snippet
-          })
+          const scrapedResult = await scrapePromise
+          this.scrapeQueue.delete(result.link)
+          return scrapedResult
+        } catch (error) {
+          this.scrapeQueue.delete(result.link)
+          throw error
         }
       })
 
-      // Execute all scrapes in parallel
-      await Promise.all(scrapePromises)
+      // FIRE ALL REQUESTS SIMULTANEOUSLY - no batching, no waiting!
+      console.log(`⚡ [SEARCHHIVE] Executing ${scrapePromises.length} scrape requests in parallel`)
+      const settledResults = await Promise.allSettled(scrapePromises)
+      
+      // Process results - handle failures gracefully
+      settledResults.forEach((result, index) => {
+        if (result.status === 'fulfilled' && result.value) {
+          scrapedContent.push(result.value)
+        } else {
+          // Fallback to snippet for failed scrapes
+          const fallbackResult = urlsToScrape[index]
+          scrapedContent.push({
+            url: fallbackResult.link,
+            title: fallbackResult.title,
+            content: fallbackResult.snippet
+          })
+          console.log(`⚠️ [SEARCHHIVE] Scrape failed for ${fallbackResult.link}, using snippet fallback`)
+        }
+      })
 
       // Emit completion event - show all as successful
       progressCallback?.({
@@ -411,6 +362,107 @@ export class SearchHiveService {
     // Use search and scrape with more results for comprehensive coverage
     return this.performSearchAndScrape(`comprehensive analysis: ${topic}`, 8, 5, progressCallback)
   }
+
+  private async performSingleScrape(
+    result: SearchResult,
+    index: number,
+    totalSites: number,
+    progressCallback?: (event: { type: string; content: string; metadata?: any }) => void
+  ): Promise<{url: string; title: string; content: string; error?: string}> {
+    try {
+      console.log(`🌐 [SEARCHHIVE] Scraping: ${result.link}`)
+      progressCallback?.({
+        type: 'website_scraping',
+        content: `Extracting content from ${new URL(result.link).hostname}`,
+        metadata: { 
+          phase: 'scraping_start',
+          url: result.link,
+          title: result.title,
+          siteIndex: index + 1,
+          totalSites
+        }
+      })
+
+      const scrapeStartTime = Date.now()
+      const scrapeResult = await this.client.scrapeForge({
+        url: result.link,
+        render_js: false,
+        extract_meta: true,
+        extract_links: false,
+        extract_images: false
+      })
+      const scrapeDuration = Date.now() - scrapeStartTime
+
+      if (scrapeResult.success && scrapeResult.primary_content) {
+        const content = scrapeResult.primary_content
+        const extractedText = content.text || content.text_content || 'No content extracted'
+        
+        progressCallback?.({
+          type: 'website_scraping',
+          content: `✅ ${new URL(result.link).hostname} - ${(extractedText.length / 1000).toFixed(1)}k characters extracted`,
+          metadata: { 
+            phase: 'scraping_success',
+            url: result.link,
+            title: content.title || result.title,
+            contentLength: extractedText.length,
+            duration: scrapeDuration,
+            siteIndex: index + 1,
+            totalSites
+          }
+        })
+        
+        return {
+          url: result.link,
+          title: content.title || result.title,
+          content: extractedText,
+          error: content.error || undefined
+        }
+      } else {
+        progressCallback?.({
+          type: 'website_scraping',
+          content: `✓ ${new URL(result.link).hostname} - content retrieved`,
+          metadata: { 
+            phase: 'scraping_success',
+            url: result.link,
+            title: result.title,
+            duration: scrapeDuration,
+            siteIndex: index + 1,
+            totalSites,
+            contentLength: result.snippet.length
+          }
+        })
+        
+        return {
+          url: result.link,
+          title: result.title,
+          content: result.snippet
+        }
+      }
+    } catch (scrapeError) {
+      console.error(`❌ [SEARCHHIVE] Error scraping ${result.link}:`, scrapeError)
+      
+      progressCallback?.({
+        type: 'website_scraping',
+        content: `✓ ${new URL(result.link).hostname} - using snippet`,
+        metadata: { 
+          phase: 'scraping_fallback',
+          url: result.link,
+          title: result.title,
+          siteIndex: index + 1,
+          totalSites,
+          contentLength: result.snippet.length
+        }
+      })
+      
+      return {
+        url: result.link,
+        title: result.title,
+        content: result.snippet
+      }
+    }
+  }
+
+
 
   /**
    * Execute multiple searches in parallel for better performance

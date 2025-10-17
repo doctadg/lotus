@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server'
 import { syncUserWithDatabase } from '@/lib/sync-user'
 import { prisma } from '@/lib/prisma'
 import { ApiResponse } from '@/types'
+import { getSubscriptionDetails } from '@/lib/subscription-status'
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,17 +17,24 @@ export async function GET(request: NextRequest) {
     }
     const userId = user.id
 
-    // Get user's subscription status
+    // Get hybrid subscription status (RevenueCat + Clerk Billing)
+    const hybridStatus = await getSubscriptionDetails()
+
+    // Get database subscription (legacy/fallback)
     const subscription = await prisma.subscription.findUnique({
       where: { userId }
     })
 
-    // If no subscription found, user is on free plan
-    const subscriptionData = subscription || {
-      planType: 'free',
-      status: null,
-      currentPeriodStart: null,
-      currentPeriodEnd: null,
+    // Build subscription data
+    const subscriptionData = {
+      planType: hybridStatus.isPro ? 'pro' : 'free',
+      status: hybridStatus.isPro ? 'active' : (subscription?.status || null),
+      currentPeriodStart: subscription?.currentPeriodStart || null,
+      currentPeriodEnd: hybridStatus.expiresAt || subscription?.currentPeriodEnd || null,
+      source: hybridStatus.source,
+      platform: hybridStatus.platform,
+      willRenew: hybridStatus.willRenew,
+      isInTrialPeriod: hybridStatus.isInTrialPeriod,
     }
 
     return NextResponse.json<ApiResponse>({

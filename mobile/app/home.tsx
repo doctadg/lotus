@@ -28,6 +28,8 @@ import { LotusIcon, LotusFullLogo } from '../src/components/Logo'
 import Markdown from '../src/components/Markdown'
 import * as ImagePicker from 'expo-image-picker'
 import * as DocumentPicker from 'expo-document-picker'
+import { useAuth as useClerkAuth } from '@clerk/clerk-expo'
+import { canUseDeepResearch, isProUser } from '../src/lib/billing'
 
 interface Message {
   id: string
@@ -44,8 +46,12 @@ interface ChatSession {
 }
 
 export default function HomeScreen() {
-  const { user, logout, isAuthenticated, isLoading: isAuthLoading } = useAuth()
+  const { user, logout, isAuthenticated, isLoading: isAuthLoading, isReady, hasRevenueCatPro } = useAuth()
+  const { has } = useClerkAuth()
   const router = useRouter()
+  // Check both RevenueCat (mobile IAP) and Clerk (web billing)
+  const isPro = hasRevenueCatPro || isProUser(has)
+  const hasDeepResearch = hasRevenueCatPro || canUseDeepResearch(has)
   const [messages, setMessages] = useState<Message[]>([])
   const [inputText, setInputText] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -66,12 +72,12 @@ export default function HomeScreen() {
   const slideAnim = useRef(new Animated.Value(-300)).current
   const keyboardAnim = useRef(new Animated.Value(0)).current
 
-  // Load chats only after auth is ready and user is signed in
+  // Load chats only after auth AND token provider are ready and user is signed in
   useEffect(() => {
-    if (!isAuthLoading && isAuthenticated) {
+    if (isReady && isAuthenticated) {
       loadChats()
     }
-  }, [isAuthLoading, isAuthenticated])
+  }, [isReady, isAuthenticated])
 
   useEffect(() => {
     Animated.timing(slideAnim, {
@@ -112,7 +118,19 @@ export default function HomeScreen() {
   const loadChats = async () => {
     try {
       const response = await apiService.getChats()
-      setChatSessions(response.map((chat: any) => ({
+      if (__DEV__) {
+        console.log('Chats response:', response)
+      }
+      // Handle various response formats: array, {data: []}, or {chats: []}
+      const chats = Array.isArray(response)
+        ? response
+        : (response?.chats || response?.data || [])
+
+      if (__DEV__) {
+        console.log('Parsed chats:', chats)
+      }
+
+      setChatSessions(chats.map((chat: any) => ({
         id: chat.id,
         title: chat.title || 'New Chat',
         messages: [],
@@ -132,14 +150,22 @@ export default function HomeScreen() {
   const loadChatMessages = async (chatId: string) => {
     try {
       const messages = await apiService.getMessages(chatId)
-      setMessages(messages.map(msg => ({
-        id: msg.id,
-        content: msg.content,
-        role: msg.role,
-        timestamp: new Date(msg.timestamp)
-      })))
+      // Ensure messages is an array before mapping
+      if (Array.isArray(messages)) {
+        setMessages(messages.map(msg => ({
+          id: msg.id,
+          content: msg.content,
+          role: msg.role,
+          timestamp: new Date(msg.timestamp)
+        })))
+      } else {
+        console.error('Messages response is not an array:', messages)
+        setMessages([])
+      }
     } catch (error) {
       console.error('Error loading chat messages:', error)
+      setMessages([])
+      Alert.alert('Error', 'Failed to load chat messages. Please try again.')
     }
   }
 
@@ -458,11 +484,39 @@ export default function HomeScreen() {
                 <View style={styles.userInfo}>
                   <Text style={styles.userName}>{user?.name || 'User'}</Text>
                   <Text style={styles.userEmail}>{user?.email}</Text>
+                  {isPro && (
+                    <View style={styles.proBadge}>
+                      <Feather name="star" size={10} color={theme.colors.primary} />
+                      <Text style={styles.proBadgeText}>Pro</Text>
+                    </View>
+                  )}
                 </View>
                 <TouchableOpacity onPress={logout} style={styles.logoutButton}>
                   <Feather name="log-out" size={16} color={theme.colors.text} />
                 </TouchableOpacity>
               </View>
+
+              {/* Upgrade Banner for Free Users */}
+              {!isPro && (
+                <TouchableOpacity
+                  style={styles.upgradeBanner}
+                  onPress={() => {
+                    setSidebarOpen(false)
+                    router.push('/paywall')
+                  }}
+                >
+                  <View style={styles.upgradeBannerContent}>
+                    <Feather name="star" size={20} color="#fff" />
+                    <View style={styles.upgradeBannerText}>
+                      <Text style={styles.upgradeBannerTitle}>Upgrade to Pro</Text>
+                      <Text style={styles.upgradeBannerSubtitle}>
+                        Unlimited messages & deep research
+                      </Text>
+                    </View>
+                  </View>
+                  <Feather name="chevron-right" size={20} color="#fff" />
+                </TouchableOpacity>
+              )}
 
               {/* New Chat Button */}
               <TouchableOpacity style={styles.newChatButton} onPress={newChat}>
@@ -525,10 +579,10 @@ export default function HomeScreen() {
                 )}
               </View>
                   
-                  {/* Show agent status after the last message and only if there's agent activity */}
-                  {index === messages.length - 1 && 
+                  {/* Show agent status after the last message only while agent is actively working */}
+                  {index === messages.length - 1 && !agentComplete &&
                    (thinkingSteps.length > 0 || searchSteps.length > 0 || currentTools.length > 0) && (
-                    <AgentStatus 
+                    <AgentStatus
                       thinkingSteps={thinkingSteps}
                       searchSteps={searchSteps}
                       tools={currentTools}
@@ -592,11 +646,27 @@ export default function HomeScreen() {
             />
             <TouchableOpacity
               style={[styles.deepButton, { marginRight: theme.spacing.sm }, deepMode ? styles.deepButtonActive : null]}
-              onPress={() => setDeepMode(v => !v)}
+              onPress={() => {
+                if (!hasDeepResearch) {
+                  Alert.alert(
+                    'Deep Research is a Pro Feature',
+                    'Upgrade to Pro to access Deep Research mode with comprehensive sources and enhanced analysis.',
+                    [
+                      { text: 'Maybe Later', style: 'cancel' },
+                      { text: 'Upgrade to Pro', onPress: () => router.push('/paywall') },
+                    ]
+                  )
+                } else {
+                  setDeepMode(v => !v)
+                }
+              }}
               disabled={isLoading}
             >
               <Feather name="zap" size={12} color={deepMode ? theme.colors.text : theme.colors.textSecondary} />
               <Text style={[styles.deepButtonText, deepMode ? styles.deepButtonTextActive : null]}>Deep</Text>
+              {!isPro && (
+                <Feather name="lock" size={10} color={theme.colors.textSecondary} style={{ marginLeft: 4 }} />
+              )}
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.sendButton, (!inputText.trim() && attachments.length === 0) || isLoading ? styles.sendButtonDisabled : null]}
@@ -883,5 +953,45 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     backgroundColor: theme.colors.surfaceHover
-  }
+  },
+  proBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  proBadgeText: {
+    color: theme.colors.primary,
+    fontSize: 10,
+    fontFamily: theme.typography.fontFamily.bold,
+  },
+  upgradeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
+    padding: theme.spacing.lg,
+    borderRadius: theme.borderRadius.lg,
+    marginBottom: theme.spacing.lg,
+  },
+  upgradeBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    flex: 1,
+  },
+  upgradeBannerText: {
+    flex: 1,
+  },
+  upgradeBannerTitle: {
+    color: '#fff',
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.bold,
+    marginBottom: 2,
+  },
+  upgradeBannerSubtitle: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: theme.typography.fontSize.xs,
+    fontFamily: theme.typography.fontFamily.regular,
+  },
 })

@@ -2,12 +2,13 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Menu, Plus, Trash2, Send, Search, BookOpen, Sparkles, FileText, Image as ImageIcon, X, ChevronDown, Check } from 'lucide-react'
+import { Menu, Plus, Trash2, Send, Search, BookOpen, Sparkles, FileText, Image as ImageIcon, X, ChevronDown, Check, Sun, Moon } from 'lucide-react'
 import { AgentActivity } from '../../components/chat/AgentActivity'
 import { MessageRenderer } from '../../components/chat/MessageRenderer'
 import { useAuth } from '../../hooks/useAuth'
 import UpgradeModal from '@/components/billing/UpgradeModal'
 import { useSubscription } from '@/hooks/useSubscription'
+import { useTheme } from '../../hooks/useTheme'
 
 type Role = 'user' | 'assistant'
 
@@ -61,6 +62,7 @@ export default function ChatPage() {
 
 function ChatLayout() {
   const { user, signOut, isAuthenticated, isLoading } = useAuth()
+  const { isDark, theme, setTheme } = useTheme()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
@@ -607,22 +609,22 @@ function ChatLayout() {
   // Removed custom drawer timeline; using AgentActivity inline, always showing
 
   const sidebar = (
-    <div className="flex h-full flex-col bg-neutral-900 w-64 overflow-hidden p-2">
+    <div className={`flex h-full flex-col w-64 overflow-hidden p-2 ${isDark ? 'bg-black/20 backdrop-blur-2xl border-white/10' : 'bg-white/80 backdrop-blur-2xl border-gray-200/50'} border-r`}>
       {/* Top Bar */}
-      <div className="flex items-center justify-between px-3 py-3 rounded-xl bg-neutral-900">
+      <div className={`flex items-center justify-between px-3 py-3 rounded-xl ${isDark ? 'bg-white/5 backdrop-blur-xl border-white/10' : 'bg-white/60 backdrop-blur-xl border-gray-200/50'} border shadow-lg`}>
         <Link href="/" className="flex items-center gap-2">
-          <img src="/lotus-full.svg" alt="Lotus" className="h-6 md:h-7 w-auto invert opacity-90" />
+          <img src="/lotus-full.svg" alt="Lotus" className={`h-6 md:h-7 w-auto ${isDark ? 'invert opacity-90' : 'opacity-90'}`} />
         </Link>
-        <button onClick={newChat} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-neutral-900 text-white hover:bg-neutral-800 border border-neutral-700/50">
+        <button onClick={newChat} className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg ${isDark ? 'bg-white/10 backdrop-blur-xl text-white hover:bg-white/20 border-white/20' : 'bg-white/80 text-gray-900 hover:bg-white border-gray-300/50'} border shadow-sm transition-all`}>
           <Plus className="w-3 h-3" /> New
         </button>
       </div>
       <div className="px-1 pt-2 space-y-1">
-        <button className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-xs text-neutral-300 hover:bg-neutral-900">
-          <Search className="w-3.5 h-3.5 text-neutral-400" /> Search chats
+        <button className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all ${isDark ? 'text-neutral-300 hover:bg-white/5 backdrop-blur-xl' : 'text-gray-600 hover:bg-white/60 backdrop-blur-xl'}`}>
+          <Search className={`w-3.5 h-3.5 ${isDark ? 'text-neutral-400' : 'text-gray-400'}`} /> Search chats
         </button>
-        <button className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-xs text-neutral-300 hover:bg-neutral-900">
-          <BookOpen className="w-3.5 h-3.5 text-neutral-400" /> Library
+        <button className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all ${isDark ? 'text-neutral-300 hover:bg-white/5 backdrop-blur-xl' : 'text-gray-600 hover:bg-white/60 backdrop-blur-xl'}`}>
+          <BookOpen className={`w-3.5 h-3.5 ${isDark ? 'text-neutral-400' : 'text-gray-400'}`} /> Library
         </button>
       </div>
       <div className="flex-1 overflow-y-auto px-1 py-2 space-y-1">
@@ -630,17 +632,27 @@ function ChatLayout() {
           <div
             key={s.id}
             onClick={() => selectChat(s.id)}
-            className={`group flex items-center gap-2 px-3 py-2 rounded-xl cursor-pointer border border-transparent hover:border-neutral-700/60 hover:bg-[#15191e] ${
-              currentChatId === s.id ? 'bg-[#15191e] border-neutral-700/60' : ''
+            className={`group flex items-center gap-2 px-3 py-2 rounded-xl cursor-pointer border transition-all ${
+              isDark
+                ? 'hover:border-white/20 hover:bg-white/10 backdrop-blur-xl hover:shadow-lg'
+                : 'hover:border-gray-300/60 hover:bg-white/80 backdrop-blur-xl hover:shadow-md'
+            } ${
+              currentChatId === s.id
+                ? (isDark ? 'bg-white/10 backdrop-blur-xl border-white/20 shadow-lg' : 'bg-white/90 backdrop-blur-xl border-gray-300/60 shadow-md')
+                : 'border-transparent'
             }`}
           >
-            <div className="flex-1 truncate text-sm text-neutral-200">{s.title || 'Untitled Chat'}</div>
+            <div className={`flex-1 truncate text-sm ${isDark ? 'text-neutral-200' : 'text-gray-700'}`}>{s.title || 'Untitled Chat'}</div>
             <button
               onClick={(e) => {
                 e.stopPropagation()
                 deleteChat(s.id)
               }}
-              className="opacity-0 group-hover:opacity-100 text-neutral-400 hover:text-red-400 p-1 rounded-lg hover:bg-red-500/10"
+              className={`opacity-0 group-hover:opacity-100 p-1 rounded-lg ${
+                isDark 
+                  ? 'text-neutral-400 hover:text-red-400 hover:bg-red-500/10' 
+                  : 'text-gray-400 hover:text-red-500 hover:bg-red-50'
+              }`}
               title="Delete"
             >
               <Trash2 className="w-3 h-3" />
@@ -648,29 +660,29 @@ function ChatLayout() {
           </div>
         ))}
         {sessions.length === 0 && (
-          <div className="text-xs text-neutral-500 px-3 py-8 text-center">No conversations yet</div>
+          <div className={`text-xs px-3 py-8 text-center ${isDark ? 'text-neutral-500' : 'text-gray-400'}`}>No conversations yet</div>
         )}
       </div>
       {/* Bottom Bar */}
       <div className="px-1 pt-2">
-        <div className="rounded-xl bg-neutral-900 p-2 space-y-1">
-          <Link href="/memories" className="block text-xs text-neutral-300 px-3 py-2 rounded-lg hover:bg-[#15191e]">Memories</Link>
-          <Link href="/settings" className="block text-xs text-neutral-300 px-3 py-2 rounded-lg hover:bg-[#15191e]">Settings</Link>
-          <button onClick={signOut} className="w-full text-left text-xs text-neutral-300 px-3 py-2 rounded-lg hover:bg-[#15191e]">Logout</button>
+        <div className={`rounded-xl p-2 space-y-1 ${isDark ? 'bg-white/5 backdrop-blur-xl border-white/10' : 'bg-white/60 backdrop-blur-xl border-gray-200/50'} border shadow-lg`}>
+          <Link href="/memories" className={`block text-xs px-3 py-2 rounded-lg transition-all ${isDark ? 'text-neutral-300 hover:bg-white/10 backdrop-blur-xl' : 'text-gray-600 hover:bg-white/80 backdrop-blur-xl'}`}>Memories</Link>
+          <Link href="/settings" className={`block text-xs px-3 py-2 rounded-lg transition-all ${isDark ? 'text-neutral-300 hover:bg-white/10 backdrop-blur-xl' : 'text-gray-600 hover:bg-white/80 backdrop-blur-xl'}`}>Settings</Link>
+          <button onClick={signOut} className={`w-full text-left text-xs px-3 py-2 rounded-lg transition-all ${isDark ? 'text-neutral-300 hover:bg-white/10 backdrop-blur-xl' : 'text-gray-600 hover:bg-white/80 backdrop-blur-xl'}`}>Logout</button>
         </div>
       </div>
     </div>
   )
 
   return (
-    <div className="flex h-screen overflow-hidden bg-black text-white">
+    <div className={`flex h-screen overflow-hidden ${isDark ? 'bg-gradient-to-br from-black via-neutral-950 to-black text-white' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100 text-gray-900'}`}>
       {/* Sidebar - desktop */}
       <div className="hidden md:flex w-64 h-screen">{sidebar}</div>
 
       {/* Sidebar toggle - mobile */}
       <button
         onClick={() => setSidebarOpen(true)}
-        className="md:hidden fixed top-4 left-4 z-40 p-3 rounded-lg bg-neutral-900 border border-neutral-800 text-white"
+        className={`md:hidden fixed top-4 left-4 z-40 p-3 rounded-lg border transition-all shadow-lg ${isDark ? 'bg-white/10 backdrop-blur-xl border-white/20 text-white hover:bg-white/20' : 'bg-white/90 backdrop-blur-xl border-gray-300/50 text-gray-900 hover:bg-white'}`}
         aria-label="Open sidebar"
       >
         <Menu className="w-5 h-5" />
@@ -700,14 +712,22 @@ function ChatLayout() {
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') setAgentMenuOpen(false)
                 }}
-                className="group inline-flex items-center gap-2 rounded-full p-[1px] bg-neutral-800/60 border border-neutral-700/60 transition"
+                className={`group inline-flex items-center gap-2 rounded-full p-[1px] border transition-all ${
+                  isDark ? 'bg-white/5 backdrop-blur-xl border-white/10' : 'bg-white/60 backdrop-blur-xl border-gray-300/50'
+                }`}
                 title="Select agent"
               >
-                <span className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-neutral-900/60 hover:bg-neutral-900/80 text-neutral-100 backdrop-blur border border-neutral-700/60">
+                <span className={`inline-flex items-center gap-2 rounded-full px-4 py-2 backdrop-blur-xl border shadow-lg ${
+                  isDark
+                    ? 'bg-white/10 hover:bg-white/20 text-neutral-100 border-white/20'
+                    : 'bg-white/80 hover:bg-white text-gray-900 border-gray-300/50'
+                }`}>
                   <span className="text-sm font-medium">
                     {agentOptions.find(a => a.id === selectedAgent)?.label || 'Select Agent'}
                   </span>
-                  <ChevronDown className="w-4 h-4 text-neutral-300 transition-transform group-aria-expanded:rotate-180" />
+                  <ChevronDown className={`w-4 h-4 transition-transform group-aria-expanded:rotate-180 ${
+                    isDark ? 'text-neutral-300' : 'text-gray-500'
+                  }`} />
                 </span>
               </button>
 
@@ -715,7 +735,11 @@ function ChatLayout() {
                 <div
                   role="listbox"
                   aria-activedescendant={`agent-${selectedAgent}`}
-                  className="absolute z-30 mt-2 w-64 rounded-xl border border-white/10 bg-neutral-950/90 backdrop-blur-xl shadow-2xl ring-1 ring-white/10 overflow-hidden"
+                  className={`absolute z-30 mt-2 w-64 rounded-xl border backdrop-blur-2xl shadow-2xl ring-1 overflow-hidden ${
+                    isDark
+                      ? 'border-white/10 bg-black/80 backdrop-blur-2xl ring-white/10'
+                      : 'border-gray-200/50 bg-white/90 backdrop-blur-2xl ring-gray-200/50'
+                  }`}
                 >
                   {agentOptions.map((opt) => {
                     const active = opt.id === selectedAgent
@@ -726,14 +750,14 @@ function ChatLayout() {
                         role="option"
                         aria-selected={active}
                         onClick={() => { setSelectedAgent(opt.id); setAgentMenuOpen(false) }}
-                        className={`w-full text-left px-4 py-3 text-sm flex items-center justify-between transition ${
-                          active
-                            ? 'bg-neutral-800/40 text-white'
-                            : 'text-neutral-200 hover:bg-neutral-800/30'
-                        }`}
+                         className={`w-full text-left px-4 py-3 text-sm flex items-center justify-between transition-all ${
+                           active
+                             ? (isDark ? 'bg-white/10 backdrop-blur-xl text-white' : 'bg-blue-50/90 backdrop-blur-xl text-blue-900')
+                             : (isDark ? 'text-neutral-200 hover:bg-white/5 backdrop-blur-xl' : 'text-gray-700 hover:bg-white/60 backdrop-blur-xl')
+                         }`}
                       >
                         <span>{opt.label}</span>
-                        {active && <Check className="w-4 h-4 text-neutral-300" />}
+                        {active && <Check className={`w-4 h-4 ${isDark ? 'text-neutral-300' : 'text-blue-600'}`} />}
                       </button>
                     )
                   })}
@@ -741,21 +765,38 @@ function ChatLayout() {
               )}
             </div>
           </div>
-          {/* Right side of header intentionally minimal; background removed */}
+          {/* Theme toggle button */}
+          <button
+            onClick={() => {
+              if (theme === 'system') {
+                setTheme(isDark ? 'light' : 'dark')
+              } else {
+                setTheme(theme === 'dark' ? 'light' : 'dark')
+              }
+            }}
+            className={`p-2 rounded-lg transition-all ${
+              isDark
+                ? 'bg-white/10 backdrop-blur-xl border border-white/20 text-yellow-400 hover:bg-white/20 hover:shadow-lg'
+                : 'bg-white/80 backdrop-blur-xl border border-gray-300/50 text-gray-600 hover:bg-white hover:shadow-md'
+            }`}
+            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </button>
         </div>
 
         {/* Messages container: wider black panel with rounded corners */}
         <div className="flex-1 overflow-y-auto px-4 pt-4">
           <div
-            className={`mx-auto w-full max-w-6xl rounded-2xl overflow-hidden ${
-              messages.length === 0 ? '' : 'bg-black'
+            className={`mx-auto w-full max-w-6xl rounded-2xl overflow-hidden transition-all ${
+              messages.length === 0 ? '' : (isDark ? 'bg-black/40 backdrop-blur-xl border border-white/10 shadow-2xl' : 'bg-white/80 backdrop-blur-xl border border-gray-200/50 shadow-xl')
             }`}
           >
             <div className="mx-auto w-full max-w-4xl px-4 py-6 space-y-4">
               {messages.length === 0 ? (
                 <div className="min-h-[70vh] flex flex-col items-center justify-center text-center gap-6">
-                  <h1 className="text-[22px] md:text-2xl font-medium text-neutral-200">What's on the agenda today?</h1>
-                  <p className="text-sm text-neutral-400">
+                  <h1 className={`text-[22px] md:text-2xl font-medium ${isDark ? 'text-neutral-200' : 'text-gray-800'}`}>What's on the agenda today?</h1>
+                  <p className={`text-sm ${isDark ? 'text-neutral-400' : 'text-gray-500'}`}>
                     {questionsLoading
                       ? 'Loading personalized suggestions...'
                       : isPersonalized
@@ -764,23 +805,27 @@ function ChatLayout() {
                   </p>
                   {/* Input box shown in hero for empty chat */}
                   <div className="w-full max-w-2xl mx-auto">
-                    <div className="rounded-2xl bg-[#12161a] p-2 shadow-sm">
+                    <div className={`rounded-2xl p-2 shadow-2xl transition-all ${isDark ? 'bg-white/5 backdrop-blur-2xl border border-white/10' : 'bg-white/90 backdrop-blur-2xl border border-gray-300/50'}`}>
                       {/* Attachments preview (hero, above input) */}
                       {attachments.length > 0 && (
                         <div className="w-full mb-2 flex flex-wrap gap-2">
                           {attachments.map((att) => (
-                            <div key={att.url} className="relative border border-neutral-800 rounded-lg p-1 bg-neutral-900/60">
+                            <div key={att.url} className={`relative border rounded-lg p-1 ${isDark ? 'border-neutral-800 bg-neutral-900/60' : 'border-gray-300 bg-gray-50'}`}>
                               {att.kind === 'image' ? (
                                 <img src={att.url} alt={att.name} className="h-16 w-16 object-cover rounded" />
                               ) : (
-                                <div className="h-16 w-44 flex items-center gap-2 px-2 text-xs text-neutral-300">
-                                  <FileText className="w-4 h-4 text-neutral-400" />
+                                <div className={`h-16 w-44 flex items-center gap-2 px-2 text-xs ${isDark ? 'text-neutral-300' : 'text-gray-600'}`}>
+                                  <FileText className={`w-4 h-4 ${isDark ? 'text-neutral-400' : 'text-gray-400'}`} />
                                   <span className="truncate" title={att.name}>{att.name}</span>
                                 </div>
                               )}
                               <button
                                 onClick={() => removeAttachment(att.url)}
-                                className="absolute -top-2 -right-2 bg-neutral-800 border border-neutral-700 rounded-full p-1 text-neutral-300 hover:bg-neutral-700"
+                                className={`absolute -top-2 -right-2 rounded-full p-1 ${
+                                  isDark 
+                                    ? 'bg-neutral-800 border border-neutral-700 text-neutral-300 hover:bg-neutral-700' 
+                                    : 'bg-white border border-gray-300 text-gray-500 hover:bg-gray-100'
+                                }`}
                                 aria-label="Remove attachment"
                               >
                                 <X className="w-3 h-3" />
@@ -793,29 +838,37 @@ function ChatLayout() {
                         <div className="relative">
                           <button
                             onClick={() => setAttachOpenHero((v) => !v)}
-                            className="shrink-0 w-8 h-8 rounded-full bg-neutral-900 border border-neutral-700/60 text-neutral-300 hover:bg-neutral-800 flex items-center justify-center"
+                            className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                              isDark
+                                ? 'bg-white/10 backdrop-blur-xl border border-white/20 text-neutral-300 hover:bg-white/20 hover:shadow-lg'
+                                : 'bg-white/80 backdrop-blur-xl border border-gray-300/50 text-gray-600 hover:bg-white hover:shadow-md'
+                            }`}
                             title="Attach image or document"
                             type="button"
                           >
                             <Plus className="w-4 h-4" />
                           </button>
                           {attachOpenHero && (
-                            <div className="absolute z-10 mt-2 w-48 rounded-lg border border-neutral-800 bg-neutral-900 shadow-lg">
+                            <div className={`absolute z-10 mt-2 w-48 rounded-lg border shadow-2xl ${
+                              isDark ? 'border-white/10 bg-black/90 backdrop-blur-2xl' : 'border-gray-300/50 bg-white/95 backdrop-blur-2xl'
+                            }`}>
                               <button
                                 onClick={() => {
                                   setAttachOpenHero(false)
                                   imageInputHeroRef.current?.click()
                                 }}
                                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-neutral-200 hover:bg-neutral-800"
-                              >
-                                <ImageIcon className="w-4 h-4 text-neutral-400" /> Upload image
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setAttachOpenHero(false)
-                                  docInputHeroRef.current?.click()
-                                }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-neutral-200 hover:bg-neutral-800"
+                        >
+                          <ImageIcon className="w-4 h-4 text-gray-400" /> Upload image
+                        </button>
+                        <button
+                          onClick={() => {
+                            setAttachOpenHero(false)
+                            docInputHeroRef.current?.click()
+                          }}
+                          className={`w-full flex items-center gap-2 px-3 py-2 text-sm ${
+                            isDark ? 'text-neutral-200 hover:bg-neutral-800' : 'text-gray-700 hover:bg-gray-100'
+                          }`}
                               >
                                 <FileText className="w-4 h-4 text-neutral-400" /> Upload document
                               </button>
@@ -877,7 +930,11 @@ function ChatLayout() {
                             }
                           }}
                           placeholder={uploading ? "Uploading…" : "Message Lotus…"}
-                          className="flex-1 bg-transparent text-neutral-200 placeholder-neutral-500 rounded-xl px-2 py-2 outline-none resize-none min-h-[44px] max-h-40"
+                          className={`flex-1 bg-transparent rounded-xl px-2 py-2 outline-none resize-none min-h-[44px] max-h-40 ${
+                            isDark 
+                              ? 'text-neutral-200 placeholder-neutral-500' 
+                              : 'text-gray-900 placeholder-gray-400'
+                          }`}
                           rows={1}
                           disabled={sending || uploading}
                         />
@@ -885,10 +942,12 @@ function ChatLayout() {
                         <div className="flex items-center gap-1.5">
                           <button
                             onClick={() => { if (!isPro) { setShowUpgrade(true); return } setDeepMode(v => !v) }}
-                            className={`w-auto px-2 h-8 rounded-full border flex items-center gap-1 justify-center text-xs transition ${
-                              deepMode
-                                ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-white border-transparent'
-                                : 'bg-neutral-900 border-neutral-700/60 text-neutral-300 hover:bg-neutral-800'
+                            className={`w-auto px-2 h-8 rounded-full border flex items-center gap-1 justify-center text-xs transition-all ${
+                        deepMode
+                          ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-white border-transparent shadow-lg shadow-purple-500/50'
+                          : (isDark
+                              ? 'bg-white/10 backdrop-blur-xl border-white/20 text-neutral-300 hover:bg-white/20 hover:shadow-lg'
+                              : 'bg-white/80 backdrop-blur-xl border-gray-300/50 text-gray-600 hover:bg-white hover:shadow-md')
                             }`}
                             title="Toggle deep research"
                             type="button"
@@ -899,10 +958,14 @@ function ChatLayout() {
                           <button
                             onClick={() => sendMessage()}
                             disabled={sending || uploading || (!input.trim() && attachments.length === 0)}
-                            className={`w-8 h-8 rounded-full border flex items-center justify-center transition ${
-                              sending || uploading || (!input.trim() && attachments.length === 0)
-                                ? 'bg-neutral-900 border-neutral-700/60 text-neutral-500 cursor-not-allowed'
-                                : 'bg-neutral-900 border-neutral-700/60 text-neutral-200 hover:bg-neutral-800'
+                            className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all ${
+                        sending || uploading || (!input.trim() && attachments.length === 0)
+                          ? (isDark
+                              ? 'bg-white/5 backdrop-blur-xl border-white/10 text-neutral-500 cursor-not-allowed'
+                              : 'bg-gray-100/50 backdrop-blur-xl border-gray-300/50 text-gray-400 cursor-not-allowed')
+                          : (isDark
+                              ? 'bg-white/10 backdrop-blur-xl border-white/20 text-neutral-200 hover:bg-white/20 hover:shadow-lg'
+                              : 'bg-white/80 backdrop-blur-xl border-gray-300/50 text-gray-600 hover:bg-white hover:shadow-md')
                             }`}
                             title="Send"
                           >
@@ -929,10 +992,14 @@ function ChatLayout() {
                           <button
                             key={`${q.text}-${i}`}
                             onClick={() => sendMessage(q.text)}
-                            className="p-4 rounded-xl border border-neutral-800/60 bg-neutral-900/60 text-left hover:bg-neutral-900 transition"
+                            className={`p-4 rounded-xl border text-left transition-all hover:scale-[1.02] ${
+                              isDark
+                                ? 'border-white/10 bg-white/5 backdrop-blur-xl hover:bg-white/10 hover:border-white/20 hover:shadow-xl'
+                                : 'border-gray-300/50 bg-white/80 backdrop-blur-xl hover:bg-white hover:border-gray-300 hover:shadow-lg'
+                            }`}
                             title={q.reasoning || undefined}
                           >
-                            <span className="text-sm text-neutral-300">{q.text}</span>
+                            <span className={`text-sm ${isDark ? 'text-neutral-300' : 'text-gray-700'}`}>{q.text}</span>
                           </button>
                         ))}
                       </div>
@@ -962,11 +1029,15 @@ function ChatLayout() {
                       {shouldShowAIMessage && (
                         <div className="w-full">
                           <div
-                            className={`rounded-2xl px-4 py-3 border max-w-[90%] md:max-w-[85%] ${
-                              m.role === 'user'
-                                ? 'bg-[#161a1f] border-neutral-800/70 ml-auto md:mr-2'
-                                : 'bg-[#111315] border-neutral-800/70 mr-auto md:ml-2'
-                            }`}
+                             className={`rounded-2xl px-4 py-3 border max-w-[90%] md:max-w-[85%] transition-all ${
+                               m.role === 'user'
+                                 ? (isDark
+                                     ? 'bg-gradient-to-br from-blue-600/90 to-blue-700/90 backdrop-blur-xl text-white border-blue-500/30 shadow-lg shadow-blue-500/20 ml-auto md:mr-2'
+                                     : 'bg-gradient-to-br from-blue-500/95 to-blue-600/95 backdrop-blur-xl text-white border-blue-400/30 shadow-lg shadow-blue-400/20 ml-auto md:mr-2')
+                                 : (isDark
+                                     ? 'bg-white/5 backdrop-blur-2xl text-neutral-200 border-white/10 shadow-xl mr-auto md:ml-2'
+                                     : 'bg-white/90 backdrop-blur-2xl text-gray-900 border-gray-300/50 shadow-lg mr-auto md:ml-2')
+                             }`}
                           >
                             <MessageRenderer
                               content={m.content}
@@ -986,28 +1057,32 @@ function ChatLayout() {
           </div>
         </div>
 
-        {/* Bottom bar: show only after chat starts */}
+        {/* Input box - show only after chat starts */}
         {messages.length > 0 && (
-          <div className="bg-neutral-900 px-4 pb-4">
+          <div className="px-4 pb-4">
             <div className="mx-auto w-full max-w-3xl">
               <div className="mx-auto w-full max-w-2xl px-0 py-4">
-                <div className="rounded-2xl bg-[#12161a] p-2 shadow-sm">
+                <div className={`rounded-2xl p-2 shadow-2xl transition-all ${isDark ? 'bg-white/5 backdrop-blur-2xl border border-white/10' : 'bg-white/90 backdrop-blur-2xl border border-gray-300/50'}`}>
                   {/* Attachments preview (active chat, above input) */}
                   {attachments.length > 0 && (
                     <div className="w-full mb-2 flex flex-wrap gap-2">
                       {attachments.map((att) => (
-                        <div key={att.url} className="relative border border-neutral-800 rounded-lg p-1 bg-neutral-900/60">
+                        <div key={att.url} className={`relative border rounded-lg p-1 ${isDark ? 'border-neutral-800 bg-neutral-900/60' : 'border-gray-300 bg-gray-50'}`}>
                           {att.kind === 'image' ? (
                             <img src={att.url} alt={att.name} className="h-16 w-16 object-cover rounded" />
                           ) : (
-                            <div className="h-16 w-44 flex items-center gap-2 px-2 text-xs text-neutral-300">
-                              <FileText className="w-4 h-4 text-neutral-400" />
+                            <div className={`h-16 w-44 flex items-center gap-2 px-2 text-xs ${isDark ? 'text-neutral-300' : 'text-gray-600'}`}>
+                              <FileText className={`w-4 h-4 ${isDark ? 'text-neutral-400' : 'text-gray-400'}`} />
                               <span className="truncate" title={att.name}>{att.name}</span>
                             </div>
                           )}
                           <button
                             onClick={() => removeAttachment(att.url)}
-                            className="absolute -top-2 -right-2 bg-neutral-800 border border-neutral-700 rounded-full p-1 text-neutral-300 hover:bg-neutral-700"
+                            className={`absolute -top-2 -right-2 rounded-full p-1 ${
+                              isDark 
+                                ? 'bg-neutral-800 border border-neutral-700 text-neutral-300 hover:bg-neutral-700' 
+                                : 'bg-white border border-gray-300 text-gray-500 hover:bg-gray-100'
+                            }`}
                             aria-label="Remove attachment"
                           >
                             <X className="w-3 h-3" />
@@ -1017,125 +1092,147 @@ function ChatLayout() {
                     </div>
                   )}
                   <div className="flex items-end gap-2">
-                  <div className="relative">
-                    <button
-                      onClick={() => setAttachOpen((v) => !v)}
-                      className="shrink-0 w-8 h-8 rounded-full bg-neutral-900 border border-neutral-700/60 text-neutral-300 hover:bg-neutral-800 flex items-center justify-center"
-                      title="Attach image or document"
-                      type="button"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                    {attachOpen && (
-                      <div className="absolute z-10 bottom-10 left-0 w-48 rounded-lg border border-neutral-800 bg-neutral-900 shadow-lg">
-                        <button
-                          onClick={() => { setAttachOpen(false); imageInputRef.current?.click() }}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-neutral-200 hover:bg-neutral-800"
-                        >
-                          <ImageIcon className="w-4 h-4 text-neutral-400" /> Upload image
-                        </button>
-                        <button
-                          onClick={() => { setAttachOpen(false); docInputRef.current?.click() }}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-neutral-200 hover:bg-neutral-800"
-                        >
-                          <FileText className="w-4 h-4 text-neutral-400" /> Upload document
-                        </button>
-                      </div>
-                    )}
-                    <input
-                      ref={imageInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={async (e) => {
-                        const f = e.target.files?.[0]
-                        if (!f) return
-                        const info = await uploadFile(f)
-                        if (info) addAttachment(info)
-                        e.currentTarget.value = ''
-                      }}
-                    />
-                    <input
-                      ref={docInputRef}
-                      type="file"
-                      accept=".pdf,.docx,.txt,.md,.markdown,.html,.htm,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,text/html"
-                      className="hidden"
-                      onChange={async (e) => {
-                        const f = e.target.files?.[0]
-                        if (!f) return
-                        const info = await uploadFile(f)
-                        if (info) addAttachment(info)
-                        e.currentTarget.value = ''
-                      }}
-                    />
-                  </div>
-                  <textarea
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault()
-                        sendMessage()
-                      }
-                    }}
-                    onPaste={async (e) => {
-                      const items = e.clipboardData?.items
-                      if (!items) return
-                      const imgs: File[] = []
-                      for (let i = 0; i < items.length; i++) {
-                        const it = items[i]
-                        if (it.kind === 'file' && it.type.startsWith('image/')) {
-                          const file = it.getAsFile()
-                          if (file) imgs.push(file)
-                        }
-                      }
-                      if (imgs.length > 0) {
-                        e.preventDefault()
-                        for (const f of imgs) {
+                    <div className="relative">
+                      <button
+                        onClick={() => setAttachOpen((v) => !v)}
+                        className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                          isDark
+                            ? 'bg-white/10 backdrop-blur-xl border border-white/20 text-neutral-300 hover:bg-white/20 hover:shadow-lg'
+                            : 'bg-white/80 backdrop-blur-xl border border-gray-300/50 text-gray-600 hover:bg-white hover:shadow-md'
+                        }`}
+                        title="Attach image or document"
+                        type="button"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                      {attachOpen && (
+                        <div className={`absolute z-10 bottom-10 left-0 w-48 rounded-lg border shadow-2xl ${
+                          isDark ? 'border-white/10 bg-black/90 backdrop-blur-2xl' : 'border-gray-300/50 bg-white/95 backdrop-blur-2xl'
+                        }`}>
+                          <button
+                            onClick={() => { setAttachOpen(false); imageInputRef.current?.click() }}
+                            className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-all ${
+                              isDark ? 'text-neutral-200 hover:bg-white/10 backdrop-blur-xl' : 'text-gray-700 hover:bg-white/80 backdrop-blur-xl'
+                            }`}
+                          >
+                            <ImageIcon className={`w-4 h-4 ${isDark ? 'text-neutral-400' : 'text-gray-400'}`} /> Upload image
+                          </button>
+                          <button
+                            onClick={() => { setAttachOpen(false); docInputRef.current?.click() }}
+                            className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-all ${
+                              isDark ? 'text-neutral-200 hover:bg-white/10 backdrop-blur-xl' : 'text-gray-700 hover:bg-white/80 backdrop-blur-xl'
+                            }`}
+                          >
+                            <FileText className={`w-4 h-4 ${isDark ? 'text-neutral-400' : 'text-gray-400'}`} /> Upload document
+                          </button>
+                        </div>
+                      )}
+                      <input
+                        ref={imageInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0]
+                          if (!f) return
                           const info = await uploadFile(f)
                           if (info) addAttachment(info)
+                          e.currentTarget.value = ''
+                        }}
+                      />
+                      <input
+                        ref={docInputRef}
+                        type="file"
+                        accept=".pdf,.docx,.txt,.md,.markdown,.html,.htm,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,text/html"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0]
+                          if (!f) return
+                          const info = await uploadFile(f)
+                          if (info) addAttachment(info)
+                          e.currentTarget.value = ''
+                        }}
+                      />
+                    </div>
+                    <textarea
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault()
+                          sendMessage()
                         }
-                      }
-                    }}
-                    placeholder={uploading ? "Uploading…" : "Message Lotus…"}
-                    className="flex-1 bg-transparent text-neutral-200 placeholder-neutral-500 rounded-xl px-2 py-2 outline-none resize-none min-h-[44px] max-h-40"
-                    rows={1}
-                    disabled={sending || uploading}
-                  />
-                  
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => { if (!isPro) { setShowUpgrade(true); return } setDeepMode(v => !v) }}
-                      className={`w-auto px-2 h-8 rounded-full border flex items-center gap-1 justify-center text-xs transition ${
-                        deepMode
-                          ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-white border-transparent'
-                          : 'bg-neutral-900 border-neutral-700/60 text-neutral-300 hover:bg-neutral-800'
+                      }}
+                      onPaste={async (e) => {
+                        const items = e.clipboardData?.items
+                        if (!items) return
+                        const imgs: File[] = []
+                        for (let i = 0; i < items.length; i++) {
+                          const it = items[i]
+                          if (it.kind === 'file' && it.type.startsWith('image/')) {
+                            const file = it.getAsFile()
+                            if (file) imgs.push(file)
+                          }
+                        }
+                        if (imgs.length > 0) {
+                          e.preventDefault()
+                          for (const f of imgs) {
+                            const info = await uploadFile(f)
+                            if (info) addAttachment(info)
+                          }
+                        }
+                      }}
+                      placeholder={uploading ? "Uploading…" : "Message Lotus…"}
+                      className={`flex-1 bg-transparent rounded-xl px-2 py-2 outline-none resize-none min-h-[44px] max-h-40 ${
+                        isDark 
+                          ? 'text-neutral-200 placeholder-neutral-500' 
+                          : 'text-gray-900 placeholder-gray-400'
                       }`}
-                      title="Toggle deep research"
-                      type="button"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      Deep
-                    </button>
-                    <button
-                      onClick={() => sendMessage()}
-                      disabled={sending || uploading || (!input.trim() && attachments.length === 0)}
-                      className={`w-8 h-8 rounded-full border flex items-center justify-center transition ${
-                        sending || uploading || (!input.trim() && attachments.length === 0)
-                          ? 'bg-neutral-900 border-neutral-700/60 text-neutral-500 cursor-not-allowed'
-                          : 'bg-neutral-900 border-neutral-700/60 text-neutral-200 hover:bg-neutral-800'
-                      }`}
-                      title="Send"
-                    >
-                      <Send className="w-4 h-4" />
-                    </button>
-                  </div>
+                      rows={1}
+                      disabled={sending || uploading}
+                    />
+                    
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => { if (!isPro) { setShowUpgrade(true); return } setDeepMode(v => !v) }}
+                        className={`w-auto px-2 h-8 rounded-full border flex items-center gap-1 justify-center text-xs transition-all ${
+                          deepMode
+                            ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-white border-transparent shadow-lg shadow-purple-500/50'
+                            : (isDark
+                                ? 'bg-white/10 backdrop-blur-xl border-white/20 text-neutral-300 hover:bg-white/20 hover:shadow-lg'
+                                : 'bg-white/80 backdrop-blur-xl border-gray-300/50 text-gray-600 hover:bg-white hover:shadow-md')
+                        }`}
+                        title="Toggle deep research"
+                        type="button"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Deep
+                      </button>
+                      <button
+                        onClick={() => sendMessage()}
+                        disabled={sending || uploading || (!input.trim() && attachments.length === 0)}
+                        className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all ${
+                          sending || uploading || (!input.trim() && attachments.length === 0)
+                            ? (isDark
+                                ? 'bg-white/5 backdrop-blur-xl border-white/10 text-neutral-500 cursor-not-allowed'
+                                : 'bg-gray-100/50 backdrop-blur-xl border-gray-300/50 text-gray-400 cursor-not-allowed')
+                            : (isDark
+                                ? 'bg-white/10 backdrop-blur-xl border-white/20 text-neutral-200 hover:bg-white/20 hover:shadow-lg'
+                                : 'bg-white/80 backdrop-blur-xl border-gray-300/50 text-gray-600 hover:bg-white hover:shadow-md')
+                        }`}
+                        title="Send"
+                      >
+                        <Send className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         )}
+
+
       </div>
 
       {/* Removed timeline drawer; AgentActivity is always visible above messages */}

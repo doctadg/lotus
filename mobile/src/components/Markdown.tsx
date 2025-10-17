@@ -1,5 +1,8 @@
-import React from 'react'
-import { View, Text, Image, StyleSheet, Linking, Platform } from 'react-native'
+import React, { useState } from 'react'
+import { View, Text, Image, StyleSheet, Linking, Platform, TouchableOpacity, Modal, Dimensions, Alert } from 'react-native'
+import { Feather } from '@expo/vector-icons'
+import * as FileSystem from 'expo-file-system'
+import * as MediaLibrary from 'expo-media-library'
 
 interface MarkdownProps {
   content: string
@@ -12,7 +15,39 @@ interface MarkdownProps {
 // - Bold: **text**
 // - Unordered/ordered lists (basic)
 export default function Markdown({ content }: MarkdownProps) {
+  const [selectedImage, setSelectedImage] = useState<{ uri: string; alt: string } | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+
   if (!content) return null
+
+  const handleSaveImage = async (uri: string) => {
+    try {
+      setIsSaving(true)
+
+      // Request permissions
+      const { status } = await MediaLibrary.requestPermissionsAsync()
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant photo library permission to save images.')
+        return
+      }
+
+      // Download the image
+      const filename = uri.split('/').pop() || `image-${Date.now()}.jpg`
+      const downloadPath = `${FileSystem.documentDirectory}${filename}`
+
+      const { uri: localUri } = await FileSystem.downloadAsync(uri, downloadPath)
+
+      // Save to media library
+      await MediaLibrary.createAssetAsync(localUri)
+
+      Alert.alert('Success', 'Image saved to your photo library!')
+    } catch (error) {
+      console.error('Error saving image:', error)
+      Alert.alert('Error', 'Failed to save image. Please try again.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   const lines = content.split(/\r?\n/)
 
@@ -99,10 +134,18 @@ export default function Markdown({ content }: MarkdownProps) {
     if (imgMatch) {
       const [, alt, url] = imgMatch
       rendered.push(
-        <View key={`img-${i}`} style={styles.imageWrapper}>
+        <TouchableOpacity
+          key={`img-${i}`}
+          style={styles.imageWrapper}
+          onPress={() => setSelectedImage({ uri: url, alt: alt || '' })}
+          activeOpacity={0.9}
+        >
           <Image source={{ uri: url }} style={styles.image} resizeMode="cover" />
           {alt ? <Text style={styles.imageAlt}>{alt}</Text> : null}
-        </View>
+          <View style={styles.imageOverlay}>
+            <Feather name="maximize-2" size={16} color="rgba(255,255,255,0.8)" />
+          </View>
+        </TouchableOpacity>
       )
       continue
     }
@@ -133,7 +176,69 @@ export default function Markdown({ content }: MarkdownProps) {
     }
   }
 
-  return <View>{rendered}</View>
+  return (
+    <View>
+      {rendered}
+
+      {/* Full Screen Image Viewer Modal */}
+      {selectedImage && (
+        <Modal
+          visible={true}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setSelectedImage(null)}
+        >
+          <View style={styles.modalContainer}>
+            <TouchableOpacity
+              style={styles.modalBackground}
+              activeOpacity={1}
+              onPress={() => setSelectedImage(null)}
+            />
+
+            {/* Image Container */}
+            <View style={styles.modalContent}>
+              <Image
+                source={{ uri: selectedImage.uri }}
+                style={styles.fullImage}
+                resizeMode="contain"
+              />
+
+              {/* Top Bar */}
+              <View style={styles.modalTopBar}>
+                <TouchableOpacity
+                  onPress={() => setSelectedImage(null)}
+                  style={styles.modalButton}
+                >
+                  <Feather name="x" size={24} color="#fff" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Bottom Bar */}
+              <View style={styles.modalBottomBar}>
+                {selectedImage.alt && (
+                  <Text style={styles.modalImageAlt}>{selectedImage.alt}</Text>
+                )}
+                <TouchableOpacity
+                  onPress={() => handleSaveImage(selectedImage.uri)}
+                  style={styles.saveButton}
+                  disabled={isSaving}
+                >
+                  {isSaving ? (
+                    <Text style={styles.saveButtonText}>Saving...</Text>
+                  ) : (
+                    <>
+                      <Feather name="download" size={20} color="#fff" />
+                      <Text style={styles.saveButtonText}>Save Image</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+    </View>
+  )
 }
 
 const styles = StyleSheet.create({
@@ -168,7 +273,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     overflow: 'hidden',
     marginVertical: 8,
-    backgroundColor: 'rgba(255,255,255,0.05)'
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    position: 'relative',
   },
   image: {
     width: '100%',
@@ -179,8 +285,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     paddingHorizontal: 6,
     paddingVertical: 4
-  }
-  ,codeBlock: {
+  },
+  imageOverlay: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 6,
+    padding: 6,
+  },
+  codeBlock: {
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 8,
     padding: 10,
@@ -190,5 +304,67 @@ const styles = StyleSheet.create({
     fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }) as any,
     color: 'rgba(255,255,255,0.9)',
     fontSize: 12,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+  },
+  modalBackground: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  modalContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullImage: {
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height,
+  },
+  modalTopBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: 16,
+    paddingTop: Platform.OS === 'ios' ? 50 : 40,
+    backgroundColor: 'transparent',
+  },
+  modalButton: {
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 8,
+    padding: 10,
+  },
+  modalBottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+  },
+  modalImageAlt: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 14,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  saveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#6366f1',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 })

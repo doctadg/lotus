@@ -5,11 +5,12 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Check, Crown, Sparkles, Search, Zap, Shield } from 'lucide-react'
 import Link from 'next/link'
-import { SignedIn, SignedOut } from '@clerk/nextjs'
+import { SignedIn, SignedOut, PricingTable } from '@clerk/nextjs'
 
 export default function PricingPage() {
   const [isAnnual, setIsAnnual] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [useClerkBilling, setUseClerkBilling] = useState(true)
 
   const startCheckout = async () => {
     try {
@@ -69,26 +70,76 @@ export default function PricingPage() {
           <p className="text-xl dark:text-white/70 text-neutral-600 max-w-2xl mx-auto mb-10">
             Choose the plan that works best for you. Upgrade or downgrade at any time.
           </p>
-          
-          {/* Billing toggle */}
-          <div className="flex items-center justify-center gap-4 mb-12">
-            <span className={`text-sm font-medium ${!isAnnual ? 'dark:text-white text-neutral-900' : 'dark:text-white/60 text-neutral-500'}`}>
-              Monthly
-            </span>
-            <button 
-              onClick={() => setIsAnnual(!isAnnual)}
-              className="relative rounded-full w-14 h-7 dark:bg-white/10 bg-black/5 dark:border-white/20 border-black/20 transition-colors"
+
+          {/* Toggle between Clerk and custom billing */}
+          <div className="flex items-center justify-center gap-4 mb-8">
+            <button
+              onClick={() => setUseClerkBilling(true)}
+              className={`px-4 py-2 rounded-lg transition-colors ${
+                useClerkBilling
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-white/10 text-neutral-600 dark:text-white/60'
+              }`}
             >
-              <div className={`absolute top-1 w-5 h-5 rounded-full dark:bg-white bg-neutral-700 transition-all duration-300 ${isAnnual ? 'left-8' : 'left-1'}`}></div>
+              Clerk Billing
             </button>
-            <span className={`text-sm font-medium ${isAnnual ? 'dark:text-white text-neutral-900' : 'dark:text-white/60 text-neutral-500'}`}>
-              Annual <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full ml-1">Save 15%</span>
-            </span>
+            <button
+              onClick={() => setUseClerkBilling(false)}
+              className={`px-4 py-2 rounded-lg transition-colors ${
+                !useClerkBilling
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-white/10 text-neutral-600 dark:text-white/60'
+              }`}
+            >
+              Custom Plans
+            </button>
           </div>
         </div>
-        
-        {/* Plans */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+
+        {/* Clerk Billing Integration */}
+        {useClerkBilling && (
+          <div className="mb-16">
+            <SignedIn>
+              <div className="max-w-5xl mx-auto">
+                <PricingTable />
+              </div>
+            </SignedIn>
+            <SignedOut>
+              <div className="text-center">
+                <p className="text-lg dark:text-white/70 text-neutral-600 mb-6">
+                  Please sign in to view and subscribe to plans
+                </p>
+                <Link href="/register">
+                  <Button className="bg-gradient-to-r from-purple-500 to-violet-500 hover:from-purple-600 hover:to-violet-600 text-white">
+                    Get Started
+                  </Button>
+                </Link>
+              </div>
+            </SignedOut>
+          </div>
+        )}
+
+        {/* Custom Plans (Legacy) */}
+        {!useClerkBilling && (
+          <>
+            {/* Billing toggle */}
+            <div className="flex items-center justify-center gap-4 mb-12">
+              <span className={`text-sm font-medium ${!isAnnual ? 'dark:text-white text-neutral-900' : 'dark:text-white/60 text-neutral-500'}`}>
+                Monthly
+              </span>
+              <button
+                onClick={() => setIsAnnual(!isAnnual)}
+                className="relative rounded-full w-14 h-7 dark:bg-white/10 bg-black/5 dark:border-white/20 border-black/20 transition-colors"
+              >
+                <div className={`absolute top-1 w-5 h-5 rounded-full dark:bg-white bg-neutral-700 transition-all duration-300 ${isAnnual ? 'left-8' : 'left-1'}`}></div>
+              </button>
+              <span className={`text-sm font-medium ${isAnnual ? 'dark:text-white text-neutral-900' : 'dark:text-white/60 text-neutral-500'}`}>
+                Annual <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full ml-1">Save 15%</span>
+              </span>
+            </div>
+
+            {/* Plans */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
           {plans.map((plan, index) => (
             <Card 
               key={plan.name} 
@@ -151,7 +202,9 @@ export default function PricingPage() {
               </CardContent>
             </Card>
           ))}
-        </div>
+            </div>
+          </>
+        )}
         
         {/* Features comparison */}
         <div className="mt-20 max-w-4xl mx-auto">

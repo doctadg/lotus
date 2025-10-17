@@ -40,6 +40,7 @@ import { adaptiveMemory } from './adaptive-memory'
 import { getRelevantMemories, processMessageForMemories } from './memory-extractor'
 import { getUserWithMemories } from './auth'
 import { StreamingCallbackHandler, StreamingEvent } from './streaming-callback'
+import { responseCache } from './response-cache'
 
 config({ path: path.join(process.cwd(), '.env') })
 
@@ -232,222 +233,13 @@ class AIAgent {
   }
 
   private async initializeAgent() {
-    console.log('🚀 [AGENT] Initializing agent and tools...')
-    // Augment tools with multimodal/image/document tools (no change to primary chat model)
-
-    const multimodalTools: any[] = [
-      // Image edit tool using OpenRouter (image-to-image via text + source image)
-      new DynamicStructuredTool({
-        name: 'image_edit',
-        description: 'Edit or transform an existing image (e.g., isolate subject, remove background, blur, crop, recolor). Input JSON must include a clear prompt and one image via imageUrl or imageBase64. If no imageUrl/imageBase64 is provided but the prompt references "this image", "that image", or "the image", it will use the most recent image from the conversation. Returns Markdown image(s) with edited result.',
-        schema: IMAGE_EDIT_SCHEMA,
-        func: maybeTraceable(async (raw: any) => {
-          try {
-            const input = ((): any => (raw && typeof raw === 'object' && 'input' in raw) ? (raw as any).input : raw)()
-            let prompt: string = String(input?.prompt || '')
-            let imageUrl: string | undefined = input?.imageUrl
-            let imageBase64: string | undefined = input?.imageBase64
-
-            if (!prompt) {
-              return 'Image edit requires a prompt describing the desired changes.'
-            }
-
-            // If no image is provided but prompt references an image, extract from available images context
-            if (!imageUrl && !imageBase64) {
-              const promptLower = prompt.toLowerCase()
-              if (promptLower.includes('this image') || promptLower.includes('that image') ||
-                  promptLower.includes('the image') || promptLower.includes('it ') ||
-                  promptLower.includes('edit') || promptLower.includes('modify')) {
-
-                // Look for available images in the conversation context
-                // This will be provided via the enhanced content from image context manager
-                const imageRegex = /Image \d+:\s*\n- URL: (https?:\/\/[^\s\n]+)/g
-                let match
-                const availableImages: string[] = []
-
-                // Extract from the full conversation context (this is a bit hacky but works)
-                const fullContext = JSON.stringify(arguments)
-                while ((match = imageRegex.exec(fullContext)) !== null) {
-                  availableImages.push(match[1])
-                }
-
-                if (availableImages.length > 0) {
-                  imageUrl = availableImages[availableImages.length - 1] // Use most recent
-                  console.log(`🖼️ [IMAGE_EDIT] Using context image: ${imageUrl}`)
-                }
-              }
-            }
-
-            if (!imageUrl && !imageBase64) {
-              return 'Image edit requires an image. Please provide an imageUrl, imageBase64, or ensure there are recent images in the conversation to reference.'
-            }
-
-            // Enhance prompt for better editing results
-            if (prompt.length < 300) {
-              prompt = `Edit this image: ${prompt}. Maintain the overall composition and quality while making the requested changes.`
-            }
-
-            const client = getOpenRouterClient()
-            const content: any[] = [ { type: 'text', text: prompt } ]
-            if (imageUrl) content.push({ type: 'image_url', image_url: { url: imageUrl } })
-            if (imageBase64) content.push({ type: 'image_url', image_url: { url: imageBase64 } })
-
-            const result = await client.chat.completions.create({
-              model: process.env.OPENROUTER_IMAGE_EDIT_MODEL || OPENROUTER_IMAGE_MODEL,
-              messages: [ { role: 'user', content } ],
-              modalities: ['image', 'text'] as any,
-            } as any)
-
-            const message: any = result.choices?.[0]?.message
-            const images: any[] = message?.images || []
-            if (!images.length) return 'The image edit model returned no images.'
-
-            const uploaded = await Promise.all(images.map(async (img: any, i: number) => {
-              const url: string = img?.image_url?.url || ''
-              if (url.startsWith('data:')) {
-                const parsed = parseDataUrl(url)
-                if (parsed) {
-                  const ext = extensionForMime(parsed.mime)
-                  const path = `generated/edits/${Date.now()}-${i}.${ext}`
-                  try {
-                    const blobUrl = await uploadToBlob({ path, data: parsed.buffer, contentType: parsed.mime })
-                    return blobUrl
-                  } catch {
-                    return url
-                  }
-                }
-              }
-              return url
-            }))
-
-            const md = uploaded.map((u, i) => `![edited image ${i+1}](${u})`).join('\n\n')
-            return md
-          } catch (err: any) {
-            return `Image edit failed: ${err?.message || String(err)}`
-          }
-        }, addTraceMetadata({ tool_type: 'multimodal', capability: 'image_edit' }))
-      }),
-      // Image generation tool using OpenRouter image-capable model
-      new DynamicStructuredTool({
-        name: 'image_generate',
-        description: 'Generate an image when the user explicitly asks for an image or picture. Input can be plain text prompt or JSON {"prompt": string}. The prompt will automatically include context from recent conversation images when relevant. Returns a Markdown image tag with embedded base64 image data. Do not use unless the user requests an image.',
-        schema: IMAGE_GEN_SCHEMA,
-        func: maybeTraceable(async (raw: any) => {
-          try {
-            const normalized = ((): any => {
-              if (typeof raw === 'string') return { prompt: raw }
-              if (raw && typeof raw === 'object') {
-                if ('prompt' in raw) return raw as any
-                if ('input' in raw) return (raw as any).input
-              }
-              return { prompt: '' }
-            })()
-            let prompt: string = String(normalized.prompt || '')
-            if (!prompt) return 'No prompt provided for image generation.'
-
-            // Enhance prompt with conversation context for better generation
-            if (prompt.length < 500) { // Only enhance shorter prompts to avoid token limits
-              prompt = `Generate an image based on this description: ${prompt}. Create a high-quality, detailed image that matches the described style and content.`
-            }
-
-            const client = getOpenRouterClient()
-            const result = await client.chat.completions.create({
-              model: OPENROUTER_IMAGE_MODEL,
-              messages: [ { role: 'user', content: prompt } ],
-              modalities: ['image', 'text'] as any,
-            } as any)
-            const message: any = result.choices?.[0]?.message
-            const images: any[] = message?.images || []
-            if (!images.length) return 'The image model returned no images.'
-
-            const uploaded = await Promise.all(images.map(async (img: any, i: number) => {
-              const url: string = img?.image_url?.url || ''
-              if (url.startsWith('data:')) {
-                const parsed = parseDataUrl(url)
-                if (parsed) {
-                  const ext = extensionForMime(parsed.mime)
-                  const path = `generated/${Date.now()}-${i}.${ext}`
-                  try {
-                    const blobUrl = await uploadToBlob({ path, data: parsed.buffer, contentType: parsed.mime })
-                    return blobUrl
-                  } catch (e) {
-                    // Fallback to data URL if blob upload fails
-                    return url
-                  }
-                }
-              }
-              return url
-            }))
-
-            const md = uploaded.map((u, i) => `![generated image ${i+1}](${u})`).join('\n\n')
-            return md
-          } catch (err: any) {
-            return `Image generation failed: ${err?.message || String(err)}`
-          }
-        }, addTraceMetadata({ tool_type: 'multimodal', capability: 'image_generate' }))
-      }),
-
-      // Vision analysis tool (image understanding)
-      new DynamicStructuredTool({
-        name: 'vision_analyze',
-        description: 'Summarize or describe an image. Input must be JSON: {"prompt": string, "imageUrl"?: string, "imageBase64"?: string}. Include brief relevant chat context in the prompt. Use when the user asks about an image or provides an image URL/data URI. Returns a concise summary/answer.',
-        schema: VISION_INPUT_SCHEMA,
-        func: maybeTraceable(async (raw: any) => {
-          try {
-            const input = ((): any => (raw && typeof raw === 'object' && 'input' in raw) ? (raw as any).input : raw)()
-            const prompt: string = input?.prompt ? String(input.prompt) : ''
-            const imageUrl: string | undefined = input?.imageUrl
-            const imageBase64: string | undefined = input?.imageBase64
-            if (!prompt && !imageUrl && !imageBase64) return 'No prompt or image provided.'
-            const client = getOpenRouterClient()
-            const content: any[] = []
-            if (prompt) content.push({ type: 'text', text: prompt })
-            if (imageUrl) content.push({ type: 'image_url', image_url: { url: imageUrl } })
-            if (imageBase64) content.push({ type: 'image_url', image_url: { url: imageBase64 } })
-            const completion = await client.chat.completions.create({
-              model: process.env.OPENROUTER_VISION_MODEL || OPENROUTER_IMAGE_MODEL,
-              messages: [ { role: 'user', content } ],
-            })
-            const text = completion.choices?.[0]?.message?.content || 'No description available.'
-            return text
-          } catch (err: any) {
-            return `Vision analysis failed: ${err?.message || String(err)}`
-          }
-        }, addTraceMetadata({ tool_type: 'multimodal', capability: 'vision_analyze' }))
-      }),
-
-      // Document summarize tool (PDF/DOCX/TXT/MD/HTML)
-      new DynamicStructuredTool({
-        name: 'document_summarize',
-        description: 'Summarize a document from a URL. Input must be JSON: {"url": string, "instructions"?: string}. Include any brief context/instructions relevant from the chat. Supports PDF, DOCX, TXT, MD, HTML. Returns a concise summary.',
-        schema: DOC_INPUT_SCHEMA,
-        func: maybeTraceable(async (raw: any) => {
-          try {
-            const input = ((): any => (raw && typeof raw === 'object' && 'input' in raw) ? (raw as any).input : raw)()
-            const url: string = input?.url ? String(input.url) : ''
-            const instructions: string = input?.instructions ? String(input.instructions) : 'Provide a concise helpful summary.'
-            if (!url) return 'No URL provided.'
-            const parsed = await parseFromUrl(url)
-            const text = (parsed.text || '').slice(0, 120_000) // Simple safety cap
-            const client = getOpenRouterClient()
-            const completion = await client.chat.completions.create({
-              model: process.env.OPENROUTER_VISION_MODEL || OPENROUTER_IMAGE_MODEL,
-              messages: [
-                { role: 'system', content: 'You are a helpful assistant summarizing documents. Be accurate and concise.' },
-                { role: 'user', content: [ { type: 'text', text: `${instructions}\n\nDocument type: ${parsed.type}\n\nContent:\n${text}` } ] as any },
-              ],
-            })
-            const summary = completion.choices?.[0]?.message?.content || 'No summary available.'
-            return summary
-          } catch (err: any) {
-            return `Document summarization failed: ${err?.message || String(err)}`
-          }
-        }, addTraceMetadata({ tool_type: 'multimodal', capability: 'document_summarize' }))
-      }),
-    ]
-
-    // Extend the default tools set (keeps primary chat model intact)
-    this.tools = [webSearchTool, comprehensiveSearchTool, ...multimodalTools]
+    console.log('🚀 [AGENT] Initializing optimized agent...')
+    
+    // Lazy load multimodal tools only when needed
+    const coreTools = [webSearchTool, comprehensiveSearchTool]
+    
+    // For faster initialization, start with core tools only
+    this.tools = coreTools
     const prompt = ChatPromptTemplate.fromMessages([
       ['system', agentConfig.systemPrompt],
       new MessagesPlaceholder('chat_history'),
@@ -464,8 +256,8 @@ class AIAgent {
     this.agent = new AgentExecutor({
       agent,
       tools: this.tools,
-      verbose: process.env.NODE_ENV === 'development',
-      maxIterations: Number(process.env.AGENT_MAX_ITERATIONS || 6)
+      verbose: false, // Disabled for speed
+      maxIterations: Math.min(Number(process.env.AGENT_MAX_ITERATIONS || 6), 4) // Reduced max iterations
     })
 
     // Create streaming agent with callback handler
@@ -478,38 +270,54 @@ class AIAgent {
     this.streamingAgent = new AgentExecutor({
       agent: streamingAgent,
       tools: this.tools,
-      verbose: process.env.NODE_ENV === 'development',
+      verbose: false, // Disabled for speed
       returnIntermediateSteps: true,
-      maxIterations: Number(process.env.AGENT_MAX_ITERATIONS || 6)
+      maxIterations: Math.min(Number(process.env.AGENT_MAX_ITERATIONS || 6), 4) // Reduced max iterations
     })
   }
 
-  // Fast-path detection for simple queries
+  // Fast-path detection for simple queries - expanded for more coverage
   private isSimpleQuery(query: string): { isSimple: boolean; type: string; response?: string } {
     const trimmed = query.trim().toLowerCase()
 
-    // Greetings
-    if (/^(hi|hello|hey|yo|sup|howdy|greetings?)[\.!?\s]*$/.test(trimmed)) {
+    // Greetings - expanded patterns
+    if (/^(hi|hello|hey|yo|sup|howdy|greetings?)[\.!?\s]*$/i.test(trimmed)) {
       return { isSimple: true, type: 'greeting', response: 'Hello! How can I help you today?' }
     }
-    if (/^(good\s+(morning|afternoon|evening|day|night))[\.!?\s]*$/.test(trimmed)) {
+    if (/^(good\s+(morning|afternoon|evening|day|night))[\.!?\s]*$/i.test(trimmed)) {
       return { isSimple: true, type: 'greeting', response: 'Good day! What can I assist you with?' }
     }
+    if (/^(what'?s\s+up|whats?\s+up|wassup|wazzup)[\.!?\s]*$/i.test(trimmed)) {
+      return { isSimple: true, type: 'greeting', response: 'Hey! What can I help you with?' }
+    }
+    if (/^(how'?s\s+it\s+going|how\s+are\s+you)[\.!?\s]*$/i.test(trimmed)) {
+      return { isSimple: true, type: 'greeting', response: "I'm doing well, thanks for asking! How can I assist you?" }
+    }
 
-    // Simple math
-    if (/^[\d\s\+\-\*\/\(\)\^]+$/.test(trimmed)) {
+    // Simple math - expanded patterns
+    if (/^[\d\s\+\-\*\/\(\)\^\%]+$/.test(trimmed)) {
       try {
         // Safe math evaluation for simple expressions
-        const result = Function('"use strict"; return (' + trimmed.replace(/\^/g, '**') + ')')();
+        const result = Function('"use strict"; return (' + trimmed.replace(/\^/g, '**').replace(/\%/g, '/100') + ')')();
         return { isSimple: true, type: 'math', response: String(result) }
       } catch {
         return { isSimple: false, type: 'unknown' }
       }
     }
 
-    // Simple yes/no questions about basic facts
-    if (/^(is|are|was|were|does|do|did|can|could|will|would|should)\s+\w+\s+\w+[\.?\s]*$/.test(trimmed) && trimmed.length < 50) {
-      return { isSimple: false, type: 'factual' } // Let agent handle these but flag as simple
+    // Simple factual questions that don't need search/memory
+    if (/^(what|who|when|where|why|how)\s+(is|are|was|were)\s+\w+(\s+\w+)?[\.?\s]*$/i.test(trimmed) && trimmed.length < 40) {
+      return { isSimple: false, type: 'factual' }
+    }
+
+    // Simple requests for basic information
+    if (/^(tell|give|show)\s+me\s+(about|more)\s+/i.test(trimmed) && trimmed.length < 50) {
+      return { isSimple: false, type: 'information' }
+    }
+
+    // Time/date questions
+    if (/\b(time|date|day|month|year|now|current)\b/i.test(trimmed) && trimmed.length < 30) {
+      return { isSimple: false, type: 'temporal' }
     }
 
     return { isSimple: false, type: 'unknown' }
@@ -524,10 +332,27 @@ class AIAgent {
     content: string
     metadata?: Record<string, unknown>
   }> {
-    // Check for fast-path simple queries first
+    // Check response cache first for instant responses
+    const cachedResponse = responseCache.get(message)
+    if (cachedResponse) {
+      console.log(`⚡ [AGENT] Cache hit for query: ${message.substring(0, 30)}...`)
+      return {
+        content: cachedResponse.response,
+        metadata: {
+          cache_hit: true,
+          query_type: cachedResponse.queryType,
+          execution_time_ms: 0,
+          hit_count: cachedResponse.hitCount
+        }
+      }
+    }
+
+    // Check for fast-path simple queries
     const simpleCheck = this.isSimpleQuery(message)
     if (simpleCheck.isSimple && simpleCheck.response) {
       console.log(`⚡ [AGENT] Fast-path response for ${simpleCheck.type} query`)
+      // Cache the simple response
+      responseCache.set(message, simpleCheck.response, simpleCheck.type)
       return {
         content: simpleCheck.response,
         metadata: {
@@ -546,84 +371,70 @@ class AIAgent {
     }
 
     try {
-      // Parallel operations: analyze query while retrieving memories
-      const parallelStartTime = Date.now()
+      // Optimized: Skip complex parallel operations for simple queries
       let userMemoriesContext = ''
       let memoryResult: any = null
       
-      // Skip memory retrieval for simple/fast queries
+      // Skip memory retrieval for simple/fast queries - expanded conditions
       const skipMemory = simpleCheck.type === 'greeting' || simpleCheck.type === 'math' ||
-                         simpleCheck.type === 'factual' || !userId
+                         simpleCheck.type === 'factual' || simpleCheck.type === 'temporal' ||
+                         simpleCheck.type === 'information' || !userId
 
-      // Run query analysis and memory retrieval in parallel if userId is provided
-      const operations = []
-
-      if (userId && !skipMemory) {
-        console.log(`🧠 [TRACE] Starting parallel memory retrieval for user: ${userId}`)
-      } else if (skipMemory && userId) {
+      if (skipMemory && userId) {
         console.log(`⚡ [TRACE] Skipping memory retrieval for ${simpleCheck.type} query`)
       }
 
+      // Only retrieve memories for complex queries that need personalization - more aggressive skipping
       if (userId && !skipMemory) {
-        operations.push(
-          adaptiveMemory.retrieveAdaptiveMemories(userId, message)
-            .then(result => ({ type: 'memory', data: result }))
-            .catch(error => {
-              console.error('❌ [TRACE] Memory retrieval error:', error)
-              return { type: 'memory', data: null, error }
-            })
-        )
-      }
-      
-      // Execute parallel operations
-      const results = await Promise.all(operations)
-      const parallelDuration = Date.now() - parallelStartTime
-      
-      // Process memory results
-      const memoryOperation = results.find(r => r.type === 'memory')
-      if (memoryOperation?.data) {
-        memoryResult = memoryOperation.data
-        console.log(`📚 [TRACE] Adaptive memory retrieval completed:`, {
-          memoryCount: memoryResult.memories.length,
-          strategy: memoryResult.strategy.reasoning,
-          retrievalTime: memoryResult.performance.retrievalTime,
-          totalAvailable: memoryResult.metadata.totalAvailableMemories
-        })
+        const memoryStartTime = Date.now()
         
-        // Only add personalization context if we have meaningful memories
-        if (memoryResult.memories.length > 0) {
-          userMemoriesContext = '\n\n=== USER CONTEXT ===\n'
+        try {
+          console.log(`🧠 [TRACE] Starting selective memory retrieval for user: ${userId}`)
           
-          // Add only highly relevant memories
-          userMemoriesContext += `Relevant Information:\n`
-          memoryResult.memories.forEach((memory: any) => {
-            // Skip if value looks like a conversation exchange
-            if (memory.value && (
-              memory.value.includes('User:') || 
-              memory.value.includes('Assistant:') ||
-              memory.value.includes('\nUser:') ||
-              memory.value.includes('\nAssistant:')
-            )) {
-              console.log('🚫 [AGENT] Skipping conversation-like memory in context')
-              return
-            }
+          // Quick check: if message is very short, skip memories
+          if (message.trim().length < 20) {
+            console.log(`⚡ [TRACE] Skipping memories for very short message`)
+          } else {
+            memoryResult = await adaptiveMemory.retrieveAdaptiveMemories(userId, message)
             
-            // Only include high-relevance memories
-            if (!memory.relevanceScore || memory.relevanceScore > 0.7) {
-              userMemoriesContext += `- ${memory.key}: ${memory.value}\n`
+            console.log(`📚 [TRACE] Adaptive memory retrieval completed:`, {
+              memoryCount: memoryResult.memories.length,
+              strategy: memoryResult.strategy.reasoning,
+              retrievalTime: memoryResult.performance.retrievalTime,
+              totalAvailable: memoryResult.metadata.totalAvailableMemories
+            })
+            
+            // Only add personalization context if we have highly relevant memories
+            if (memoryResult.memories.length > 0) {
+              const highlyRelevantMemories = memoryResult.memories.filter((memory: any) => 
+                (memory.relevanceScore || 0) > 0.85 && 
+                memory.value && 
+                !memory.value.includes('User:') && 
+                !memory.value.includes('Assistant:') &&
+                !memory.value.includes('\nUser:') &&
+                !memory.value.includes('\nAssistant:')
+              ).slice(0, 2) // Max 2 memories for speed
+              
+              if (highlyRelevantMemories.length > 0) {
+                userMemoriesContext = '\n\n=== USER CONTEXT ===\n'
+                userMemoriesContext += `Relevant Information:\n`
+                highlyRelevantMemories.forEach((memory: any) => {
+                  userMemoriesContext += `- ${memory.key}: ${memory.value}\n`
+                })
+                userMemoriesContext += '\nUse this context naturally where relevant.\n=== END CONTEXT ===\n\n'
+              } else if (memoryResult.context?.communicationStyle) {
+                userMemoriesContext = `\n[User prefers ${memoryResult.context.communicationStyle} communication]\n`
+              }
             }
-          })
-          
-          userMemoriesContext += '\nUse this context naturally where relevant.\n=== END CONTEXT ===\n\n'
-        } else if (memoryResult.context?.communicationStyle) {
-          // For greetings or minimal personalization, only add style preference
-          userMemoriesContext = `\n[User prefers ${memoryResult.context.communicationStyle} communication]\n`
+          }
+        } catch (error) {
+          console.error('❌ [TRACE] Memory retrieval error (continuing):', error)
+          // Continue without memories rather than failing
         }
-      } else if (userId) {
-        console.log(`📭 [TRACE] No memories retrieved or retrieval failed`)
+        
+        const memoryDuration = Date.now() - memoryStartTime
+        console.log(`⚡ [TRACE] Memory operations completed in ${memoryDuration}ms`)
       }
-      
-      console.log(`⚡ [TRACE] Parallel operations completed in ${parallelDuration}ms`)
 
       const formattedHistory = this.trimHistory(chatHistory, agentConfig.conversationSettings.maxHistoryLength, 2000)
 
@@ -690,6 +501,12 @@ class AIAgent {
         }
       }
 
+      // Cache successful responses for future use
+      if (result.output && result.output.length > 10 && result.output.length < 1000 && 
+          !result.output.includes('error') && !result.output.includes('apologize')) {
+        responseCache.set(message, result.output, simpleCheck.type)
+      }
+
       // Process message for memories in the background if userId is provided
       if (userId) {
         console.log(`💾 [TRACE] Starting background memory processing for user: ${userId}`)
@@ -717,10 +534,37 @@ class AIAgent {
     try {
       console.log('🤖 [AGENT] Starting streamMessage for query:', message.substring(0, 100))
 
-      // Check for fast-path simple queries first
+      // Check response cache first for instant streaming
+      const cachedResponse = responseCache.get(message)
+      if (cachedResponse) {
+        console.log(`⚡ [AGENT] Cache hit stream for query: ${message.substring(0, 30)}...`)
+        yield {
+          type: 'content',
+          content: cachedResponse.response,
+          metadata: {
+            cache_hit: true,
+            query_type: cachedResponse.queryType,
+            hit_count: cachedResponse.hitCount
+          }
+        }
+        yield {
+          type: 'complete',
+          metadata: {
+            cache_hit: true,
+            query_type: cachedResponse.queryType,
+            execution_time_ms: 0
+          }
+        }
+        return
+      }
+
+      // Check for fast-path simple queries
       const simpleCheck = this.isSimpleQuery(message)
       if (simpleCheck.isSimple && simpleCheck.response) {
         console.log(`⚡ [AGENT] Fast-path streaming response for ${simpleCheck.type} query`)
+        // Cache the simple response
+        responseCache.set(message, simpleCheck.response, simpleCheck.type)
+        
         // Stream the response immediately without any processing
         yield {
           type: 'content',

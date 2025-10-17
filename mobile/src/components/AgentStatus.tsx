@@ -48,19 +48,20 @@ interface ActivityItem {
   resultSize?: number
 }
 
+// Simplified, more subtle color palette
 const STEP_COLORS = {
-  thinking_stream: '#94a3b8',
-  memory_access: '#a78bfa',
-  context_analysis: '#86efac',
-  search_planning: '#fbbf24',
-  search_result_analysis: '#67e8f9',
-  context_synthesis: '#c084fc',
-  response_planning: '#86efac',
-  web_search: '#67e8f9',
-  comprehensive_search: '#c084fc',
-  searchhive: '#67e8f9',
-  website_scraping: '#c084fc',
-  default: '#94a3b8'
+  thinking_stream: '#8b9dc3',
+  memory_access: '#8b9dc3',
+  context_analysis: '#8b9dc3',
+  search_planning: '#8b9dc3',
+  search_result_analysis: '#8b9dc3',
+  context_synthesis: '#8b9dc3',
+  response_planning: '#8b9dc3',
+  web_search: '#8b9dc3',
+  comprehensive_search: '#8b9dc3',
+  searchhive: '#8b9dc3',
+  website_scraping: '#8b9dc3',
+  default: '#8b9dc3'
 }
 
 export default function AgentStatus({ thinkingSteps, searchSteps, tools, isActive }: AgentStatusProps) {
@@ -168,8 +169,7 @@ export default function AgentStatus({ thinkingSteps, searchSteps, tools, isActiv
               styles.eventBubble,
               {
                 opacity: fadeAnim,
-                backgroundColor: `${item.color}15`,
-                borderColor: `${item.color}30`,
+                backgroundColor: `${item.color}0D`,
               }
             ]}
           >
@@ -200,10 +200,10 @@ export default function AgentStatus({ thinkingSteps, searchSteps, tools, isActiv
       
       {/* Processing indicator when no specific events */}
       {isActive && visibleItems.every(item => item.status === 'complete') && (
-        <View style={[styles.eventBubble, { backgroundColor: '#94a3b815', borderColor: '#94a3b830' }]}>
+        <View style={[styles.eventBubble, { backgroundColor: '#8b9dc30D' }]}>
           <View style={styles.eventContent}>
-            <Text style={[styles.eventLabel, { color: '#94a3b8' }]}>Processing</Text>
-            <Feather name="loader" size={10} color="#94a3b8" style={styles.spinner} />
+            <Text style={[styles.eventLabel, { color: '#8b9dc3' }]}>Processing</Text>
+            <Feather name="loader" size={10} color="#8b9dc3" style={styles.spinner} />
           </View>
           <Text style={styles.eventText}>Analyzing...</Text>
         </View>
@@ -215,42 +215,43 @@ export default function AgentStatus({ thinkingSteps, searchSteps, tools, isActiv
 const styles = StyleSheet.create({
   container: {
     alignItems: 'flex-start',
-    paddingVertical: 12,
+    paddingVertical: 8,
     paddingHorizontal: 4,
-    marginBottom: 8,
+    marginBottom: 4,
   },
   eventBubble: {
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 6,
-    maxWidth: '80%',
-    minWidth: 120,
+    borderRadius: 8,
+    borderWidth: 0,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 4,
+    maxWidth: '75%',
+    minWidth: 100,
     alignSelf: 'flex-start',
   },
   eventContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 2,
+    marginBottom: 1,
   },
   eventLabel: {
-    fontSize: 10,
-    fontWeight: '600',
+    fontSize: 9,
+    fontWeight: '500',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
     flex: 1,
+    opacity: 0.9,
   },
   eventText: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.8)',
-    lineHeight: 14,
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.7)',
+    lineHeight: 13,
   },
   eventMeta: {
-    fontSize: 9,
-    color: 'rgba(255, 255, 255, 0.4)',
-    marginTop: 2,
+    fontSize: 8,
+    color: 'rgba(255, 255, 255, 0.35)',
+    marginTop: 1,
   },
   spinner: {
     marginLeft: 4,

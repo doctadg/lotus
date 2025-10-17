@@ -50,20 +50,29 @@ export class AdaptiveMemoryService {
     return greetingPatterns.some(pattern => pattern.test(query.trim()))
   }
   
-  // Helper to check if we should skip memory retrieval entirely
+  // Helper to check if we should skip memory retrieval entirely - expanded for speed
   private shouldSkipMemories(query: string, queryType?: string): boolean {
     // Skip for greetings
     if (this.isGreeting(query) || queryType === 'greeting') {
       return true
     }
     
-    // Skip for pure factual/definitional queries
+    // Skip for very short queries (likely simple)
+    if (query.trim().length < 15) {
+      return true
+    }
+    
+    // Skip for pure factual/definitional queries - expanded patterns
     const skipPatterns = [
       /^(what is|define|explain)\s+[\w\s]+$/i,     // Definitions
-      /^(calculate|compute|solve|what'?s)\s+[\d\s\+\-\*\/\(\)]+/i,  // Math
+      /^(calculate|compute|solve|what'?s)\s+[\d\s\+\-\*\/\(\)\%]+$/i,  // Math
       /^(how to|tutorial for|guide to)\s+[\w\s]+$/i,  // Generic how-tos
       /\b(documentation|docs|syntax|api reference)\b/i,  // Technical docs
-      /^(tell me about|describe)\s+(the\s+)?(concept|theory|principle)/i  // Concepts
+      /^(tell me about|describe)\s+(the\s+)?(concept|theory|principle)/i,  // Concepts
+      /^(who|when|where|why)\s+(is|are|was|were)\s+/i,  // Simple factual questions
+      /^(list|show|give)\s+me\s+/i,  // Simple list requests
+      /\b(example|examples?)\b/i,  // Example requests
+      /^(compare|difference)\s+/i  // Comparisons
     ]
     return skipPatterns.some(pattern => pattern.test(query))
   }
