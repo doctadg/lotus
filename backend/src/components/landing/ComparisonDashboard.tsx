@@ -54,9 +54,9 @@ export default function ComparisonDashboard() {
   const [activeResponse, setActiveResponse] = useState<"generic" | "mror">("generic")
 
   return (
-    <div className="w-full max-w-5xl mx-auto">
+    <div className="w-full max-w-5xl mx-auto px-4 sm:px-0">
       {/* Scenario Selector */}
-      <div className="flex flex-wrap gap-3 mb-8 justify-center">
+      <div className="flex flex-wrap gap-2 sm:gap-3 mb-6 sm:mb-8 justify-center">
         {scenarios.map((scenario) => {
           const Icon = scenario.icon
           return (
@@ -64,8 +64,8 @@ export default function ComparisonDashboard() {
               key={scenario.id}
               onClick={() => setSelectedScenario(scenario)}
               className={`
-                flex items-center gap-2 px-4 py-2.5 rounded-full
-                text-sm font-medium transition-all duration-300
+                flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full
+                text-xs sm:text-sm font-medium transition-all duration-300
                 ${
                   selectedScenario.id === scenario.id
                     ? "bg-white/10 text-white border border-white/30 shadow-lg shadow-white/10"
@@ -73,8 +73,9 @@ export default function ComparisonDashboard() {
                 }
               `}
             >
-              <Icon className="w-4 h-4" />
-              {scenario.title}
+              <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden xs:inline">{scenario.title}</span>
+              <span className="xs:hidden">{scenario.title.split(' ')[0]}</span>
             </button>
           )
         })}
@@ -83,32 +84,32 @@ export default function ComparisonDashboard() {
       {/* Dashboard Card */}
       <div className="relative">
         {/* Glass Background */}
-        <div className="absolute inset-0 bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10"></div>
+        <div className="absolute inset-0 bg-white/5 backdrop-blur-xl rounded-2xl sm:rounded-3xl border border-white/10"></div>
 
         {/* Content */}
-        <div className="relative p-8">
+        <div className="relative p-4 sm:p-6 md:p-8">
           {/* Question */}
-          <div className="mb-6">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-2 h-2 bg-white/60 rounded-full"></div>
-              <span className="text-white/60 text-sm font-medium uppercase tracking-wide">
+          <div className="mb-4 sm:mb-6">
+            <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+              <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white/60 rounded-full"></div>
+              <span className="text-white/60 text-xs sm:text-sm font-medium uppercase tracking-wide">
                 User Question
               </span>
             </div>
-            <h3 className="text-2xl font-semibold text-white">{selectedScenario.question}</h3>
+            <h3 className="text-lg sm:text-xl md:text-2xl font-semibold text-white">{selectedScenario.question}</h3>
           </div>
 
           {/* Context Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border border-indigo-400/30 mb-8">
-            <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-pulse"></div>
-            <span className="text-indigo-200 text-sm font-medium">{selectedScenario.context}</span>
+          <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border border-indigo-400/30 mb-6 sm:mb-8">
+            <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-indigo-400 rounded-full animate-pulse"></div>
+            <span className="text-indigo-200 text-xs sm:text-sm font-medium">{selectedScenario.context}</span>
           </div>
 
           {/* Toggle */}
-          <div className="mb-6">
-            <div className="relative inline-flex p-1 bg-black/40 rounded-full border border-white/10">
+          <div className="mb-4 sm:mb-6 overflow-x-auto">
+            <div className="relative inline-flex p-0.5 sm:p-1 bg-black/40 rounded-full border border-white/10 min-w-max">
               <motion.div
-                className="absolute inset-y-1 w-1/2 bg-gradient-to-r from-gray-600 to-gray-700 rounded-full"
+                className="absolute inset-y-0.5 sm:inset-y-1 w-1/2 bg-gradient-to-r from-gray-600 to-gray-700 rounded-full"
                 animate={{
                   x: activeResponse === "generic" ? 0 : "100%",
                 }}
@@ -117,7 +118,7 @@ export default function ComparisonDashboard() {
               <button
                 onClick={() => setActiveResponse("generic")}
                 className={`
-                  relative z-10 px-6 py-2.5 text-sm font-medium rounded-full transition-colors
+                  relative z-10 px-4 sm:px-6 py-2 sm:py-2.5 text-xs sm:text-sm font-medium rounded-full transition-colors whitespace-nowrap
                   ${activeResponse === "generic" ? "text-white" : "text-white/50"}
                 `}
               >
@@ -126,7 +127,7 @@ export default function ComparisonDashboard() {
               <button
                 onClick={() => setActiveResponse("mror")}
                 className={`
-                  relative z-10 px-6 py-2.5 text-sm font-medium rounded-full transition-colors
+                  relative z-10 px-4 sm:px-6 py-2 sm:py-2.5 text-xs sm:text-sm font-medium rounded-full transition-colors whitespace-nowrap
                   ${activeResponse === "mror" ? "text-white" : "text-white/50"}
                 `}
               >
@@ -146,7 +147,7 @@ export default function ComparisonDashboard() {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3 }}
               className={`
-                p-6 rounded-2xl border min-h-[180px]
+                p-4 sm:p-6 rounded-xl sm:rounded-2xl border min-h-[140px] sm:min-h-[180px]
                 ${
                   activeResponse === "generic"
                     ? "bg-white/5 border-white/10"
@@ -154,7 +155,7 @@ export default function ComparisonDashboard() {
                 }
               `}
             >
-              <p className="text-white/90 text-lg leading-relaxed">
+              <p className="text-white/90 text-sm sm:text-base md:text-lg leading-relaxed">
                 {activeResponse === "generic"
                   ? selectedScenario.genericResponse
                   : selectedScenario.mrorResponse}
@@ -167,18 +168,18 @@ export default function ComparisonDashboard() {
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex flex-wrap gap-4 mt-6"
+              className="flex flex-wrap gap-3 sm:gap-4 mt-4 sm:mt-6"
             >
               {[
                 { label: "Context-aware", icon: "✓" },
                 { label: "Personalized", icon: "✓" },
                 { label: "Actionable", icon: "✓" },
               ].map((stat, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold">
+                <div key={index} className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-[10px] sm:text-xs font-bold">
                     {stat.icon}
                   </div>
-                  <span className="text-white/70 text-sm font-medium">{stat.label}</span>
+                  <span className="text-white/70 text-xs sm:text-sm font-medium">{stat.label}</span>
                 </div>
               ))}
             </motion.div>

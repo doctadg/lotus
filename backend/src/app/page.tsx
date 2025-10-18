@@ -33,66 +33,66 @@ export default function LandingPage() {
       <DynamicNavbar />
 
       {/* Hero Section - Focused on Adaptability */}
-      <section className="relative min-h-screen flex items-center justify-center">
+      <section className="relative min-h-screen flex items-center justify-center pt-20 sm:pt-24 pb-12 sm:pb-16">
         <GrayGlowBackground intensity={0.6} />
         <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black to-transparent z-0"></div>
 
-        <div className="relative z-20 container mx-auto px-4 lg:px-8 grid lg:grid-cols-[1.2fr_0.8fr] gap-8 lg:gap-16 items-center">
+        <div className="relative z-20 container mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-[1.2fr_0.8fr] gap-8 sm:gap-10 lg:gap-16 items-center">
           {/* Left Column - Evolution-Focused Hero */}
           <FadeInView direction="up" className="max-w-5xl mx-auto lg:mx-0 text-center lg:text-left">
             <motion.div
-              className="mb-14"
+              className="mb-8 sm:mb-12 md:mb-14"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 1 }}
             >
-              <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-white leading-tight mb-8">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white leading-tight mb-4 sm:mb-6 md:mb-8">
                 Your AI That <span className="gray-gradient-text font-black">Evolves</span> With You
               </h1>
-              <p className="text-2xl md:text-3xl text-gray-100 font-medium leading-relaxed max-w-3xl">
+              <p className="text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl text-gray-100 font-medium leading-relaxed max-w-3xl mx-auto lg:mx-0">
                 Unlike generic chatbots, MROR learns your style, remembers your context, and
                 <span className="text-white font-bold"> adapts to become uniquely yours</span>
               </p>
             </motion.div>
 
             {/* Value Props - Focused on Capabilities */}
-            <StaggerChildren className="space-y-8 mb-12" stagger={0.15}>
-              <div className="space-y-4">
-                <motion.div className="flex items-start space-x-3">
-                  <Brain className="w-5 h-5 text-white mt-1 flex-shrink-0" />
-                  <p className="text-lg text-white/90 leading-relaxed">
+            <StaggerChildren className="space-y-5 sm:space-y-6 md:space-y-8 mb-8 sm:mb-10 md:mb-12" stagger={0.15}>
+              <div className="space-y-3 sm:space-y-4">
+                <motion.div className="flex items-start space-x-2 sm:space-x-3">
+                  <Brain className="w-4 h-4 sm:w-5 sm:h-5 text-white mt-1 flex-shrink-0" />
+                  <p className="text-sm sm:text-base md:text-lg text-white/90 leading-relaxed">
                     <span className="font-semibold">Persistent Memory</span> - Builds understanding across all conversations
                   </p>
                 </motion.div>
-                <motion.div className="flex items-start space-x-3">
-                  <Sparkles className="w-5 h-5 text-white mt-1 flex-shrink-0" />
-                  <p className="text-lg text-white/90 leading-relaxed">
+                <motion.div className="flex items-start space-x-2 sm:space-x-3">
+                  <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-white mt-1 flex-shrink-0" />
+                  <p className="text-sm sm:text-base md:text-lg text-white/90 leading-relaxed">
                     <span className="font-semibold">Adaptive Intelligence</span> - Learns your preferences and working style
                   </p>
                 </motion.div>
-                <motion.div className="flex items-start space-x-3">
-                  <Zap className="w-5 h-5 text-white mt-1 flex-shrink-0" />
-                  <p className="text-lg text-white/90 leading-relaxed">
+                <motion.div className="flex items-start space-x-2 sm:space-x-3">
+                  <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-white mt-1 flex-shrink-0" />
+                  <p className="text-sm sm:text-base md:text-lg text-white/90 leading-relaxed">
                     <span className="font-semibold">Multi-Modal Mastery</span> - Text, images, code, research - all in one place
                   </p>
                 </motion.div>
-                <motion.div className="flex items-start space-x-3">
-                  <Shield className="w-5 h-5 text-white mt-1 flex-shrink-0" />
-                  <p className="text-lg text-white/90 leading-relaxed">
+                <motion.div className="flex items-start space-x-2 sm:space-x-3">
+                  <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-white mt-1 flex-shrink-0" />
+                  <p className="text-sm sm:text-base md:text-lg text-white/90 leading-relaxed">
                     <span className="font-semibold">Privacy First</span> - Your data stays yours, always
                   </p>
                 </motion.div>
               </div>
 
-              <p className="text-xl text-white/85 leading-relaxed max-w-2xl font-medium">
+              <p className="text-base sm:text-lg md:text-xl text-white/85 leading-relaxed max-w-2xl mx-auto lg:mx-0 font-medium">
                 Experience AI that doesn't just respond - it <span className="text-white font-bold">understands, learns, and grows</span> with every interaction.
               </p>
 
               <FadeInView delay={0.5}>
-                <div className="premium-card px-6 py-4 inline-block">
-                  <p className="text-white text-base font-semibold flex items-center space-x-3">
-                    <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-                    <span>Join <span className="text-green-300 font-bold text-lg">10,000+ professionals</span> using MROR</span>
+                <div className="premium-card px-4 sm:px-5 md:px-6 py-3 sm:py-4 inline-block">
+                  <p className="text-white text-sm sm:text-base font-semibold flex items-center space-x-2 sm:space-x-3">
+                    <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full animate-pulse"></span>
+                    <span>Join <span className="text-green-300 font-bold text-base sm:text-lg">10,000+ professionals</span> using MROR</span>
                   </p>
                 </div>
               </FadeInView>
@@ -100,17 +100,17 @@ export default function LandingPage() {
 
             {/* CTA */}
             <FadeInView direction="up" delay={0.8}>
-              <div className="space-y-6">
-                <div className="space-y-3">
+              <div className="space-y-4 sm:space-y-5 md:space-y-6">
+                <div className="space-y-2 sm:space-y-3">
                   <SignedOut>
                     <Link href="/register">
                       <HoverCard scale={1.05} y={-2}>
                         <Button
                           size="lg"
-                          className="premium-button text-xl font-bold shadow-2xl"
+                          className="premium-button text-base sm:text-lg md:text-xl font-bold shadow-2xl w-full sm:w-auto"
                         >
                           Start Your AI Evolution
-                          <ArrowRight className="ml-3 h-6 w-6" />
+                          <ArrowRight className="ml-2 sm:ml-3 h-5 w-5 sm:h-6 sm:w-6" />
                         </Button>
                       </HoverCard>
                     </Link>
@@ -120,32 +120,33 @@ export default function LandingPage() {
                       <HoverCard scale={1.05} y={-2}>
                         <Button
                           size="lg"
-                          className="premium-button text-xl font-bold shadow-2xl"
+                          className="premium-button text-base sm:text-lg md:text-xl font-bold shadow-2xl w-full sm:w-auto"
                         >
                           Open MROR
-                          <ArrowRight className="ml-3 h-6 w-6" />
+                          <ArrowRight className="ml-2 sm:ml-3 h-5 w-5 sm:h-6 sm:w-6" />
                         </Button>
                       </HoverCard>
                     </Link>
                   </SignedIn>
 
-                  <p className="text-center lg:text-left text-gray-300 text-sm font-medium">
+                  <p className="text-center lg:text-left text-gray-300 text-xs sm:text-sm font-medium">
                     14-day free trial • No credit card required
                   </p>
                 </div>
 
-                <div className="flex items-center justify-center lg:justify-start space-x-8 text-sm text-white/60">
-                  <span className="flex items-center space-x-2">
-                    <div className="w-1.5 h-1.5 bg-white rounded-full white-glow"></div>
+                <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 sm:gap-4 md:gap-6 lg:gap-8 text-xs sm:text-sm text-white/60">
+                  <span className="flex items-center space-x-1.5 sm:space-x-2">
+                    <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-white rounded-full white-glow"></div>
                     <span>$5/month</span>
                   </span>
-                  <span className="flex items-center space-x-2">
-                    <div className="w-1.5 h-1.5 bg-white rounded-full white-glow"></div>
+                  <span className="flex items-center space-x-1.5 sm:space-x-2">
+                    <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-white rounded-full white-glow"></div>
                     <span>Cancel anytime</span>
                   </span>
-                  <span className="flex items-center space-x-2">
-                    <div className="w-1.5 h-1.5 bg-white rounded-full white-glow"></div>
-                    <span>Your data, your control</span>
+                  <span className="flex items-center space-x-1.5 sm:space-x-2">
+                    <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-white rounded-full white-glow"></div>
+                    <span className="hidden sm:inline">Your data, your control</span>
+                    <span className="sm:hidden">Your data</span>
                   </span>
                 </div>
               </div>
@@ -154,7 +155,7 @@ export default function LandingPage() {
 
           {/* Right Column - Animated Blob */}
           <motion.div
-            className="relative h-[500px] lg:h-[600px] mt-8 lg:mt-0 flex items-center justify-center"
+            className="relative h-[300px] sm:h-[400px] md:h-[500px] lg:h-[600px] mt-8 lg:mt-0 flex items-center justify-center"
             style={{ y: yParallax }}
           >
             <AnimatedBlob
@@ -168,22 +169,22 @@ export default function LandingPage() {
 
 
       {/* AI That Adapts to Your World - NEW SECTION */}
-      <section className="features-section relative z-10 py-16 sm:py-20 lg:py-24 bg-transparent">
+      <section className="features-section relative z-10 py-12 sm:py-16 md:py-20 lg:py-24 bg-transparent">
         <GrayGlowBackground intensity={0.3} />
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <FadeInView className="max-w-7xl mx-auto">
             {/* Section Header */}
-            <motion.div className="text-center mb-16">
-              <h2 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
+            <motion.div className="text-center mb-10 sm:mb-12 md:mb-16">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold text-white mb-4 sm:mb-5 md:mb-6 leading-tight px-4">
                 AI that adapts to your world
               </h2>
-              <p className="text-xl text-white/70 max-w-3xl mx-auto">
+              <p className="text-base sm:text-lg md:text-xl text-white/70 max-w-3xl mx-auto px-4">
                 Stop repeating yourself. Start having real conversations.
               </p>
             </motion.div>
 
             {/* Feature Cards Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-20">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 md:gap-6 mb-12 sm:mb-16 md:mb-20">
               <AdaptiveFeatureCard
                 icon={Brain}
                 title="Never repeat yourself"
@@ -215,18 +216,18 @@ export default function LandingPage() {
             </div>
 
             {/* Comparison Dashboard */}
-            <div className="mb-20">
+            <div className="mb-12 sm:mb-16 md:mb-20">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.6 }}
-                className="text-center mb-12"
+                className="text-center mb-8 sm:mb-10 md:mb-12 px-4"
               >
-                <h3 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+                <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-3 sm:mb-4">
                   See the difference
                 </h3>
-                <p className="text-lg text-white/60">
+                <p className="text-sm sm:text-base md:text-lg text-white/60">
                   Compare generic AI responses with MROR's personalized approach
                 </p>
               </motion.div>
@@ -236,11 +237,11 @@ export default function LandingPage() {
 
             {/* Feature List */}
             <FadeInView delay={0.3}>
-              <div className="max-w-4xl mx-auto">
-                <h3 className="text-2xl font-bold text-white mb-8 text-center">
+              <div className="max-w-4xl mx-auto px-4">
+                <h3 className="text-xl sm:text-2xl font-bold text-white mb-6 sm:mb-8 text-center">
                   Why MROR adapts to you
                 </h3>
-                <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid md:grid-cols-2 gap-3 sm:gap-4">
                   {[
                     "Builds living memory from every conversation",
                     "Adapts to your expertise and communication style",
@@ -255,11 +256,11 @@ export default function LandingPage() {
                       whileInView={{ opacity: 1, x: 0 }}
                       viewport={{ once: true }}
                       transition={{ duration: 0.4, delay: index * 0.1 }}
-                      className="flex items-center gap-3 text-white/80"
+                      className="flex items-center gap-2 sm:gap-3 text-white/80"
                     >
-                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center flex-shrink-0">
+                      <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center flex-shrink-0">
                         <svg
-                          className="w-3.5 h-3.5 text-white"
+                          className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
@@ -272,7 +273,7 @@ export default function LandingPage() {
                           />
                         </svg>
                       </div>
-                      <span className="text-base">{feature}</span>
+                      <span className="text-sm sm:text-base">{feature}</span>
                     </motion.div>
                   ))}
                 </div>
@@ -283,21 +284,21 @@ export default function LandingPage() {
       </section>
 
       {/* Interactive Demo Section - Simplified */}
-      <section className="relative z-10 py-32">
+      <section className="relative z-10 py-16 sm:py-20 md:py-24 lg:py-32">
         <div className="absolute inset-0 -z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-gray-950/30 via-black to-gray-950/20"></div>
           <div className="absolute inset-0 bg-black/60"></div>
         </div>
-        <div className="container mx-auto px-4 lg:px-8">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <FadeInView className="max-w-6xl mx-auto">
-            <div className="text-center mb-20">
-              <h2 className="text-white text-4xl lg:text-5xl font-light mb-6 tracking-tight">Experience Adaptive AI</h2>
-              <p className="text-white/70 text-xl max-w-2xl mx-auto">
+            <div className="text-center mb-12 sm:mb-16 md:mb-20 px-4">
+              <h2 className="text-white text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-light mb-4 sm:mb-6 tracking-tight">Experience Adaptive AI</h2>
+              <p className="text-white/70 text-base sm:text-lg md:text-xl max-w-2xl mx-auto">
                 Watch MROR learn, adapt, and evolve with your unique needs.
               </p>
             </div>
 
-            <div className="grid lg:grid-cols-2 gap-16 items-center">
+            <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 md:gap-16 items-center">
               {/* Left Column - Interactive Features */}
               <StaggerChildren className="space-y-12" stagger={0.2}>
                 <HoverCard className="bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-8 shadow-sm">
@@ -370,18 +371,18 @@ export default function LandingPage() {
       </section>
 
       {/* Testimonials Section - Simplified */}
-      <section className="relative z-10 py-32">
+      <section className="relative z-10 py-16 sm:py-20 md:py-24 lg:py-32">
         <div className="absolute inset-0 -z-10">
           <div className="absolute inset-0 dark:bg-gradient-to-r dark:from-gray-950/20 dark:via-black dark:to-gray-950/20"></div>
           <div className="absolute inset-0 dark:bg-black/70"></div>
         </div>
-        <div className="container mx-auto px-4 lg:px-8">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <FadeInView className="max-w-6xl mx-auto">
-            <div className="text-center mb-20">
-              <h2 className="dark:text-white text-neutral-900 text-4xl lg:text-5xl font-light mb-6 tracking-tight">
+            <div className="text-center mb-12 sm:mb-16 md:mb-20 px-4">
+              <h2 className="dark:text-white text-neutral-900 text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-light mb-4 sm:mb-6 tracking-tight">
                 Loved by Forward-Thinking Teams
               </h2>
-              <div className="dark:text-white/70 text-neutral-600 text-xl max-w-2xl mx-auto">
+              <div className="dark:text-white/70 text-neutral-600 text-base sm:text-lg md:text-xl max-w-2xl mx-auto">
                 <TextType
                   text={[
                     "See how professionals use MROR to amplify their capabilities.",
@@ -397,7 +398,7 @@ export default function LandingPage() {
             </div>
 
             {/* Testimonials Grid */}
-            <StaggerChildren className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-12 auto-rows-fr" stagger={0.1}>
+            <StaggerChildren className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6 md:gap-8 lg:gap-12 auto-rows-fr" stagger={0.1}>
               {[
                 {
                   name: "Sarah Chen",
@@ -421,27 +422,27 @@ export default function LandingPage() {
                   metric: "90% faster planning"
                 }
               ].map((testimonial, index) => (
-                <HoverCard key={index} className="group bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-6 lg:p-8 shadow-sm">
-                  <div className="flex items-center mb-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-lg">
+                <HoverCard key={index} className="group bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl sm:rounded-2xl p-5 sm:p-6 lg:p-8 shadow-sm">
+                  <div className="flex items-center mb-3 sm:mb-4">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-base sm:text-lg">
                       {testimonial.name[0]}
                     </div>
-                    <div className="ml-4">
-                      <h4 className="dark:text-white text-neutral-900 font-semibold">{testimonial.name}</h4>
-                      <p className="dark:text-white/60 text-neutral-600 text-sm">{testimonial.role}, {testimonial.company}</p>
+                    <div className="ml-3 sm:ml-4">
+                      <h4 className="dark:text-white text-neutral-900 font-semibold text-sm sm:text-base">{testimonial.name}</h4>
+                      <p className="dark:text-white/60 text-neutral-600 text-xs sm:text-sm">{testimonial.role}, {testimonial.company}</p>
                     </div>
                   </div>
-                  <div className="mb-4">
-                    <div className="flex space-x-1 mb-3">
+                  <div className="mb-3 sm:mb-4">
+                    <div className="flex space-x-1 mb-2 sm:mb-3">
                       {[...Array(5)].map((_, i) => (
-                        <div key={i} className="w-4 h-4 bg-yellow-400 rounded-full opacity-90"></div>
+                        <div key={i} className="w-3 h-3 sm:w-4 sm:h-4 bg-yellow-400 rounded-full opacity-90"></div>
                       ))}
                     </div>
-                    <p className="dark:text-white/90 text-neutral-800 text-base sm:text-lg leading-relaxed">
+                    <p className="dark:text-white/90 text-neutral-800 text-sm sm:text-base leading-relaxed">
                       "{testimonial.quote}"
                     </p>
                   </div>
-                  <div className="dark:text-white/40 text-neutral-500 text-sm group-hover:dark:text-white/60 group-hover:text-neutral-700 transition-colors">
+                  <div className="dark:text-white/40 text-neutral-500 text-xs sm:text-sm group-hover:dark:text-white/60 group-hover:text-neutral-700 transition-colors">
                     {testimonial.metric}
                   </div>
                 </HoverCard>
@@ -449,7 +450,7 @@ export default function LandingPage() {
             </StaggerChildren>
 
             <FadeInView delay={0.5}>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8 mt-16 sm:mt-20 pt-12 sm:pt-16 border-t border-white/10">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 md:gap-8 mt-12 sm:mt-16 md:mt-20 pt-8 sm:pt-12 md:pt-16 border-t border-white/10">
                 {[
                   { value: "10,000+", label: "Active Users" },
                   { value: "500+", label: "Companies" },
@@ -457,10 +458,10 @@ export default function LandingPage() {
                   { value: "24/7", label: "Support" }
                 ].map((stat, index) => (
                   <div key={index} className="text-center">
-                    <div className="text-2xl sm:text-3xl lg:text-4xl font-light text-white mb-2">
+                    <div className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-light text-white mb-1 sm:mb-2">
                       <ShinyText text={stat.value} speed={4} className="text-white" />
                     </div>
-                    <div className="text-white/60 text-sm sm:text-base">{stat.label}</div>
+                    <div className="text-white/60 text-xs sm:text-sm md:text-base">{stat.label}</div>
                   </div>
                 ))}
               </div>
@@ -470,137 +471,137 @@ export default function LandingPage() {
       </section>
 
       {/* Pricing Section - Value-Focused */}
-      <section className="pricing-section relative z-10 py-32 bg-transparent">
+      <section className="pricing-section relative z-10 py-16 sm:py-20 md:py-24 lg:py-32 bg-transparent">
         <GrayGlowBackground intensity={0.4} />
-        <div className="container mx-auto px-4 lg:px-8">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <FadeInView className="max-w-7xl mx-auto">
             {/* Section Header */}
-            <motion.div className="text-center mb-16">
-              <h2 className="text-white text-4xl lg:text-5xl font-bold mb-6 tracking-tight">
+            <motion.div className="text-center mb-12 sm:mb-14 md:mb-16 px-4">
+              <h2 className="text-white text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-4 sm:mb-5 md:mb-6 tracking-tight">
                 Powerful AI, Fair Pricing
               </h2>
-              <p className="text-white/80 text-xl max-w-4xl mx-auto mb-8">
+              <p className="text-white/80 text-base sm:text-lg md:text-xl max-w-4xl mx-auto mb-6 sm:mb-8">
                 Get more capability for less. <span className="text-white font-bold">Advanced AI that grows with you</span> at a price that makes sense.
               </p>
             </motion.div>
 
             {/* Pricing Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6 md:gap-8 max-w-5xl mx-auto">
               {/* Free Plan */}
-              <HoverCard className="bg-white/5 border border-white/10 rounded-2xl p-8">
-                <div className="text-center mb-6">
-                  <h3 className="text-white text-2xl font-semibold mb-2">Explorer</h3>
-                  <div className="text-white text-4xl font-bold">Free</div>
-                  <p className="text-white/60 text-sm mt-2">Try MROR risk-free</p>
+              <HoverCard className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-6 sm:p-8">
+                <div className="text-center mb-5 sm:mb-6">
+                  <h3 className="text-white text-xl sm:text-2xl font-semibold mb-2">Explorer</h3>
+                  <div className="text-white text-3xl sm:text-4xl font-bold">Free</div>
+                  <p className="text-white/60 text-xs sm:text-sm mt-2">Try MROR risk-free</p>
                 </div>
-                <div className="space-y-4 mb-8">
+                <div className="space-y-3 sm:space-y-4 mb-6 sm:mb-8">
                   <div className="flex items-center text-white/80">
-                    <div className="w-2 h-2 bg-white rounded-full mr-3"></div>
-                    <span className="text-sm">Basic AI conversations</span>
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full mr-2 sm:mr-3 flex-shrink-0"></div>
+                    <span className="text-xs sm:text-sm">Basic AI conversations</span>
                   </div>
                   <div className="flex items-center text-white/80">
-                    <div className="w-2 h-2 bg-white rounded-full mr-3"></div>
-                    <span className="text-sm">Limited memory (7 days)</span>
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full mr-2 sm:mr-3 flex-shrink-0"></div>
+                    <span className="text-xs sm:text-sm">Limited memory (7 days)</span>
                   </div>
                   <div className="flex items-center text-white/80">
-                    <div className="w-2 h-2 bg-white rounded-full mr-3"></div>
-                    <span className="text-sm">10 messages per day</span>
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full mr-2 sm:mr-3 flex-shrink-0"></div>
+                    <span className="text-xs sm:text-sm">10 messages per day</span>
                   </div>
                 </div>
                 <SignedOut>
                   <Link href="/register">
-                    <Button className="w-full bg-white/10 hover:bg-white/20 text-white border border-white/20">
+                    <Button className="w-full bg-white/10 hover:bg-white/20 text-white border border-white/20 text-sm sm:text-base">
                       Start Free
                     </Button>
                   </Link>
                 </SignedOut>
                 <SignedIn>
                   <Link href="/chat">
-                    <Button className="w-full bg-white/10 hover:bg-white/20 text-white border border-white/20">
-                      Open Lotus
+                    <Button className="w-full bg-white/10 hover:bg-white/20 text-white border border-white/20 text-sm sm:text-base">
+                      Open MROR
                     </Button>
                   </Link>
                 </SignedIn>
               </HoverCard>
 
               {/* Pro Plan - Featured */}
-              <HoverCard className="premium-card backdrop-blur-xl border-2 border-white/20 p-8 relative transform scale-105">
-                <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                  <div className="bg-white text-black px-4 py-1 rounded-full text-xs font-bold white-glow">
+              <HoverCard className="premium-card backdrop-blur-xl border-2 border-white/20 p-6 sm:p-8 relative md:transform md:scale-105">
+                <div className="absolute -top-3 sm:-top-4 left-1/2 transform -translate-x-1/2">
+                  <div className="bg-white text-black px-3 sm:px-4 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold white-glow">
                     MOST POPULAR
                   </div>
                 </div>
-                <div className="text-center mb-6">
-                  <h3 className="text-white text-2xl font-semibold mb-2">Professional</h3>
-                  <div className="text-white text-4xl font-bold">$5</div>
-                  <p className="text-white/60 text-sm mt-2">/month</p>
+                <div className="text-center mb-5 sm:mb-6">
+                  <h3 className="text-white text-xl sm:text-2xl font-semibold mb-2">Professional</h3>
+                  <div className="text-white text-3xl sm:text-4xl font-bold">$5</div>
+                  <p className="text-white/60 text-xs sm:text-sm mt-2">/month</p>
                 </div>
-                <div className="space-y-4 mb-8">
+                <div className="space-y-3 sm:space-y-4 mb-6 sm:mb-8">
                   <div className="flex items-center text-white/90">
-                    <div className="w-2 h-2 bg-green-400 rounded-full mr-3"></div>
-                    <span className="text-sm font-medium">Unlimited conversations</span>
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full mr-2 sm:mr-3 flex-shrink-0"></div>
+                    <span className="text-xs sm:text-sm font-medium">Unlimited conversations</span>
                   </div>
                   <div className="flex items-center text-white/90">
-                    <div className="w-2 h-2 bg-green-400 rounded-full mr-3"></div>
-                    <span className="text-sm font-medium">Persistent memory</span>
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full mr-2 sm:mr-3 flex-shrink-0"></div>
+                    <span className="text-xs sm:text-sm font-medium">Persistent memory</span>
                   </div>
                   <div className="flex items-center text-white/90">
-                    <div className="w-2 h-2 bg-green-400 rounded-full mr-3"></div>
-                    <span className="text-sm font-medium">All AI models</span>
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full mr-2 sm:mr-3 flex-shrink-0"></div>
+                    <span className="text-xs sm:text-sm font-medium">All AI models</span>
                   </div>
                   <div className="flex items-center text-white/90">
-                    <div className="w-2 h-2 bg-green-400 rounded-full mr-3"></div>
-                    <span className="text-sm font-medium">Image generation</span>
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full mr-2 sm:mr-3 flex-shrink-0"></div>
+                    <span className="text-xs sm:text-sm font-medium">Image generation</span>
                   </div>
                   <div className="flex items-center text-white/90">
-                    <div className="w-2 h-2 bg-green-400 rounded-full mr-3"></div>
-                    <span className="text-sm font-medium">Priority support</span>
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full mr-2 sm:mr-3 flex-shrink-0"></div>
+                    <span className="text-xs sm:text-sm font-medium">Priority support</span>
                   </div>
                 </div>
                 <SignedOut>
                   <Link href="/register">
-                    <Button className="w-full premium-button font-bold">
+                    <Button className="w-full premium-button font-bold text-sm sm:text-base">
                       Start 14-Day Trial
-                      <ArrowRight className="ml-2 h-4 w-4" />
+                      <ArrowRight className="ml-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     </Button>
                   </Link>
                 </SignedOut>
                 <SignedIn>
                   <Link href="/chat">
-                    <Button className="w-full premium-button font-bold">
-                      Open Lotus
-                      <ArrowRight className="ml-2 h-4 w-4" />
+                    <Button className="w-full premium-button font-bold text-sm sm:text-base">
+                      Open MROR
+                      <ArrowRight className="ml-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     </Button>
                   </Link>
                 </SignedIn>
               </HoverCard>
 
               {/* Enterprise Plan */}
-              <HoverCard className="bg-white/5 border border-white/10 rounded-2xl p-8">
-                <div className="text-center mb-6">
-                  <h3 className="text-white text-2xl font-semibold mb-2">Enterprise</h3>
-                  <div className="text-white text-4xl font-bold">Custom</div>
-                  <p className="text-white/60 text-sm mt-2">For teams</p>
+              <HoverCard className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-6 sm:p-8">
+                <div className="text-center mb-5 sm:mb-6">
+                  <h3 className="text-white text-xl sm:text-2xl font-semibold mb-2">Enterprise</h3>
+                  <div className="text-white text-3xl sm:text-4xl font-bold">Custom</div>
+                  <p className="text-white/60 text-xs sm:text-sm mt-2">For teams</p>
                 </div>
-                <div className="space-y-4 mb-8">
+                <div className="space-y-3 sm:space-y-4 mb-6 sm:mb-8">
                   <div className="flex items-center text-white/80">
-                    <div className="w-2 h-2 bg-white rounded-full mr-3"></div>
-                    <span className="text-sm">Everything in Pro</span>
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full mr-2 sm:mr-3 flex-shrink-0"></div>
+                    <span className="text-xs sm:text-sm">Everything in Pro</span>
                   </div>
                   <div className="flex items-center text-white/80">
-                    <div className="w-2 h-2 bg-white rounded-full mr-3"></div>
-                    <span className="text-sm">Team collaboration</span>
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full mr-2 sm:mr-3 flex-shrink-0"></div>
+                    <span className="text-xs sm:text-sm">Team collaboration</span>
                   </div>
                   <div className="flex items-center text-white/80">
-                    <div className="w-2 h-2 bg-white rounded-full mr-3"></div>
-                    <span className="text-sm">Custom integrations</span>
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full mr-2 sm:mr-3 flex-shrink-0"></div>
+                    <span className="text-xs sm:text-sm">Custom integrations</span>
                   </div>
                   <div className="flex items-center text-white/80">
-                    <div className="w-2 h-2 bg-white rounded-full mr-3"></div>
-                    <span className="text-sm">Dedicated support</span>
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full mr-2 sm:mr-3 flex-shrink-0"></div>
+                    <span className="text-xs sm:text-sm">Dedicated support</span>
                   </div>
                 </div>
-                <Button className="w-full bg-white/10 hover:bg-white/20 text-white border border-white/20">
+                <Button className="w-full bg-white/10 hover:bg-white/20 text-white border border-white/20 text-sm sm:text-base">
                   Contact Sales
                 </Button>
               </HoverCard>
@@ -628,18 +629,18 @@ export default function LandingPage() {
             </FadeInView>
 
             {/* FAQ Section */}
-            <FadeInView delay={0.5} className="mt-20 pt-16 border-t border-white/10">
-              <h3 className="text-white text-2xl font-light text-center mb-12">Common Questions</h3>
-              <StaggerChildren className="grid md:grid-cols-2 gap-8" stagger={0.1}>
-                <HoverCard className="bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl p-6 shadow-sm">
-                  <h4 className="text-white font-semibold mb-3">How does MROR learn from me?</h4>
-                  <p className="text-white/80 text-sm leading-relaxed">
+            <FadeInView delay={0.5} className="mt-12 sm:mt-16 md:mt-20 pt-12 sm:pt-14 md:pt-16 border-t border-white/10">
+              <h3 className="text-white text-xl sm:text-2xl font-light text-center mb-8 sm:mb-10 md:mb-12 px-4">Common Questions</h3>
+              <StaggerChildren className="grid md:grid-cols-2 gap-5 sm:gap-6 md:gap-8" stagger={0.1}>
+                <HoverCard className="bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-lg sm:rounded-xl p-5 sm:p-6 shadow-sm">
+                  <h4 className="text-white font-semibold mb-2 sm:mb-3 text-sm sm:text-base">How does MROR learn from me?</h4>
+                  <p className="text-white/80 text-xs sm:text-sm leading-relaxed">
                     MROR uses advanced memory systems to understand your preferences, writing style, and project context across all conversations.
                   </p>
                 </HoverCard>
-                <HoverCard className="bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl p-6 shadow-sm">
-                  <h4 className="text-white font-semibold mb-3">Is my data really private?</h4>
-                  <p className="text-white/80 text-sm leading-relaxed">
+                <HoverCard className="bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-lg sm:rounded-xl p-5 sm:p-6 shadow-sm">
+                  <h4 className="text-white font-semibold mb-2 sm:mb-3 text-sm sm:text-base">Is my data really private?</h4>
+                  <p className="text-white/80 text-xs sm:text-sm leading-relaxed">
                     Yes. We never train models on your data, and your conversations are encrypted and isolated to your account only.
                   </p>
                 </HoverCard>
