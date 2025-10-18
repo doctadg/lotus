@@ -59,9 +59,9 @@ export default function DynamicNavbar() {
         {/* Logo */}
         <Link href="/" className="flex items-center group">
           <img
-            src="/lotus-full.svg"
-            alt="Lotus"
-            className="h-8 w-auto opacity-80 group-hover:opacity-100 transition-all duration-300 group-hover:scale-110 dark:filter dark:brightness-0 dark:invert"
+            src="/mror-full.png"
+            alt="MROR"
+            className="h-10 w-auto opacity-80 group-hover:opacity-100 transition-all duration-300 group-hover:scale-110 brightness-0 invert"
           />
         </Link>
 

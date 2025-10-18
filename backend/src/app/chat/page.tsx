@@ -613,7 +613,7 @@ function ChatLayout() {
       {/* Top Bar */}
       <div className={`flex items-center justify-between px-3 py-3 rounded-xl ${isDark ? 'bg-white/5 backdrop-blur-xl border-white/10' : 'bg-white/60 backdrop-blur-xl border-gray-200/50'} border shadow-lg`}>
         <Link href="/" className="flex items-center gap-2">
-          <img src="/lotus-full.svg" alt="Lotus" className={`h-6 md:h-7 w-auto ${isDark ? 'invert opacity-90' : 'opacity-90'}`} />
+          <img src="/mror-full.png" alt="MROR" className={`h-6 md:h-7 w-auto ${isDark ? 'brightness-0 invert opacity-90' : 'brightness-0 invert opacity-90'}`} />
         </Link>
         <button onClick={newChat} className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg ${isDark ? 'bg-white/10 backdrop-blur-xl text-white hover:bg-white/20 border-white/20' : 'bg-white/80 text-gray-900 hover:bg-white border-gray-300/50'} border shadow-sm transition-all`}>
           <Plus className="w-3 h-3" /> New
@@ -929,7 +929,7 @@ function ChatLayout() {
                               }
                             }
                           }}
-                          placeholder={uploading ? "Uploading…" : "Message Lotus…"}
+                          placeholder={uploading ? "Uploading…" : "Message MROR…"}
                           className={`flex-1 bg-transparent rounded-xl px-2 py-2 outline-none resize-none min-h-[44px] max-h-40 ${
                             isDark 
                               ? 'text-neutral-200 placeholder-neutral-500' 

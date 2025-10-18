@@ -14,6 +14,8 @@ import DynamicNavbar from "@/components/landing/DynamicNavbar"
 import FadeInView from "@/components/landing/FadeInView"
 import HoverCard from "@/components/landing/HoverCard"
 import StaggerChildren from "@/components/landing/StaggerChildren"
+import ComparisonDashboard from "@/components/landing/ComparisonDashboard"
+import AdaptiveFeatureCard from "@/components/landing/AdaptiveFeatureCard"
 
 export default function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -48,7 +50,7 @@ export default function LandingPage() {
                 Your AI That <span className="gray-gradient-text font-black">Evolves</span> With You
               </h1>
               <p className="text-2xl md:text-3xl text-gray-100 font-medium leading-relaxed max-w-3xl">
-                Unlike generic chatbots, Lotus learns your style, remembers your context, and
+                Unlike generic chatbots, MROR learns your style, remembers your context, and
                 <span className="text-white font-bold"> adapts to become uniquely yours</span>
               </p>
             </motion.div>
@@ -90,7 +92,7 @@ export default function LandingPage() {
                 <div className="premium-card px-6 py-4 inline-block">
                   <p className="text-white text-base font-semibold flex items-center space-x-3">
                     <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-                    <span>Join <span className="text-green-300 font-bold text-lg">10,000+ professionals</span> using smarter AI</span>
+                    <span>Join <span className="text-green-300 font-bold text-lg">10,000+ professionals</span> using MROR</span>
                   </p>
                 </div>
               </FadeInView>
@@ -120,7 +122,7 @@ export default function LandingPage() {
                           size="lg"
                           className="premium-button text-xl font-bold shadow-2xl"
                         >
-                          Open Lotus
+                          Open MROR
                           <ArrowRight className="ml-3 h-6 w-6" />
                         </Button>
                       </HoverCard>
@@ -164,146 +166,118 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Multimodal Capabilities - Simplified */}
-      <section className="relative z-10 py-12 sm:py-16 lg:py-20 bg-transparent">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <FadeInView className="max-w-6xl mx-auto">
-            <div className="text-center mb-10 sm:mb-14">
-              <h2 className="text-3xl sm:text-4xl font-semibold text-white mb-3">Complete AI Intelligence</h2>
-              <p className="text-white/70 text-base sm:text-lg">Every capability you need, learning and improving with each use.</p>
-            </div>
-            <StaggerChildren className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6" stagger={0.1}>
-              {[
-                {
-                  title: "Creative Generation",
-                  description: "Images, text, and ideas that match your unique style and vision.",
-                  icon: Sparkles
-                },
-                {
-                  title: "Deep Analysis",
-                  description: "Understand documents, data, and complex problems with contextual insight.",
-                  icon: Brain
-                },
-                {
-                  title: "Code & Development",
-                  description: "Write, debug, and optimize code with an AI that learns your patterns.",
-                  icon: Layers
-                },
-                {
-                  title: "Personal Memory",
-                  description: "Remembers your preferences, projects, and past conversations.",
-                  icon: Heart
-                }
-              ].map((feature, index) => (
-                <HoverCard key={index} className="premium-card p-6" scale={1.03} y={-5}>
-                  <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mb-5 white-glow">
-                    <feature.icon className="w-6 h-6 text-white" />
-                  </div>
-                  <h3 className="text-white text-xl font-semibold mb-2">{feature.title}</h3>
-                  <p className="text-white/75 text-sm leading-relaxed">{feature.description}</p>
-                </HoverCard>
-              ))}
-            </StaggerChildren>
-          </FadeInView>
-        </div>
-      </section>
 
-      {/* Features Section - Focused on Adaptability */}
+      {/* AI That Adapts to Your World - NEW SECTION */}
       <section className="features-section relative z-10 py-16 sm:py-20 lg:py-24 bg-transparent">
         <GrayGlowBackground intensity={0.3} />
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <FadeInView className="max-w-6xl mx-auto">
+          <FadeInView className="max-w-7xl mx-auto">
             {/* Section Header */}
-            <motion.div className="text-center mb-16 sm:mb-20">
-              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-light text-white mb-6 leading-tight">
-                <ShinyText text="AI That Adapts to Your World" speed={3} className="text-white" />
+            <motion.div className="text-center mb-16">
+              <h2 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
+                AI that adapts to your world
               </h2>
-              <div className="max-w-3xl mx-auto">
-                <TextType
-                  text={[
-                    "Every conversation makes Lotus smarter about your needs.",
-                    "It learns your communication style and preferences over time.",
-                    "Your AI assistant becomes truly yours, not just another chatbot.",
-                  ]}
-                  typingSpeed={75}
-                  pauseDuration={2500}
-                  showCursor={true}
-                  cursorCharacter="|"
-                  className="text-white/80 text-lg sm:text-xl"
-                />
-              </div>
+              <p className="text-xl text-white/70 max-w-3xl mx-auto">
+                Stop repeating yourself. Start having real conversations.
+              </p>
             </motion.div>
 
-            {/* Bento Grid Layout - Adaptive Features */}
-            <StaggerChildren className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 auto-rows-fr" stagger={0.1}>
-              {/* Card 1 - Large */}
-              <HoverCard className="premium-card p-6 lg:p-8 md:col-span-2 lg:col-span-2" scale={1.02} y={-3}>
-                <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mb-6 white-glow">
-                  <Brain className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="text-white text-xl lg:text-2xl font-semibold mb-4">Learns From Every Interaction</h3>
-                <p className="text-white/80 leading-relaxed text-base lg:text-lg">
-                  Unlike traditional AI that resets with each chat, <span className="text-white font-bold">Lotus builds a comprehensive understanding of you</span>.
-                  Your writing style, technical preferences, favorite frameworks, and project goals all inform how it assists you.
-                </p>
-              </HoverCard>
+            {/* Feature Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-20">
+              <AdaptiveFeatureCard
+                icon={Brain}
+                title="Never repeat yourself"
+                description="MROR builds a living memory of your conversations, projects, and preferences"
+                gradient={["#6366f1", "#8b5cf6"]}
+                delay={0.1}
+              />
+              <AdaptiveFeatureCard
+                icon={Layers}
+                title="Speaks your language"
+                description="Adapts responses based on your background, expertise level, and goals"
+                gradient={["#8b5cf6", "#d946ef"]}
+                delay={0.2}
+              />
+              <AdaptiveFeatureCard
+                icon={Sparkles}
+                title="Explores with you"
+                description="Tracks topics you're curious about and proactively provides insights"
+                gradient={["#6366f1", "#3b82f6"]}
+                delay={0.3}
+              />
+              <AdaptiveFeatureCard
+                icon={Zap}
+                title="Goes deeper"
+                description="Comprehensive analysis with verified sources when you need it"
+                gradient={["#8b5cf6", "#6366f1"]}
+                delay={0.4}
+              />
+            </div>
 
-              {/* Card 2 - Small */}
-              <HoverCard className="premium-card p-6 lg:p-8" scale={1.05} y={-5}>
-                <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mb-6 white-glow">
-                  <Sparkles className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="text-white text-lg lg:text-xl font-semibold mb-4">Context-Aware Responses</h3>
-                <p className="text-white/80 leading-relaxed text-sm lg:text-base">
-                  <span className="text-white font-bold">Remembers your projects</span>, understands your goals, and provides relevant suggestions.
+            {/* Comparison Dashboard */}
+            <div className="mb-20">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6 }}
+                className="text-center mb-12"
+              >
+                <h3 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+                  See the difference
+                </h3>
+                <p className="text-lg text-white/60">
+                  Compare generic AI responses with MROR's personalized approach
                 </p>
-              </HoverCard>
+              </motion.div>
 
-              {/* Card 3 - Small */}
-              <HoverCard className="premium-card p-6 lg:p-8" scale={1.05} y={-5}>
-                <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mb-6 white-glow">
-                  <Zap className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="text-white text-lg lg:text-xl font-semibold mb-4">Instant Adaptation</h3>
-                <p className="text-white/80 leading-relaxed text-sm lg:text-base">
-                  Switch between coding, writing, analysis, and creative work - <span className="text-white font-bold">Lotus adapts instantly</span>.
-                </p>
-              </HoverCard>
+              <ComparisonDashboard />
+            </div>
 
-              {/* Card 4 - Large */}
-              <HoverCard className="premium-card p-6 lg:p-8 md:col-span-2 lg:col-span-2" scale={1.02} y={-3}>
-                <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mb-6 white-glow">
-                  <Heart className="w-6 h-6 text-white" />
+            {/* Feature List */}
+            <FadeInView delay={0.3}>
+              <div className="max-w-4xl mx-auto">
+                <h3 className="text-2xl font-bold text-white mb-8 text-center">
+                  Why MROR adapts to you
+                </h3>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {[
+                    "Builds living memory from every conversation",
+                    "Adapts to your expertise and communication style",
+                    "Explores your curiosity with proactive insights",
+                    "Deep research mode with comprehensive sources",
+                    "Context-aware responses that understand your world",
+                    "Never lose track of important topics or goals",
+                  ].map((feature, index) => (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, x: -10 }}
+                      whileInView={{ opacity: 1, x: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ duration: 0.4, delay: index * 0.1 }}
+                      className="flex items-center gap-3 text-white/80"
+                    >
+                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center flex-shrink-0">
+                        <svg
+                          className="w-3.5 h-3.5 text-white"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={3}
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                      </div>
+                      <span className="text-base">{feature}</span>
+                    </motion.div>
+                  ))}
                 </div>
-                <h3 className="text-white text-xl lg:text-2xl font-semibold mb-4">Your Personal AI Partner</h3>
-                <p className="text-white/80 leading-relaxed text-base lg:text-lg">
-                  More than an assistant - <span className="text-white font-bold">a collaborative partner that grows with you</span>.
-                  Whether you're researching, creating, coding, or planning, Lotus evolves to match your working style and amplify your capabilities.
-                </p>
-              </HoverCard>
-
-              {/* Card 5 - Small */}
-              <HoverCard className="premium-card p-6 lg:p-8" scale={1.05} y={-5}>
-                <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mb-6 white-glow">
-                  <Shield className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="text-white text-lg lg:text-xl font-semibold mb-4">Private & Secure</h3>
-                <p className="text-white/80 leading-relaxed text-sm lg:text-base">
-                  <span className="text-white font-bold">Your conversations stay yours</span>. No training on your data, ever.
-                </p>
-              </HoverCard>
-
-              {/* Card 6 - Small */}
-              <HoverCard className="premium-card p-6 lg:p-8" scale={1.05} y={-5}>
-                <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mb-6 white-glow">
-                  <Layers className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="text-white text-lg lg:text-xl font-semibold mb-4">Multi-Model Intelligence</h3>
-                <p className="text-white/80 leading-relaxed text-sm lg:text-base">
-                  Access to <span className="text-white font-bold">Claude, GPT-4, and specialized models</span> - all learning from you.
-                </p>
-              </HoverCard>
-            </StaggerChildren>
+              </div>
+            </FadeInView>
           </FadeInView>
         </div>
       </section>
@@ -319,7 +293,7 @@ export default function LandingPage() {
             <div className="text-center mb-20">
               <h2 className="text-white text-4xl lg:text-5xl font-light mb-6 tracking-tight">Experience Adaptive AI</h2>
               <p className="text-white/70 text-xl max-w-2xl mx-auto">
-                Watch Lotus learn, adapt, and evolve with your unique needs.
+                Watch MROR learn, adapt, and evolve with your unique needs.
               </p>
             </div>
 
@@ -335,7 +309,7 @@ export default function LandingPage() {
                     speed={0.6}
                     scrambleChars=".:!@#$%"
                   >
-                    Lotus observes patterns in your work, adapting its responses to match your style and preferences automatically.
+                    MROR observes patterns in your work, adapting its responses to match your style and preferences automatically.
                   </ScrambledText>
                 </HoverCard>
 
@@ -410,7 +384,7 @@ export default function LandingPage() {
               <div className="dark:text-white/70 text-neutral-600 text-xl max-w-2xl mx-auto">
                 <TextType
                   text={[
-                    "See how professionals use Lotus to amplify their capabilities.",
+                    "See how professionals use MROR to amplify their capabilities.",
                     "Real stories from teams achieving more with adaptive AI.",
                     "Join thousands discovering what personalized AI can do.",
                   ]}
@@ -429,7 +403,7 @@ export default function LandingPage() {
                   name: "Sarah Chen",
                   role: "AI Researcher",
                   company: "TechCorp",
-                  quote: "Lotus's ability to maintain context across research sessions has accelerated my work tremendously.",
+                  quote: "MROR's ability to maintain context across research sessions has accelerated my work tremendously.",
                   metric: "70% faster research"
                 },
                 {
@@ -443,7 +417,7 @@ export default function LandingPage() {
                   name: "Aisha Patel",
                   role: "Product Strategist",
                   company: "ScaleUp",
-                  quote: "The way Lotus remembers our product decisions and strategy is game-changing.",
+                  quote: "The way MROR remembers our product decisions and strategy is game-changing.",
                   metric: "90% faster planning"
                 }
               ].map((testimonial, index) => (
@@ -517,7 +491,7 @@ export default function LandingPage() {
                 <div className="text-center mb-6">
                   <h3 className="text-white text-2xl font-semibold mb-2">Explorer</h3>
                   <div className="text-white text-4xl font-bold">Free</div>
-                  <p className="text-white/60 text-sm mt-2">Try Lotus risk-free</p>
+                  <p className="text-white/60 text-sm mt-2">Try MROR risk-free</p>
                 </div>
                 <div className="space-y-4 mb-8">
                   <div className="flex items-center text-white/80">
@@ -635,7 +609,7 @@ export default function LandingPage() {
             {/* Value Comparison */}
             <FadeInView delay={0.3} className="mt-16 text-center">
               <div className="bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-8 shadow-sm max-w-3xl mx-auto">
-                <h3 className="text-white text-2xl font-bold mb-4">Why Choose Lotus?</h3>
+                <h3 className="text-white text-2xl font-bold mb-4">Why Choose MROR?</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-white/70">
                   <div>
                     <div className="text-3xl font-bold text-green-400 mb-2">75%</div>
@@ -658,9 +632,9 @@ export default function LandingPage() {
               <h3 className="text-white text-2xl font-light text-center mb-12">Common Questions</h3>
               <StaggerChildren className="grid md:grid-cols-2 gap-8" stagger={0.1}>
                 <HoverCard className="bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl p-6 shadow-sm">
-                  <h4 className="text-white font-semibold mb-3">How does Lotus learn from me?</h4>
+                  <h4 className="text-white font-semibold mb-3">How does MROR learn from me?</h4>
                   <p className="text-white/80 text-sm leading-relaxed">
-                    Lotus uses advanced memory systems to understand your preferences, writing style, and project context across all conversations.
+                    MROR uses advanced memory systems to understand your preferences, writing style, and project context across all conversations.
                   </p>
                 </HoverCard>
                 <HoverCard className="bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl p-6 shadow-sm">
@@ -685,8 +659,8 @@ export default function LandingPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 sm:gap-12 mb-12 sm:mb-16">
               {/* Company Info */}
               <div className="sm:col-span-2 lg:col-span-1">
-                <div className="flex items-center mb-4">
-                  <img src="/lotus-full.svg" alt="Lotus" className="h-8 w-auto opacity-80 dark:filter dark:brightness-0 dark:invert" />
+                <div className="flex items-center mb-6">
+                  <img src="/mror-full.png" alt="MROR" className="h-12 w-auto brightness-0 invert opacity-90" />
                 </div>
                 <p className="dark:text-white/70 text-neutral-600 text-sm leading-relaxed mb-6">
                   AI that evolves with you. Experience intelligence that adapts, learns, and grows.
@@ -770,7 +744,7 @@ export default function LandingPage() {
             <div className="pt-6 sm:pt-8 border-t dark:border-white/10 border-black/10">
               <div className="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0 text-center sm:text-left">
                 <div className="dark:text-white/60 text-neutral-500 text-xs sm:text-sm order-2 sm:order-1 min-w-0 flex-shrink-0">
-                  © 2024 Lotus. All rights reserved.
+                  © 2025 MROR. All rights reserved.
                 </div>
                 <div className="flex flex-wrap justify-center sm:justify-end gap-4 sm:gap-6 order-1 sm:order-2">
                   {['Privacy Policy', 'Terms of Service', 'Cookie Policy'].map((item) => (

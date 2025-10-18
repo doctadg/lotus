@@ -17,14 +17,14 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXTAUTH_URL || 'http://localhost:3000'),
   title: {
-    default: "Lotus: The Private, Personal, and Powerful AI You Own",
-    template: "%s | Lotus"
+    default: "MROR: AI That Adapts to Your World",
+    template: "%s | MROR"
   },
-  description: "Why rent an AI that watches you, forgets you, and costs $20? Lotus learns you, protects you, and costs less than your coffee. For users who want intelligence—not surveillance.",
-  keywords: ["ai assistant", "private ai", "personal ai", "ai chat", "memory ai", "affordable ai", "privacy-first ai", "ai that learns", "intelligent assistant", "ai ownership"],
-  authors: [{ name: "Lotus Team" }],
-  creator: "Lotus",
-  publisher: "Lotus",
+  description: "Stop repeating yourself. MROR learns your style, remembers your context, and adapts to become uniquely yours. AI that evolves with you.",
+  keywords: ["ai assistant", "adaptive ai", "personal ai", "ai chat", "memory ai", "affordable ai", "privacy-first ai", "ai that learns", "intelligent assistant", "mror"],
+  authors: [{ name: "MROR Team" }],
+  creator: "MROR",
+  publisher: "MROR",
   robots: {
     index: true,
     follow: true,
@@ -40,24 +40,24 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'en_US',
     url: '/',
-    siteName: 'Lotus',
-    title: 'Lotus: The Private, Personal, and Powerful AI You Own',
-    description: 'Why rent an AI that watches you, forgets you, and costs $20? Lotus learns you, protects you, and costs less than your coffee. For users who want intelligence—not surveillance.',
+    siteName: 'MROR',
+    title: 'MROR: AI That Adapts to Your World',
+    description: 'Stop repeating yourself. MROR learns your style, remembers your context, and adapts to become uniquely yours. AI that evolves with you.',
     images: [
       {
-        url: '/lotus.svg',
+        url: '/mror.png',
         width: 1200,
         height: 630,
-        alt: 'Lotus: The Private, Personal, and Powerful AI You Own',
+        alt: 'MROR: AI That Adapts to Your World',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Lotus: The Private, Personal, and Powerful AI You Own',
-    description: 'Why rent an AI that watches you, forgets you, and costs $20? Lotus learns you, protects you, and costs less than your coffee. For users who want intelligence—not surveillance.',
-    images: ['/lotus.svg'],
-    creator: '@lotus_ai',
+    title: 'MROR: AI That Adapts to Your World',
+    description: 'Stop repeating yourself. MROR learns your style, remembers your context, and adapts to become uniquely yours. AI that evolves with you.',
+    images: ['/mror.png'],
+    creator: '@mror_ai',
   },
   verification: {
     google: 'google-site-verification-code-here',
@@ -79,7 +79,7 @@ export default function RootLayout({
         <head>
           <link rel="preconnect" href="https://fonts.googleapis.com" />
           <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-          <link rel="preload" href="/lotus.svg" as="image" />
+          <link rel="preload" href="/mror.png" as="image" />
           <meta name="theme-color" content="#8B5CF6" />
           <meta name="color-scheme" content="dark light" />
           {/* Set initial theme to system preference or saved choice without flash */}
@@ -88,8 +88,8 @@ export default function RootLayout({
               __html: `(() => { try { const ls = localStorage.getItem('theme'); const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches; const useDark = ls ? ls === 'dark' : prefersDark; document.documentElement.classList.toggle('dark', useDark); } catch (e) {} })();`,
             }}
           />
-          <link rel="icon" href="/lotus.svg" type="image/svg+xml" />
-          <link rel="apple-touch-icon" href="/lotus.svg" />
+          <link rel="icon" href="/favicon.png" type="image/png" />
+          <link rel="apple-touch-icon" href="/mror.png" />
           <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         </head>
         <body
