@@ -177,7 +177,7 @@ export default function PaywallScreen() {
               <Feather name="check-circle" size={48} color={theme.colors.success} />
               <Text style={styles.successTitle}>All Pro Features Unlocked</Text>
               <Text style={styles.successDescription}>
-                Thank you for supporting Lotus! Enjoy unlimited access to all features.
+                Thank you for supporting Mror! Enjoy unlimited access to all features.
               </Text>
             </Card>
 

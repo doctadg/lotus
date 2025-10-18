@@ -75,7 +75,7 @@ export default function ContextScreen() {
 
         <View style={styles.content}>
           <Text style={styles.description}>
-            Context helps Lotus AI understand the background and provide more relevant responses.
+            Context helps Mror understand the background and provide more relevant responses.
           </Text>
 
           {context.map((ctx) => (

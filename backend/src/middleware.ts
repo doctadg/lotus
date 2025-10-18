@@ -1,6 +1,20 @@
-import { clerkMiddleware } from "@clerk/nextjs/server";
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-export default clerkMiddleware();
+const isPublicRoute = createRouteMatcher([
+  '/api/health(.*)',
+  '/api/webhooks(.*)',
+]);
+
+export default clerkMiddleware(async (auth, request) => {
+  // Allow public routes without auth
+  if (isPublicRoute(request)) {
+    return;
+  }
+
+  // All other routes require authentication
+  // This will automatically validate Bearer tokens from mobile apps
+  await auth.protect();
+});
 
 export const config = {
   matcher: [

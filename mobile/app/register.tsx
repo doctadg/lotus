@@ -112,7 +112,7 @@ export default function RegisterScreen() {
         <View style={styles.content}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Join Lotus</Text>
+            <Text style={styles.title}>Join Mror</Text>
             <Text style={styles.subtitle}>Create your account to get started</Text>
           </View>
 

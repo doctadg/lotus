@@ -63,8 +63,8 @@ export function LoginScreen({ navigation }: any) {
       // This will redirect to OAuth provider
       await signIn?.authenticateWithRedirect({
         strategy,
-        redirectUrl: 'lotus://oauth-callback', // Deep link for your app
-        redirectUrlComplete: 'lotus://oauth-complete'
+        redirectUrl: 'mror://oauth-callback', // Deep link for your app
+        redirectUrlComplete: 'mror://oauth-complete'
       })
     } catch (err: any) {
       console.error('OAuth error:', err)
@@ -91,7 +91,7 @@ export function LoginScreen({ navigation }: any) {
         <View style={styles.content}>
           {/* Header with Logo */}
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>Lotus Chat</Text>
+            <Text style={styles.headerTitle}>Mror</Text>
           </View>
           
           {/* Logo and Form Container */}
@@ -329,7 +329,7 @@ export function RegisterScreen({ navigation }: any) {
         <View style={styles.content}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Join Lotus</Text>
+            <Text style={styles.title}>Join Mror</Text>
             <Text style={styles.subtitle}>Create your account to get started</Text>
           </View>
 

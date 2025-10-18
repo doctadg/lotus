@@ -4,7 +4,7 @@ import Constants from 'expo-constants'
 
 class ApiService {
   private api: AxiosInstance
-  private baseURL = Constants.expoConfig?.extra?.apiUrl || 'https://lotus-backend.vercel.app/api'
+  private baseURL = Constants.expoConfig?.extra?.apiUrl || 'https://mror.app/api'
   private tokenProvider: (() => Promise<string | null>) | null = null
 
   constructor() {

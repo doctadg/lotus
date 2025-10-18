@@ -64,7 +64,7 @@ export default function QuestionsScreen() {
 
         <View style={styles.content}>
           <Text style={styles.description}>
-            Add questions you'd like Lotus AI to help you explore.
+            Add questions you'd like Mror to help you explore.
           </Text>
 
           <View style={styles.addQuestionContainer}>

@@ -167,7 +167,7 @@ export default function PricingScreen() {
 
               <View style={styles.planHeader}>
                 <Feather name="star" size={28} color={theme.colors.text} />
-                <Text style={[styles.planName, styles.proPlanName]}>Lotus Pro</Text>
+                <Text style={[styles.planName, styles.proPlanName]}>Mror Pro</Text>
               </View>
 
               {packages.length > 0 ? (

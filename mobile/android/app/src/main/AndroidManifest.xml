@@ -25,8 +25,8 @@
         <action android:name="android.intent.action.VIEW"/>
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
-        <data android:scheme="lotus"/>
-        <data android:scheme="exp+lotus-ai"/>
+        <data android:scheme="mror"/>
+        <data android:scheme="exp+mror"/>
       </intent-filter>
     </activity>
   </application>

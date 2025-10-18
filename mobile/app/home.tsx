@@ -468,7 +468,9 @@ export default function HomeScreen() {
               >
               {/* Header with Logo */}
               <View style={styles.sidebarHeader}>
-                <LotusFullLogo width={120} height={30} color={theme.colors.text} />
+                <View style={styles.sidebarLogoContainer}>
+                  <LotusFullLogo width={160} height={40} />
+                </View>
                 <TouchableOpacity onPress={() => setSidebarOpen(false)}>
                   <Feather name="x" size={24} color={theme.colors.text} />
                 </TouchableOpacity>
@@ -552,7 +554,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
           <View style={styles.headerLogoContainer}>
             <LotusIcon size={24} color={theme.colors.text} />
-            <Text style={styles.headerTitle}>Lotus</Text>
+            <Text style={styles.headerTitle}>Mror</Text>
           </View>
           <View style={styles.headerSpacer} />
         </View>
@@ -639,7 +641,7 @@ export default function HomeScreen() {
               style={styles.textInput}
               value={inputText}
               onChangeText={setInputText}
-              placeholder={uploading ? 'Uploading…' : 'Message Lotus...'}
+              placeholder={uploading ? 'Uploading…' : 'Message Mror...'}
               placeholderTextColor="#ffffff60"
               multiline
               editable={!isLoading && !uploading}
@@ -712,6 +714,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: theme.spacing.xl,
     paddingTop: theme.spacing['3xl']
+  },
+  sidebarLogoContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.md,
   },
   userProfile: {
     flexDirection: 'row',

@@ -8,7 +8,10 @@ import {
   logoutUser as logoutRevenueCatUser,
   hasProSubscription,
   setupCustomerInfoListener,
+  syncSubscriptionWithBackend,
+  setSyncSubscriptionImpl,
 } from '../lib/revenuecat'
+import { apiService } from '../lib/api'
 
 interface AuthContextType {
   user: User | null
@@ -44,9 +47,8 @@ function InnerAuthProvider({ children, isRevenueCatReady }: { children: ReactNod
 
   // Set up API service token provider when auth state changes
   useEffect(() => {
-    const setupApiTokenProvider = async () => {
+    const setupApiTokenProvider = () => {
       try {
-        const { apiService } = await import('../lib/api')
         const clerkJwtTemplate = Constants.expoConfig?.extra?.clerkJwtTemplate as string | undefined
         if (__DEV__) {
           console.log('Auth state changed:', { isSignedIn, isLoaded })
@@ -95,7 +97,6 @@ function InnerAuthProvider({ children, isRevenueCatReady }: { children: ReactNod
           // Sync subscription with backend on startup
           // This handles cases where webhooks may have failed
           if (isPro) {
-            const { syncSubscriptionWithBackend } = await import('../lib/revenuecat')
             await syncSubscriptionWithBackend()
           }
         } catch (error) {
@@ -197,6 +198,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const initialize = async () => {
       try {
         console.log('🔧 AuthProvider: Starting RevenueCat initialization...')
+
+        // Set up sync function implementation to avoid circular dependency
+        setSyncSubscriptionImpl((data) => apiService.syncRevenueCatSubscription(data))
+
         await initializeRevenueCat()
         console.log('✅ AuthProvider: RevenueCat initialization complete')
         setIsRevenueCatReady(true)

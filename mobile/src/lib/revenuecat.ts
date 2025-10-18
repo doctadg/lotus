@@ -22,8 +22,8 @@ export const ENTITLEMENTS = {
 
 // Product identifiers (must match App Store Connect / Google Play Console)
 export const PRODUCTS = {
-  PRO_MONTHLY: 'lotus_pro_monthly',
-  PRO_ANNUAL: 'lotus_pro_annual',
+  PRO_MONTHLY: 'mror_pro_monthly',
+  PRO_ANNUAL: 'mror_pro_annual',
 } as const
 
 export type Entitlement = typeof ENTITLEMENTS[keyof typeof ENTITLEMENTS]
@@ -72,13 +72,8 @@ export async function initializeRevenueCat(): Promise<void> {
       console.log('🚀 Initializing RevenueCat with key:', apiKey.substring(0, 10) + '...')
     }
 
-    // Configure RevenueCat with dangerousSettings to prevent URL-related errors
-    await Purchases.configure({
-      apiKey,
-      dangerousSettings: {
-        autoSyncPurchases: true,
-      }
-    })
+    // Configure RevenueCat
+    await Purchases.configure({ apiKey })
     isConfigured = true
 
     if (__DEV__) {
@@ -370,6 +365,21 @@ export function setupCustomerInfoListener(
   }
 }
 
+// Export sync function that will be implemented by api module
+// This avoids circular dependency issues
+let syncSubscriptionImpl: ((data: {
+  isPro: boolean
+  customerInfo: {
+    originalAppUserId: string
+    activeSubscriptions: string[]
+    entitlements: string[]
+  } | null
+}) => Promise<void>) | null = null
+
+export function setSyncSubscriptionImpl(impl: typeof syncSubscriptionImpl) {
+  syncSubscriptionImpl = impl
+}
+
 /**
  * Sync RevenueCat subscription with backend
  * This is automatically called after purchases and restores
@@ -377,14 +387,18 @@ export function setupCustomerInfoListener(
  */
 export async function syncSubscriptionWithBackend(): Promise<void> {
   try {
-    // Dynamically import to avoid circular dependency
-    const { apiService } = await import('./api')
+    if (!syncSubscriptionImpl) {
+      if (__DEV__) {
+        console.warn('⚠️ Sync function not initialized yet, skipping sync')
+      }
+      return
+    }
 
     const customerInfo = await getCustomerInfo()
     const isPro = isCustomerInfoPro(customerInfo)
 
     // Call backend API to sync subscription status
-    await apiService.syncRevenueCatSubscription({
+    await syncSubscriptionImpl({
       isPro,
       customerInfo: customerInfo ? {
         originalAppUserId: customerInfo.originalAppUserId,

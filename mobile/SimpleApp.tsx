@@ -4,7 +4,7 @@ import { View, Text, StyleSheet } from 'react-native'
 export default function SimpleApp() {
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>Lotus AI Mobile</Text>
+      <Text style={styles.text}>Mror Mobile</Text>
       <Text style={styles.subtitle}>App is working!</Text>
     </View>
   )

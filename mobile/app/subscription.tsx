@@ -90,7 +90,7 @@ export default function SubscriptionScreen() {
         if (Platform.OS === 'web') {
           router.push('/settings')
         } else {
-          const url = 'https://lotus-backend.vercel.app/settings'
+          const url = 'https://mror.app/settings'
           await Linking.openURL(url)
         }
       } else {
@@ -171,8 +171,8 @@ export default function SubscriptionScreen() {
             </Text>
             <Text style={styles.planDescription}>
               {isPro
-                ? 'Unlimited access to all Lotus AI features'
-                : 'Basic access to Lotus AI features'}
+                ? 'Unlimited access to all Mror features'
+                : 'Basic access to Mror features'}
             </Text>
 
             {isPro && (
@@ -227,7 +227,7 @@ export default function SubscriptionScreen() {
             </View>
             <View style={styles.planHeader}>
               <Feather name="star" size={28} color={theme.colors.text} />
-              <Text style={styles.proPlanName}>Lotus Pro</Text>
+              <Text style={styles.proPlanName}>Mror Pro</Text>
             </View>
             <Text style={styles.proPlanPrice}>$9.99/month</Text>
             

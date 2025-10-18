@@ -1,4 +1,4 @@
-package com.lotus.ai
+package com.mror.app
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

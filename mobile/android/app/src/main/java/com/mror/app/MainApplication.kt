@@ -1,4 +1,4 @@
-package com.lotus.ai
+package com.mror.app
 
 import android.app.Application
 import android.content.res.Configuration

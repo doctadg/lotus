@@ -57,7 +57,7 @@ export function HomeScreen({ navigation }: any) {
           [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Upgrade', onPress: async () => {
-              const webBase = (Constants.expoConfig?.extra?.apiUrl as string | undefined)?.replace(/\/?api\/?$/, '') || 'https://lotus.sh'
+              const webBase = (Constants.expoConfig?.extra?.apiUrl as string | undefined)?.replace(/\/?api\/?$/, '') || 'https://mror.app'
               await WebBrowser.openBrowserAsync(`${webBase}/pricing`)
             }}
           ]
@@ -84,7 +84,7 @@ export function HomeScreen({ navigation }: any) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Lotus AI</Text>
+        <Text style={styles.headerTitle}>Mror</Text>
         <View style={styles.headerButtons}>
           <TouchableOpacity onPress={() => navigation.navigate('Memories')} style={styles.headerButton}>
             <Text style={styles.headerButtonText}>Memories</Text>
@@ -228,7 +228,7 @@ export function ProfileScreen({ navigation }: any) {
 
 // Placeholder screens
 export function SettingsScreen({ navigation }: any) {
-  const webBase = (Constants.expoConfig?.extra?.apiUrl as string | undefined)?.replace(/\/?api\/?$/, '') || 'https://lotus.sh'
+  const webBase = (Constants.expoConfig?.extra?.apiUrl as string | undefined)?.replace(/\/?api\/?$/, '') || 'https://mror.app'
   const { isPro, loading: subLoading, error: subError, purchasePro, restorePurchases } = useSubscription()
   const [status, setStatus] = useState<string | null>(null)
 

@@ -85,7 +85,7 @@ export default function LoginScreen() {
         <View style={styles.content}>
           {/* Header with Logo */}
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>Lotus Chat</Text>
+            <Text style={styles.headerTitle}>Mror</Text>
           </View>
           
           {/* Logo and Form Container */}
