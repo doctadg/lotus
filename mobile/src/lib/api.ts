@@ -451,17 +451,6 @@ class ApiService {
     }
   }
 
-  // Questions methods
-  async getPersonalizedQuestions(): Promise<{ questions: any[]; isPersonalized: boolean; source: string }> {
-    const response = await this.api.get<ApiResponse<{ questions: any[]; isPersonalized: boolean; source: string }>>('/user/questions')
-    
-    if (response.data.success && response.data.data) {
-      return response.data.data
-    }
-    
-    throw new Error(response.data.error || 'Failed to get personalized questions')
-  }
-
   // Memory methods
   async getUserMemories(query?: string, type?: string, limit: number = 20): Promise<{ memories: any[] }> {
     const params = new URLSearchParams()

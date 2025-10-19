@@ -38,81 +38,75 @@ export async function POST(
       return new Response('Unauthorized', { status: 401 })
     }
     
-    // Sync user with database if needed
-    const user = await syncUserWithDatabase(clerkUserId)
-    
-    if (!user) {
-      return new Response('User sync failed', { status: 500 })
-    }
-    
-    const userId = user.id
-    const userEmail = user.email
-
+    // Parse request body first
     const { content, deepResearchMode = false } = await request.json()
 
     if (!content) {
       return new Response('Message content is required', { status: 400 })
     }
 
-    // Verify chat ownership
-    const chat = await prisma.chat.findFirst({
-      where: {
-        id: chatId,
-        userId
-      }
-    })
+    // Parallelize user sync and chat verification for speed
+    const [user, chatVerification] = await Promise.all([
+      syncUserWithDatabase(clerkUserId),
+      prisma.chat.findFirst({
+        where: { id: chatId },
+        select: { userId: true }
+      })
+    ])
 
-    if (!chat) {
+    if (!user) {
+      return new Response('User sync failed', { status: 500 })
+    }
+
+    const userId = user.id
+    const userEmail = user.email
+
+    // Verify chat ownership
+    if (!chatVerification || chatVerification.userId !== userId) {
       return new Response('Chat not found', { status: 404 })
     }
 
-    // Check if user has access to deep research via hybrid subscription (RevenueCat or Clerk)
-    if (deepResearchMode) {
-      console.log(`🔍 [Deep Research Check] User ${clerkUserId} requesting deep research`)
-      const hasDeepResearch = await canUseDeepResearch()
-      console.log(`📊 [Deep Research Check] Result: ${hasDeepResearch}`)
+    // Parallelize permission checks and chat history retrieval
+    const [hasDeepResearch, hasUnlimited, messages] = await Promise.all([
+      deepResearchMode ? canUseDeepResearch() : Promise.resolve(true),
+      hasUnlimitedMessages(),
+      prisma.message.findMany({
+        where: { chatId },
+        orderBy: { createdAt: 'asc' },
+        take: 10  // Limit context to last 10 messages for performance
+      })
+    ])
 
-      if (!hasDeepResearch) {
-        console.log(`❌ [Deep Research Check] Denying access - user does not have Pro subscription`)
-        return new Response(
-          JSON.stringify({
-            error: 'Deep Research is a Pro feature',
-            message: 'Upgrade to Pro to access Deep Research mode with comprehensive sources and enhanced analysis.',
-            upgradeUrl: '/pricing'
-          }),
-          {
-            status: 403,
-            headers: { 'Content-Type': 'application/json' }
-          }
-        )
-      }
-
-      console.log(`✅ [Deep Research Check] Access granted - user has Pro subscription`)
-
-      // Track usage for analytics (even for Pro users)
-      const canProceed = await trackDeepResearchUsage(userId)
-      console.log(`📊 [Deep Research Usage] Usage tracked, can proceed: ${canProceed}`)
-
-      if (!canProceed) {
-        console.log(`❌ [Deep Research Usage] Daily limit reached for user`)
-        return new Response(
-          JSON.stringify({
-            error: 'Daily limit reached',
-            message: 'You have reached today\'s Deep Research limit on the free plan. Upgrade to Pro for unlimited deep research.',
-            upgradeUrl: '/pricing'
-          }),
-          {
-            status: 429,
-            headers: { 'Content-Type': 'application/json' }
-          }
-        )
-      }
+    // Check deep research access if requested
+    if (deepResearchMode && !hasDeepResearch) {
+      console.log(`❌ [Deep Research Check] Denying access - user does not have Pro subscription`)
+      return new Response(
+        JSON.stringify({
+          error: 'Deep Research is a Pro feature',
+          message: 'Upgrade to Pro to access Deep Research mode with comprehensive sources and enhanced analysis.',
+          upgradeUrl: '/pricing'
+        }),
+        {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      )
     }
 
-    // Check message rate limits using Clerk billing
-    const hasUnlimited = await hasUnlimitedMessages()
+    // Track usage asynchronously - don't block streaming
+    const trackingPromises = []
+
+    if (deepResearchMode) {
+      trackingPromises.push(
+        trackDeepResearchUsage(userId).catch(err => {
+          console.error('Error tracking deep research usage:', err)
+          return true // Continue even if tracking fails
+        })
+      )
+    }
+
+    // Check message rate limits
     if (!hasUnlimited) {
-      // Free users: check rate limits
       const canProceed = await trackMessageUsage(userId)
       if (!canProceed) {
         return new Response(
@@ -128,16 +122,19 @@ export async function POST(
         )
       }
     } else {
-      // Pro users: still track usage for analytics, but don't enforce limits
-      await trackMessageUsage(userId)
+      // Track Pro user usage asynchronously
+      trackingPromises.push(
+        trackMessageUsage(userId).catch(err => {
+          console.error('Error tracking message usage:', err)
+          return true
+        })
+      )
     }
 
-    // Get chat history for context
-    const messages = await prisma.message.findMany({
-      where: { chatId },
-      orderBy: { createdAt: 'asc' },
-      take: 10  // Limit context to last 10 messages for performance
-    })
+    // Execute tracking in background
+    if (trackingPromises.length > 0) {
+      Promise.all(trackingPromises).catch(console.error)
+    }
 
     // Extract images from user message
     const userImages = extractUserImageUrls(content)
@@ -147,32 +144,36 @@ export async function POST(
       description: undefined
     }))
 
-    // Store user message
-    const userMessage = await prisma.message.create({
-      data: {
-        chatId,
-        role: 'user',
-        content,
-        images: userImageData.length > 0 ? userImageData : undefined
-      }
-    })
+    // Get relevant image context for the agent (do this early while we're creating messages)
+    const imageContextPromise = imageContextManager.getImageContextForPrompt(chatId, content, 3)
 
-    // Store image context for user message if it contains images
+    // Create both messages in parallel for speed
+    const [userMessage, assistantMessage, imageContext] = await Promise.all([
+      prisma.message.create({
+        data: {
+          chatId,
+          role: 'user',
+          content,
+          images: userImageData.length > 0 ? userImageData : undefined
+        }
+      }),
+      prisma.message.create({
+        data: {
+          chatId,
+          role: 'assistant',
+          content: '' // Will be updated as stream progresses
+        }
+      }),
+      imageContextPromise
+    ])
+
+    // Store image context asynchronously if needed
     if (userImages.length > 0) {
-      await imageContextManager.storeImageContext(chatId, userMessage.id, content, 'user')
+      imageContextManager.storeImageContext(chatId, userMessage.id, content, 'user').catch(err => {
+        console.error('Error storing image context:', err)
+      })
     }
 
-    // Create assistant message placeholder
-    const assistantMessage = await prisma.message.create({
-      data: {
-        chatId,
-        role: 'assistant',
-        content: '' // Will be updated as stream progresses
-      }
-    })
-
-    // Get relevant image context for the agent
-    const imageContext = await imageContextManager.getImageContextForPrompt(chatId, content, 3)
     const enhancedContent = imageContext + content
 
     // Create streaming response

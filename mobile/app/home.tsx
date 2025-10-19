@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Modal,
   KeyboardAvoidingView,
   Platform,
   Animated,
@@ -30,6 +29,8 @@ import * as ImagePicker from 'expo-image-picker'
 import * as DocumentPicker from 'expo-document-picker'
 import { useAuth as useClerkAuth } from '@clerk/clerk-expo'
 import { canUseDeepResearch, isProUser } from '../src/lib/billing'
+import SwipeableSidebar from '../src/components/SwipeableSidebar'
+import SwipeGestureWrapper from '../src/components/SwipeGestureWrapper'
 
 interface Message {
   id: string
@@ -444,108 +445,24 @@ export default function HomeScreen() {
 
   return (
     <AuthGuard>
-      <View style={styles.container}>
-        {/* Sidebar Modal */}
-        <Modal
-          visible={sidebarOpen}
-          animationType="none"
-          transparent={true}
-          onRequestClose={() => setSidebarOpen(false)}
-        >
-          <TouchableOpacity 
-            style={styles.sidebarOverlay}
-            activeOpacity={1}
-            onPress={() => setSidebarOpen(false)}
-          >
-            <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-              <Animated.View 
-                style={[
-                  styles.sidebar,
-                  {
-                    transform: [{ translateX: slideAnim }]
-                  }
-                ]}
-              >
-              {/* Header with Logo */}
-              <View style={styles.sidebarHeader}>
-                <View style={styles.sidebarLogoContainer}>
-                  <LotusFullLogo width={160} height={40} />
-                </View>
-                <TouchableOpacity onPress={() => setSidebarOpen(false)}>
-                  <Feather name="x" size={24} color={theme.colors.text} />
-                </TouchableOpacity>
-              </View>
-
-              {/* User Profile */}
-              <View style={styles.userProfile}>
-                <View style={styles.userAvatar}>
-                  <Text style={styles.userAvatarText}>
-                    {user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
-                  </Text>
-                </View>
-                <View style={styles.userInfo}>
-                  <Text style={styles.userName}>{user?.name || 'User'}</Text>
-                  <Text style={styles.userEmail}>{user?.email}</Text>
-                  {isPro && (
-                    <View style={styles.proBadge}>
-                      <Feather name="star" size={10} color={theme.colors.primary} />
-                      <Text style={styles.proBadgeText}>Pro</Text>
-                    </View>
-                  )}
-                </View>
-                <TouchableOpacity onPress={logout} style={styles.logoutButton}>
-                  <Feather name="log-out" size={16} color={theme.colors.text} />
-                </TouchableOpacity>
-              </View>
-
-              {/* Upgrade Banner for Free Users */}
-              {!isPro && (
-                <TouchableOpacity
-                  style={styles.upgradeBanner}
-                  onPress={() => {
-                    setSidebarOpen(false)
-                    router.push('/paywall')
-                  }}
-                >
-                  <View style={styles.upgradeBannerContent}>
-                    <Feather name="star" size={20} color="#fff" />
-                    <View style={styles.upgradeBannerText}>
-                      <Text style={styles.upgradeBannerTitle}>Upgrade to Pro</Text>
-                      <Text style={styles.upgradeBannerSubtitle}>
-                        Unlimited messages & deep research
-                      </Text>
-                    </View>
-                  </View>
-                  <Feather name="chevron-right" size={20} color="#fff" />
-                </TouchableOpacity>
-              )}
-
-              {/* New Chat Button */}
-              <TouchableOpacity style={styles.newChatButton} onPress={newChat}>
-                <Feather name="plus" size={16} color={theme.colors.text} />
-                <Text style={styles.newChatText}>New Chat</Text>
-              </TouchableOpacity>
-
-              {/* Chat Sessions */}
-              <ScrollView style={styles.chatsList}>
-                {chatSessions.map((chat) => (
-                  <TouchableOpacity
-                    key={chat.id}
-                    style={[
-                      styles.chatItem,
-                      currentChatId === chat.id && styles.chatItemActive
-                    ]}
-                    onPress={() => selectChat(chat.id)}
-                  >
-                    <Feather name="message-circle" size={16} color={theme.colors.textSecondary} />
-                    <Text style={styles.chatItemText}>{chat.title}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-              </Animated.View>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </Modal>
+      <SwipeGestureWrapper
+        onSwipeToOpen={() => setSidebarOpen(true)}
+        onSwipeToClose={() => setSidebarOpen(false)}
+        sidebarOpen={sidebarOpen}
+      >
+        <View style={styles.container}>
+          {/* New Swipeable Sidebar */}
+          <SwipeableSidebar
+            isOpen={sidebarOpen}
+            onClose={() => setSidebarOpen(false)}
+            onOpen={() => setSidebarOpen(true)}
+            user={user}
+            isPro={isPro}
+            chatSessions={chatSessions}
+            onLoadChat={selectChat}
+            onNewChat={newChat}
+            onLogout={logout}
+          />
 
         {/* Header */}
         <View style={styles.header}>
@@ -560,7 +477,7 @@ export default function HomeScreen() {
         </View>
 
         {/* Messages */}
-        <View style={styles.messagesContainer}>
+          <View style={styles.messagesContainer}>
           {messages.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyTitle}>How can I help you today?</Text>
@@ -684,6 +601,7 @@ export default function HomeScreen() {
           </View>
         </Animated.View>
       </View>
+        </SwipeGestureWrapper>
     </AuthGuard>
   )
 }
@@ -693,11 +611,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background
   },
-  sidebarOverlay: {
-    flex: 1,
-    backgroundColor: theme.colors.overlay,
-    flexDirection: 'row'
-  },
+
   sidebar: {
     width: 300,
     height: '100%',

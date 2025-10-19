@@ -56,12 +56,42 @@ export class AdaptiveMemoryService {
     if (this.isGreeting(query) || queryType === 'greeting') {
       return true
     }
-    
+
     // Skip for very short queries (likely simple)
     if (query.trim().length < 15) {
       return true
     }
-    
+
+    // Skip for thank you messages
+    if (/^(thanks?|thank\s+you|ty|thx|cheers|appreciated?)[\.!?\s]*$/i.test(query)) {
+      return true
+    }
+
+    // Skip for goodbye messages
+    if (/^(bye|goodbye|see\s+ya|later|farewell|ciao|adios)[\.!?\s]*$/i.test(query)) {
+      return true
+    }
+
+    // Skip for simple acknowledgments
+    if (/^(yes|no|yeah|nope|yep|nah|okay|ok|sure|alright)[\.!?\s]*$/i.test(query)) {
+      return true
+    }
+
+    // Skip for simple math
+    if (/^[\d\s\+\-\*\/\(\)\^\%]+$/.test(query)) {
+      return true
+    }
+
+    // Skip for current time/date requests
+    if (/^what\s+(time|date|day)\s+(is\s+it|today)[\.?\s]*$/i.test(query)) {
+      return true
+    }
+
+    // Skip for help requests
+    if (/^(help|help\s+me|what\s+can\s+you\s+do|how\s+do\s+you\s+work)[\.?\s]*$/i.test(query)) {
+      return true
+    }
+
     // Skip for pure factual/definitional queries - expanded patterns
     const skipPatterns = [
       /^(what is|define|explain)\s+[\w\s]+$/i,     // Definitions

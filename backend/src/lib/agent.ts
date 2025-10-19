@@ -294,6 +294,27 @@ class AIAgent {
       return { isSimple: true, type: 'greeting', response: "I'm doing well, thanks for asking! How can I assist you?" }
     }
 
+    // Thank you responses - new fast-path
+    if (/^(thanks?|thank\s+you|ty|thx|cheers|appreciated?)[\.!?\s]*$/i.test(trimmed)) {
+      return { isSimple: true, type: 'thanks', response: "You're welcome! Happy to help!" }
+    }
+
+    // Goodbyes - new fast-path
+    if (/^(bye|goodbye|see\s+ya|later|farewell|ciao|adios)[\.!?\s]*$/i.test(trimmed)) {
+      return { isSimple: true, type: 'goodbye', response: 'Goodbye! Feel free to come back anytime you need help.' }
+    }
+
+    // Time/date questions - new fast-path with response
+    if (/^what\s+(time|date|day)\s+(is\s+it|today)[\.?\s]*$/i.test(trimmed)) {
+      const now = new Date()
+      const response = trimmed.includes('time')
+        ? `It's currently ${now.toLocaleTimeString()}`
+        : trimmed.includes('date')
+        ? `Today is ${now.toLocaleDateString()}`
+        : `Today is ${now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`
+      return { isSimple: true, type: 'temporal', response }
+    }
+
     // Simple math - expanded patterns
     if (/^[\d\s\+\-\*\/\(\)\^\%]+$/.test(trimmed)) {
       try {
@@ -302,6 +323,20 @@ class AIAgent {
         return { isSimple: true, type: 'math', response: String(result) }
       } catch {
         return { isSimple: false, type: 'unknown' }
+      }
+    }
+
+    // Yes/no acknowledgments - new fast-path
+    if (/^(yes|no|yeah|nope|yep|nah|okay|ok|sure|alright)[\.!?\s]*$/i.test(trimmed)) {
+      return { isSimple: true, type: 'acknowledgment', response: 'Understood! How can I help you further?' }
+    }
+
+    // Help requests - new fast-path
+    if (/^(help|help\s+me|what\s+can\s+you\s+do|how\s+do\s+you\s+work)[\.?\s]*$/i.test(trimmed)) {
+      return {
+        isSimple: true,
+        type: 'help',
+        response: "I'm Mror, your AI assistant! I can help you with:\n• Answering questions\n• Research and analysis\n• Creative writing\n• Problem-solving\n• And much more!\n\nJust ask me anything!"
       }
     }
 
@@ -315,7 +350,7 @@ class AIAgent {
       return { isSimple: false, type: 'information' }
     }
 
-    // Time/date questions
+    // Time/date questions (non-current)
     if (/\b(time|date|day|month|year|now|current)\b/i.test(trimmed) && trimmed.length < 30) {
       return { isSimple: false, type: 'temporal' }
     }
@@ -378,7 +413,9 @@ class AIAgent {
       // Skip memory retrieval for simple/fast queries - expanded conditions
       const skipMemory = simpleCheck.type === 'greeting' || simpleCheck.type === 'math' ||
                          simpleCheck.type === 'factual' || simpleCheck.type === 'temporal' ||
-                         simpleCheck.type === 'information' || !userId
+                         simpleCheck.type === 'information' || simpleCheck.type === 'thanks' ||
+                         simpleCheck.type === 'goodbye' || simpleCheck.type === 'acknowledgment' ||
+                         simpleCheck.type === 'help' || !userId || message.trim().length < 15
 
       if (skipMemory && userId) {
         console.log(`⚡ [TRACE] Skipping memory retrieval for ${simpleCheck.type} query`)
@@ -592,9 +629,12 @@ class AIAgent {
         metadata: { phase: 'initialization', timestamp: Date.now() }
       }
       
-      // Skip memory retrieval for simple/fast queries
+      // Skip memory retrieval for simple/fast queries - matching processMessage logic
       const skipMemory = simpleCheck.type === 'greeting' || simpleCheck.type === 'math' ||
-                         simpleCheck.type === 'factual' || !userId
+                         simpleCheck.type === 'factual' || simpleCheck.type === 'temporal' ||
+                         simpleCheck.type === 'information' || simpleCheck.type === 'thanks' ||
+                         simpleCheck.type === 'goodbye' || simpleCheck.type === 'acknowledgment' ||
+                         simpleCheck.type === 'help' || !userId || message.trim().length < 15
 
       // Get user memories if userId is provided
       let userMemoriesContext = ''

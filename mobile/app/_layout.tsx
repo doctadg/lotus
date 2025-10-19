@@ -4,6 +4,7 @@ import { AuthProvider } from '../src/contexts/AuthContext'
 import * as Font from 'expo-font'
 import * as SplashScreen from 'expo-splash-screen'
 import { View } from 'react-native'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -31,27 +32,26 @@ export default function RootLayout() {
   }, [])
 
   return (
-    <AuthProvider>
-      {!fontsLoaded ? (
-        <View style={{ flex: 1, backgroundColor: '#141414' }} />
-      ) : (
-        <Stack>
-          <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="home" options={{ headerShown: false }} />
-          <Stack.Screen name="login" options={{ headerShown: false }} />
-          <Stack.Screen name="register" options={{ headerShown: false }} />
-          <Stack.Screen name="signup" options={{ headerShown: false }} />
-          <Stack.Screen name="profile" options={{ headerShown: false }} />
-          <Stack.Screen name="memories" options={{ headerShown: false }} />
-          <Stack.Screen name="memory/[id]" options={{ headerShown: false }} />
-          <Stack.Screen name="subscription" options={{ headerShown: false }} />
-          <Stack.Screen name="context" options={{ headerShown: false }} />
-          <Stack.Screen name="questions" options={{ headerShown: false }} />
-          <Stack.Screen name="settings" options={{ headerShown: false }} />
-          <Stack.Screen name="paywall" options={{ headerShown: false }} />
-          <Stack.Screen name="pricing" options={{ headerShown: false }} />
-        </Stack>
-      )}
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        {!fontsLoaded ? (
+          <View style={{ flex: 1, backgroundColor: '#141414' }} />
+        ) : (
+          <Stack>
+            <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="home" options={{ headerShown: false }} />
+            <Stack.Screen name="login" options={{ headerShown: false }} />
+            <Stack.Screen name="register" options={{ headerShown: false }} />
+            <Stack.Screen name="signup" options={{ headerShown: false }} />
+            <Stack.Screen name="profile" options={{ headerShown: false }} />
+            <Stack.Screen name="subscription" options={{ headerShown: false }} />
+            <Stack.Screen name="context" options={{ headerShown: false }} />
+            <Stack.Screen name="settings" options={{ headerShown: false }} />
+            <Stack.Screen name="paywall" options={{ headerShown: false }} />
+            <Stack.Screen name="pricing" options={{ headerShown: false }} />
+          </Stack>
+        )}
+      </AuthProvider>
+    </GestureHandlerRootView>
   )
 }
