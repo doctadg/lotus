@@ -13,7 +13,7 @@ import { traceable } from 'langsmith/traceable'
 
 // Use a faster model for question generation
 const llm = new ChatOpenAI({
-  model: 'openai/gpt-3.5-turbo', // Faster model for quick generation
+  model: 'openai/gpt-oss-20b', // Faster model for quick generation
   temperature: 0.3,
   apiKey: process.env.OPENROUTER_API_KEY,
   maxRetries: 2, // Reduced retries

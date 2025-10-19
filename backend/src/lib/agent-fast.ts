@@ -102,7 +102,7 @@ class FastAIAgent {
     }
 
     // Use faster model for quick responses
-    const modelName = process.env.OPENROUTER_FAST_MODEL || 'openai/gpt-3.5-turbo'
+    const modelName = process.env.OPENROUTER_FAST_MODEL || 'openai/gpt-oss-20b'
 
     this.llm = new ChatOpenAI({
       model: modelName,
@@ -347,7 +347,7 @@ class FastAIAgent {
       return {
         content: result.output,
         metadata: {
-          model: process.env.OPENROUTER_FAST_MODEL || 'openai/gpt-3.5-turbo',
+          model: process.env.OPENROUTER_FAST_MODEL || 'openai/gpt-oss-20b',
           fast_mode: true,
           tools_used: result.intermediateSteps?.length > 0 ? true : false,
           user_memories_used: userMemoriesContext.length > 0 ? true : false,
