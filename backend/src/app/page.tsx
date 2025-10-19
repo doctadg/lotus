@@ -16,6 +16,7 @@ import HoverCard from "@/components/landing/HoverCard"
 import StaggerChildren from "@/components/landing/StaggerChildren"
 import ComparisonDashboard from "@/components/landing/ComparisonDashboard"
 import AdaptiveFeatureCard from "@/components/landing/AdaptiveFeatureCard"
+import { Logo } from "@/components/ui/Logo"
 
 export default function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -661,7 +662,7 @@ export default function LandingPage() {
               {/* Company Info */}
               <div className="sm:col-span-2 lg:col-span-1">
                 <div className="flex items-center mb-6">
-                  <img src="/mror-full.png" alt="MROR" className="h-12 w-auto brightness-0 invert opacity-90" />
+                  <Logo variant="full" height={48} className="opacity-90" />
                 </div>
                 <p className="dark:text-white/70 text-neutral-600 text-sm leading-relaxed mb-6">
                   AI that evolves with you. Experience intelligence that adapts, learns, and grows.

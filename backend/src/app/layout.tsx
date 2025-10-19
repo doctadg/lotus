@@ -79,6 +79,7 @@ export default function RootLayout({
         <head>
           <link rel="preconnect" href="https://fonts.googleapis.com" />
           <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+          <link rel="preload" href="/mror-full.png" as="image" />
           <link rel="preload" href="/mror.png" as="image" />
           <meta name="theme-color" content="#8B5CF6" />
           <meta name="color-scheme" content="dark light" />
@@ -90,6 +91,7 @@ export default function RootLayout({
           />
           <link rel="icon" href="/favicon.png" type="image/png" />
           <link rel="apple-touch-icon" href="/mror.png" />
+          <link rel="icon" href="/favicon.ico" sizes="any" />
           <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         </head>
         <body

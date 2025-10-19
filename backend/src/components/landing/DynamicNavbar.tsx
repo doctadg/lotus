@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ArrowRight, Menu, X, Sun, Moon, ChevronDown, Brain, ImageIcon, Layers } from "lucide-react"
 import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs"
+import { Logo } from "@/components/ui/Logo"
 
 export default function DynamicNavbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -58,10 +59,10 @@ export default function DynamicNavbar() {
       <div className="flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center group">
-          <img
-            src="/mror-full.png"
-            alt="MROR"
-            className="h-10 w-auto opacity-80 group-hover:opacity-100 transition-all duration-300 group-hover:scale-110 brightness-0 invert"
+          <Logo 
+            variant="full" 
+            height={40}
+            className="opacity-80 group-hover:opacity-100 transition-all duration-300 group-hover:scale-110"
           />
         </Link>
 
