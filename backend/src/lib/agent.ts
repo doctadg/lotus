@@ -336,7 +336,7 @@ class AIAgent {
       return {
         isSimple: true,
         type: 'help',
-        response: "I'm Mror, your AI assistant! I can help you with:\n• Answering questions\n• Research and analysis\n• Creative writing\n• Problem-solving\n• And much more!\n\nJust ask me anything!"
+        response: "I'm MRor AI, an intelligent assistant created by Venym Labs in Bangkok, Thailand. I can help you with:\n\n• Intelligent web search and research\n• Image generation, editing, and analysis\n• Document summarization\n• Personalized responses (I remember your preferences and context)\n• Answering questions and problem-solving\n• Technical guidance and creative tasks\n\nI have an active memory system that learns from our conversations to provide increasingly personalized assistance. Just ask me anything!"
       }
     }
 
