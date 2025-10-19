@@ -4,7 +4,7 @@ import Constants from 'expo-constants'
 
 class ApiService {
   private api: AxiosInstance
-  private baseURL = Constants.expoConfig?.extra?.apiUrl || 'https://mror.app/api'
+  private baseURL = Constants.expoConfig?.extra?.apiUrl || 'https://www.mror.app/api'
   private tokenProvider: (() => Promise<string | null>) | null = null
 
   constructor() {
@@ -127,12 +127,17 @@ class ApiService {
   }
 
   async getChats(): Promise<Chat[]> {
-    const response = await this.api.get<ApiResponse<Chat[]>>('/chat')
-    
+    const response = await this.api.get<ApiResponse<Chat[] | { chats: Chat[]; pagination: any }>>('/chat')
+
     if (response.data.success && response.data.data) {
-      return response.data.data
+      // Handle both old (direct array) and new (paginated) response formats
+      if (Array.isArray(response.data.data)) {
+        return response.data.data
+      } else if (response.data.data.chats && Array.isArray(response.data.data.chats)) {
+        return response.data.data.chats
+      }
     }
-    
+
     throw new Error(response.data.error || 'Failed to get chats')
   }
 

@@ -4,15 +4,33 @@ import { prisma } from '@/lib/prisma'
 import { syncUserWithDatabase } from '@/lib/sync-user'
 import { ApiResponse, CreateChatRequest } from '@/types'
 
+// Add OPTIONS handler for CORS preflight
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
+    },
+  })
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth()
-    
+
     if (!userId) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Unauthorized'
-      }, { status: 401 })
+      }, {
+        status: 401,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+        }
+      })
     }
 
     // Sync user with database if needed
@@ -22,7 +40,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'User sync failed'
-      }, { status: 500 })
+      }, {
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+        }
+      })
     }
 
     const { title }: CreateChatRequest = await request.json()
@@ -42,13 +65,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json<ApiResponse>({
       success: true,
       data: chat
+    }, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+      }
     })
   } catch (error) {
     console.error('Error creating chat:', error)
     return NextResponse.json<ApiResponse>({
       success: false,
       error: 'Internal server error'
-    }, { status: 500 })
+    }, {
+      status: 500,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+      }
+    })
   }
 }
 
@@ -60,7 +92,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Unauthorized'
-      }, { status: 401 })
+      }, {
+        status: 401,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+        }
+      })
     }
 
     // Sync user with database if needed
@@ -70,7 +107,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'User sync failed'
-      }, { status: 500 })
+      }, {
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+        }
+      })
     }
 
     // Get pagination parameters
@@ -121,12 +163,21 @@ export async function GET(request: NextRequest) {
           pages: Math.ceil(totalCount / limit)
         }
       }
+    }, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+      }
     })
   } catch (error) {
     console.error('Error fetching chats:', error)
     return NextResponse.json<ApiResponse>({
       success: false,
       error: 'Internal server error'
-    }, { status: 500 })
+    }, {
+      status: 500,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+      }
+    })
   }
 }

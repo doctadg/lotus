@@ -38,7 +38,7 @@
       "typedRoutes": true
     },
     "extra": {
-      "apiUrl": "https://mror.app/api",
+      "apiUrl": "https://www.mror.app/api",
       "clerkPublishableKey": "pk_test_bGl2aW5nLWxpb25maXNoLTcuY2xlcmsuYWNjb3VudHMuZGV2JA",
       "clerkTelemetryDisabled": true,
       "revenueCatIosKey": "test_oJwlvMrRcUojTNOPNUiGKoVhxqH",

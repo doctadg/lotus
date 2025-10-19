@@ -6,6 +6,19 @@ import { aiAgent } from '@/lib/agent'
 import { trackMessageUsage } from '@/lib/rate-limit'
 import { ApiResponse, SendMessageRequest } from '@/types'
 
+// Add OPTIONS handler for CORS preflight
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
+    },
+  })
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ chatId: string }> }
@@ -24,7 +37,12 @@ export async function GET(
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Unauthorized'
-      }, { status: 401 })
+      }, {
+        status: 401,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+        }
+      })
     }
     
     // Sync user with database if needed
@@ -34,7 +52,12 @@ export async function GET(
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'User sync failed'
-      }, { status: 500 })
+      }, {
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+        }
+      })
     }
 
     const chat = await prisma.chat.findFirst({
@@ -48,7 +71,12 @@ export async function GET(
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Chat not found'
-      }, { status: 404 })
+      }, {
+        status: 404,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+        }
+      })
     }
 
     // Fetch messages with pagination and optimized query
@@ -82,13 +110,22 @@ export async function GET(
           pages: Math.ceil(totalCount / limit)
         }
       }
+    }, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+      }
     })
   } catch (error) {
     console.error('Error fetching messages:', error)
     return NextResponse.json<ApiResponse>({
       success: false,
       error: 'Internal server error'
-    }, { status: 500 })
+    }, {
+      status: 500,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+      }
+    })
   }
 }
 
@@ -104,7 +141,12 @@ export async function POST(
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Unauthorized'
-      }, { status: 401 })
+      }, {
+        status: 401,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+        }
+      })
     }
     
     // Sync user with database if needed
@@ -114,7 +156,12 @@ export async function POST(
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'User sync failed'
-      }, { status: 500 })
+      }, {
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+        }
+      })
     }
 
     const { content }: SendMessageRequest = await request.json()
@@ -131,13 +178,23 @@ export async function POST(
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Chat not found'
-      }, { status: 404 })
+      }, {
+        status: 404,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+        }
+      })
     }
 
     // Rate limit: count this message for free users
     const ok = await trackMessageUsage(user.id)
     if (!ok) {
-      return NextResponse.json<ApiResponse>({ success: false, error: 'Rate limit exceeded. Upgrade to Pro for unlimited access.' }, { status: 429 })
+      return NextResponse.json<ApiResponse>({ success: false, error: 'Rate limit exceeded. Upgrade to Pro for unlimited access.' }, {
+        status: 429,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+        }
+      })
     }
 
     // Get chat history for context - optimized query
@@ -187,12 +244,21 @@ export async function POST(
         userMessage,
         assistantMessage
       }
+    }, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+      }
     })
   } catch (error) {
     console.error('Error processing message:', error)
     return NextResponse.json<ApiResponse>({
       success: false,
       error: 'Internal server error'
-    }, { status: 500 })
+    }, {
+      status: 500,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+      }
+    })
   }
 }

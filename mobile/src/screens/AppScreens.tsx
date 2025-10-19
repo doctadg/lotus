@@ -57,7 +57,7 @@ export function HomeScreen({ navigation }: any) {
           [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Upgrade', onPress: async () => {
-              const webBase = (Constants.expoConfig?.extra?.apiUrl as string | undefined)?.replace(/\/?api\/?$/, '') || 'https://mror.app'
+              const webBase = (Constants.expoConfig?.extra?.apiUrl as string | undefined)?.replace(/\/?api\/?$/, '') || 'https://www.mror.app'
               await WebBrowser.openBrowserAsync(`${webBase}/pricing`)
             }}
           ]
