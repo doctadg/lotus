@@ -5,15 +5,28 @@ import * as Font from 'expo-font'
 import * as SplashScreen from 'expo-splash-screen'
 import { View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { initializeRevenueCat } from '../src/lib/revenuecat'
 
 SplashScreen.preventAutoHideAsync()
 
 export default function RootLayout() {
   const [fontsLoaded, setFontsLoaded] = React.useState(false)
+  const [revenueCatReady, setRevenueCatReady] = React.useState(false)
 
   useEffect(() => {
-    async function loadFonts() {
+    async function initializeApp() {
       try {
+        // Initialize RevenueCat first (but don't block app if it fails)
+        try {
+          await initializeRevenueCat()
+          setRevenueCatReady(true)
+        } catch (rcError) {
+          console.warn('⚠️ RevenueCat initialization failed, app will continue without it:', rcError)
+          setRevenueCatReady(false)
+          // App will still work, just without in-app purchases
+        }
+
+        // Load fonts
         await Font.loadAsync({
           'SpaceGrotesk-Regular': require('../assets/fonts/SpaceGrotesk-Regular.otf'),
           'SpaceGrotesk-Medium': require('../assets/fonts/SpaceGrotesk-Medium.otf'),
@@ -21,14 +34,14 @@ export default function RootLayout() {
           'SpaceMono-Regular': require('../assets/fonts/SpaceMono-Regular.ttf'),
         })
       } catch (e) {
-        console.warn(e)
+        console.warn('App initialization error:', e)
       } finally {
         setFontsLoaded(true)
         await SplashScreen.hideAsync()
       }
     }
 
-    loadFonts()
+    initializeApp()
   }, [])
 
   return (

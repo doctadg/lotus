@@ -1,9 +1,10 @@
 "use client"
-import { ArrowRight, Brain, Sparkles, Zap, Shield, Heart, Layers } from "lucide-react"
+import { ArrowRight, Brain, Sparkles, Zap, Shield, Heart, Layers, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SignedIn, SignedOut } from "@clerk/nextjs"
 import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { motion, useScroll, useTransform } from "framer-motion"
 import TextType from "@/components/landing/TextType"
 import ShinyText from "@/components/landing/ShinyText"
@@ -17,12 +18,22 @@ import StaggerChildren from "@/components/landing/StaggerChildren"
 import ComparisonDashboard from "@/components/landing/ComparisonDashboard"
 import AdaptiveFeatureCard from "@/components/landing/AdaptiveFeatureCard"
 import { Logo } from "@/components/ui/Logo"
+import GradientBlinds from "@/components/ui/GradientBlinds"
 
 export default function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [heroMessage, setHeroMessage] = useState('')
+  const router = useRouter()
 
   const { scrollYProgress } = useScroll()
   const yParallax = useTransform(scrollYProgress, [0, 1], [0, -50])
+
+  const handleHeroSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (heroMessage.trim()) {
+      router.push(`/chat?message=${encodeURIComponent(heroMessage.trim())}`)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-white dark:bg-black text-neutral-900 dark:text-white overflow-x-hidden">
@@ -33,139 +44,129 @@ export default function LandingPage() {
 
       <DynamicNavbar />
 
-      {/* Hero Section - Focused on Adaptability */}
-      <section className="relative min-h-screen flex items-center justify-center pt-20 sm:pt-24 pb-12 sm:pb-16">
-        <GrayGlowBackground intensity={0.6} />
-        <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black to-transparent z-0"></div>
+      {/* Hero Section - Chat Input */}
+      <section className="relative min-h-screen pt-20 sm:pt-24 pb-12 sm:pb-16 overflow-hidden">
+        {/* GradientBlinds Background */}
+        <div className="absolute inset-0 z-0">
+          <GradientBlinds
+            gradientColors={['#1a1a1a', '#404040']}
+            angle={45}
+            noise={0.3}
+            blindCount={12}
+            blindMinWidth={50}
+            spotlightRadius={0.5}
+            spotlightSoftness={1}
+            spotlightOpacity={1}
+            mouseDampening={0.15}
+            distortAmount={0}
+            shineDirection="left"
+            mixBlendMode="lighten"
+          />
+        </div>
 
-        <div className="relative z-20 container mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-[1.2fr_0.8fr] gap-8 sm:gap-10 lg:gap-16 items-center">
-          {/* Left Column - Evolution-Focused Hero */}
-          <FadeInView direction="up" className="max-w-5xl mx-auto lg:mx-0 text-center lg:text-left">
+        {/* Content Container */}
+        <div className="relative z-10 min-h-[calc(100vh-8rem)] flex flex-col justify-center">
+          {/* Heading */}
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-5xl text-center mb-10 sm:mb-14">
             <motion.div
-              className="mb-8 sm:mb-12 md:mb-14"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1 }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8 }}
             >
-              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white leading-tight mb-4 sm:mb-6 md:mb-8">
+              <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold text-white leading-tight mb-6 sm:mb-8">
                 Your AI That <span className="gray-gradient-text font-black">Evolves</span> With You
               </h1>
-              <p className="text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl text-gray-100 font-medium leading-relaxed max-w-3xl mx-auto lg:mx-0">
+              <p className="text-lg sm:text-xl md:text-2xl lg:text-3xl text-gray-100 font-medium leading-relaxed max-w-4xl mx-auto">
                 Unlike generic chatbots, MROR learns your style, remembers your context, and
                 <span className="text-white font-bold"> adapts to become uniquely yours</span>
               </p>
             </motion.div>
+          </div>
 
-            {/* Value Props - Focused on Capabilities */}
-            <StaggerChildren className="space-y-5 sm:space-y-6 md:space-y-8 mb-8 sm:mb-10 md:mb-12" stagger={0.15}>
-              <div className="space-y-3 sm:space-y-4">
-                <motion.div className="flex items-start space-x-2 sm:space-x-3">
-                  <Brain className="w-4 h-4 sm:w-5 sm:h-5 text-white mt-1 flex-shrink-0" />
-                  <p className="text-sm sm:text-base md:text-lg text-white/90 leading-relaxed">
-                    <span className="font-semibold">Persistent Memory</span> - Builds understanding across all conversations
-                  </p>
-                </motion.div>
-                <motion.div className="flex items-start space-x-2 sm:space-x-3">
-                  <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-white mt-1 flex-shrink-0" />
-                  <p className="text-sm sm:text-base md:text-lg text-white/90 leading-relaxed">
-                    <span className="font-semibold">Adaptive Intelligence</span> - Learns your preferences and working style
-                  </p>
-                </motion.div>
-                <motion.div className="flex items-start space-x-2 sm:space-x-3">
-                  <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-white mt-1 flex-shrink-0" />
-                  <p className="text-sm sm:text-base md:text-lg text-white/90 leading-relaxed">
-                    <span className="font-semibold">Multi-Modal Mastery</span> - Text, images, code, research - all in one place
-                  </p>
-                </motion.div>
-                <motion.div className="flex items-start space-x-2 sm:space-x-3">
-                  <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-white mt-1 flex-shrink-0" />
-                  <p className="text-sm sm:text-base md:text-lg text-white/90 leading-relaxed">
-                    <span className="font-semibold">Privacy First</span> - Your data stays yours, always
-                  </p>
-                </motion.div>
-              </div>
+          {/* Chat Input and Value Props */}
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-5xl">
+            <FadeInView direction="up" className="text-center">
+              {/* Chat Input Box */}
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.3 }}
+                className="max-w-4xl mx-auto mb-12 sm:mb-16 md:mb-20"
+              >
+                <form onSubmit={handleHeroSubmit} className="relative">
+                  {/* Glass Card Container */}
+                  <div className="premium-card p-6 sm:p-8 md:p-10 backdrop-blur-2xl border-2 border-white/20 shadow-2xl">
+                    <div className="flex flex-col gap-4">
+                      <textarea
+                        value={heroMessage}
+                        onChange={(e) => setHeroMessage(e.target.value)}
+                        placeholder="Ask MROR anything... Type a question or describe what you need help with."
+                        rows={4}
+                        className="w-full bg-white/10 border border-white/20 rounded-xl px-6 py-4 text-white placeholder-white/50 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-white/30 focus:border-transparent transition-all backdrop-blur-sm resize-none"
+                        autoComplete="off"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!heroMessage.trim()}
+                        className="premium-button px-8 py-4 text-base sm:text-lg font-bold flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:scale-105 self-end"
+                      >
+                        <span>Try It</span>
+                        <Send className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                </form>
 
-              <p className="text-base sm:text-lg md:text-xl text-white/85 leading-relaxed max-w-2xl mx-auto lg:mx-0 font-medium">
-                Experience AI that doesn't just respond - it <span className="text-white font-bold">understands, learns, and grows</span> with every interaction.
-              </p>
+                {/* Subtitle */}
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.8, delay: 0.6 }}
+                  className="mt-6 text-white/70 text-sm sm:text-base font-medium"
+                >
+                  No sign-up required • Get your first response instantly
+                </motion.p>
+              </motion.div>
 
-              <FadeInView delay={0.5}>
-                <div className="premium-card px-4 sm:px-5 md:px-6 py-3 sm:py-4 inline-block">
-                  <p className="text-white text-sm sm:text-base font-semibold flex items-center space-x-2 sm:space-x-3">
-                    <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full animate-pulse"></span>
-                    <span>Join <span className="text-green-300 font-bold text-base sm:text-lg">10,000+ professionals</span> using MROR</span>
-                  </p>
+              {/* Value Props */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.8, delay: 0.9 }}
+              >
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8 max-w-5xl mx-auto">
+                  <div className="flex flex-col items-center text-center space-y-3">
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 flex items-center justify-center">
+                      <Brain className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+                    </div>
+                    <p className="text-white/90 text-sm sm:text-base font-medium">Persistent Memory</p>
+                  </div>
+                  <div className="flex flex-col items-center text-center space-y-3">
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 flex items-center justify-center">
+                      <Sparkles className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+                    </div>
+                    <p className="text-white/90 text-sm sm:text-base font-medium">Adaptive Intelligence</p>
+                  </div>
+                  <div className="flex flex-col items-center text-center space-y-3">
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 flex items-center justify-center">
+                      <Zap className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+                    </div>
+                    <p className="text-white/90 text-sm sm:text-base font-medium">Multi-Modal Mastery</p>
+                  </div>
+                  <div className="flex flex-col items-center text-center space-y-3">
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 flex items-center justify-center">
+                      <Shield className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+                    </div>
+                    <p className="text-white/90 text-sm sm:text-base font-medium">Privacy First</p>
+                  </div>
                 </div>
-              </FadeInView>
-            </StaggerChildren>
-
-            {/* CTA */}
-            <FadeInView direction="up" delay={0.8}>
-              <div className="space-y-4 sm:space-y-5 md:space-y-6">
-                <div className="space-y-2 sm:space-y-3">
-                  <SignedOut>
-                    <Link href="/register">
-                      <HoverCard scale={1.05} y={-2}>
-                        <Button
-                          size="lg"
-                          className="premium-button text-base sm:text-lg md:text-xl font-bold shadow-2xl w-full sm:w-auto"
-                        >
-                          Start Your AI Evolution
-                          <ArrowRight className="ml-2 sm:ml-3 h-5 w-5 sm:h-6 sm:w-6" />
-                        </Button>
-                      </HoverCard>
-                    </Link>
-                  </SignedOut>
-                  <SignedIn>
-                    <Link href="/chat">
-                      <HoverCard scale={1.05} y={-2}>
-                        <Button
-                          size="lg"
-                          className="premium-button text-base sm:text-lg md:text-xl font-bold shadow-2xl w-full sm:w-auto"
-                        >
-                          Open MROR
-                          <ArrowRight className="ml-2 sm:ml-3 h-5 w-5 sm:h-6 sm:w-6" />
-                        </Button>
-                      </HoverCard>
-                    </Link>
-                  </SignedIn>
-
-                  <p className="text-center lg:text-left text-gray-300 text-xs sm:text-sm font-medium">
-                    14-day free trial • No credit card required
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 sm:gap-4 md:gap-6 lg:gap-8 text-xs sm:text-sm text-white/60">
-                  <span className="flex items-center space-x-1.5 sm:space-x-2">
-                    <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-white rounded-full white-glow"></div>
-                    <span>$5/month</span>
-                  </span>
-                  <span className="flex items-center space-x-1.5 sm:space-x-2">
-                    <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-white rounded-full white-glow"></div>
-                    <span>Cancel anytime</span>
-                  </span>
-                  <span className="flex items-center space-x-1.5 sm:space-x-2">
-                    <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-white rounded-full white-glow"></div>
-                    <span className="hidden sm:inline">Your data, your control</span>
-                    <span className="sm:hidden">Your data</span>
-                  </span>
-                </div>
-              </div>
+              </motion.div>
             </FadeInView>
-          </FadeInView>
-
-          {/* Right Column - Animated Blob */}
-          <motion.div
-            className="relative h-[300px] sm:h-[400px] md:h-[500px] lg:h-[600px] mt-8 lg:mt-0 flex items-center justify-center"
-            style={{ y: yParallax }}
-          >
-            <AnimatedBlob
-              size="xl"
-              colors={['#ffffff', '#f3f4f6', '#e5e7eb', '#d1d5db']}
-              className="opacity-80"
-            />
-          </motion.div>
+          </div>
         </div>
+
+        {/* Gradient Fade at Bottom */}
+        <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black to-transparent z-10"></div>
       </section>
 
 

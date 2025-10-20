@@ -1,13 +1,21 @@
-import React, { useRef, useEffect } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions } from 'react-native'
-import { PanGestureHandler, State } from 'react-native-gesture-handler'
+import React, { useRef, useEffect, useCallback } from 'react'
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions, Platform, ScrollView } from 'react-native'
+import { PanGestureHandler, State, PanGestureHandlerGestureEvent } from 'react-native-gesture-handler'
 import { useRouter, usePathname } from 'expo-router'
 import { Feather } from '@expo/vector-icons'
 import { theme } from '../constants/theme'
 import { Image } from 'react-native'
+import * as Haptics from 'expo-haptics'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
-const SIDEBAR_WIDTH = 300
+// Responsive sidebar width: 80% of screen width, max 320px
+const SIDEBAR_WIDTH = Math.min(SCREEN_WIDTH * 0.8, 320)
+// Edge detection zone for opening gesture (from left edge) - 20px thin strip
+const EDGE_DETECTION_WIDTH = 20
+// Threshold for gesture completion (40% of sidebar width)
+const GESTURE_THRESHOLD = SIDEBAR_WIDTH * 0.4
+// Velocity threshold for fast swipes (pixels per second)
+const VELOCITY_THRESHOLD = 500
 
 interface SidebarItem {
   name: string
@@ -46,15 +54,26 @@ export default function SwipeableSidebar({
 }: SwipeableSidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
+
+  // Animated values
   const translateX = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current
   const overlayOpacity = useRef(new Animated.Value(0)).current
+  const gestureState = useRef({ isGesturing: false })
 
+  // Track last opened state to trigger haptic feedback
+  const lastOpenState = useRef(isOpen)
+
+  // Sync animation with isOpen prop
   useEffect(() => {
+    const toValue = isOpen ? 0 : -SIDEBAR_WIDTH
+
+    // Always animate when isOpen changes, even if gesturing
     Animated.parallel([
-      Animated.timing(translateX, {
-        toValue: isOpen ? 0 : -SIDEBAR_WIDTH,
-        duration: 250,
+      Animated.spring(translateX, {
+        toValue,
         useNativeDriver: true,
+        tension: 65,
+        friction: 11,
       }),
       Animated.timing(overlayOpacity, {
         toValue: isOpen ? 1 : 0,
@@ -62,84 +81,147 @@ export default function SwipeableSidebar({
         useNativeDriver: true,
       })
     ]).start()
-  }, [isOpen])
 
-  const handleNavigate = (href: string) => {
+    // Haptic feedback on state change
+    if (lastOpenState.current !== isOpen) {
+      if (Platform.OS === 'ios') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      }
+      lastOpenState.current = isOpen
+    }
+  }, [isOpen, translateX, overlayOpacity])
+
+  const handleNavigate = useCallback((href: string) => {
     router.push(href as any)
     onClose()
-  }
+  }, [router, onClose])
 
-  const onGestureEvent = Animated.event(
-    [{ nativeEvent: { translationX: translateX } }],
-    { useNativeDriver: true }
-  )
+  const onGestureEvent = useCallback((event: any) => {
+    if (!gestureState.current.isGesturing) return
 
-  const onHandlerStateChange = (event: any) => {
-    if (event.nativeEvent.state === State.END) {
-      const { translationX, velocityX, absoluteX } = event.nativeEvent
-      
-      // Determine if we should open or close based on gesture
-      const shouldOpen = translationX > -SIDEBAR_WIDTH / 2 || velocityX > 500
-      
-      if (shouldOpen) {
-        onOpen()
-        Animated.spring(translateX, {
-          toValue: 0,
-          useNativeDriver: true,
-          tension: 100,
-          friction: 8,
-        }).start()
-        Animated.timing(overlayOpacity, {
-          toValue: 1,
-          duration: 150,
-          useNativeDriver: true,
-        }).start()
+    const { translationX: tx } = event.nativeEvent
+
+    // Calculate the target position based on current state
+    const basePosition = isOpen ? 0 : -SIDEBAR_WIDTH
+    const targetPosition = basePosition + tx
+
+    // Clamp position between closed (-SIDEBAR_WIDTH) and open (0)
+    const clampedPosition = Math.max(-SIDEBAR_WIDTH, Math.min(0, targetPosition))
+
+    // Update sidebar position
+    translateX.setValue(clampedPosition)
+
+    // Update overlay opacity based on position
+    const progress = (clampedPosition + SIDEBAR_WIDTH) / SIDEBAR_WIDTH
+    overlayOpacity.setValue(progress)
+  }, [isOpen, translateX, overlayOpacity])
+
+  const onHandlerStateChange = useCallback((event: any) => {
+    const { state, translationX: tx, velocityX } = event.nativeEvent
+
+    if (state === State.BEGAN) {
+      gestureState.current.isGesturing = true
+    }
+
+    if (state === State.END || state === State.CANCELLED) {
+      gestureState.current.isGesturing = false
+
+      let shouldOpen = isOpen
+
+      if (isOpen) {
+        // When open, determine if we should close
+        // Close if: swiped left past threshold OR fast left swipe
+        const draggedLeft = tx < -GESTURE_THRESHOLD
+        const fastLeftSwipe = velocityX < -VELOCITY_THRESHOLD
+
+        if (draggedLeft || fastLeftSwipe) {
+          shouldOpen = false
+        }
       } else {
-        onClose()
-        Animated.spring(translateX, {
-          toValue: -SIDEBAR_WIDTH,
-          useNativeDriver: true,
-          tension: 100,
-          friction: 8,
-        }).start()
-        Animated.timing(overlayOpacity, {
-          toValue: 0,
-          duration: 150,
-          useNativeDriver: true,
-        }).start()
+        // When closed, determine if we should open
+        // Open if: swiped right past threshold OR fast right swipe
+        const draggedRight = tx > GESTURE_THRESHOLD
+        const fastRightSwipe = velocityX > VELOCITY_THRESHOLD
+
+        if (draggedRight || fastRightSwipe) {
+          shouldOpen = true
+        }
+      }
+
+      // Update state - let useEffect handle animation
+      if (shouldOpen !== isOpen) {
+        if (shouldOpen) {
+          onOpen()
+        } else {
+          onClose()
+        }
+
+        // Haptic feedback on state change
+        if (Platform.OS === 'ios') {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+        }
+      } else {
+        // Gesture didn't cross threshold, animate back to current state
+        const finalTranslateX = isOpen ? 0 : -SIDEBAR_WIDTH
+        const finalOpacity = isOpen ? 1 : 0
+
+        Animated.parallel([
+          Animated.spring(translateX, {
+            toValue: finalTranslateX,
+            useNativeDriver: true,
+            velocity: velocityX / 1000,
+            tension: 65,
+            friction: 11,
+          }),
+          Animated.timing(overlayOpacity, {
+            toValue: finalOpacity,
+            duration: 200,
+            useNativeDriver: true,
+          })
+        ]).start()
       }
     }
-  }
+  }, [isOpen, onOpen, onClose, translateX, overlayOpacity])
 
   return (
     <>
       {/* Overlay */}
-      <Animated.View 
+      <Animated.View
         style={[styles.overlay, { opacity: overlayOpacity }]}
         pointerEvents={isOpen ? 'auto' : 'none'}
       >
-        <TouchableOpacity 
-          style={styles.overlayTouch} 
-          activeOpacity={1} 
+        <TouchableOpacity
+          style={styles.overlayTouch}
+          activeOpacity={1}
           onPress={onClose}
         />
       </Animated.View>
 
-      {/* Sidebar */}
+      {/* Sidebar - only handles closing gesture when open */}
       <PanGestureHandler
         onGestureEvent={onGestureEvent}
         onHandlerStateChange={onHandlerStateChange}
+        activeOffsetX={-10}
+        failOffsetY={[-15, 15]}
+        enabled={isOpen}
       >
-        <Animated.View style={[styles.container, { transform: [{ translateX }] }]}>
+        <Animated.View
+          style={[
+            styles.container,
+            {
+              width: SIDEBAR_WIDTH,
+              transform: [{ translateX }]
+            }
+          ]}
+        >
           {/* Header with Logo */}
           <View style={styles.header}>
-            <View style={styles.logoContainer}>
-              <Image 
-                source={require('../../assets/images/mror-full.png')} 
-                style={styles.logoImage}
-                resizeMode="contain"
-              />
-            </View>
+            <Image
+              source={require('../../assets/images/mror-full.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+            <View style={styles.headerSpacer} />
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Feather name="x" size={24} color={theme.colors.text} />
             </TouchableOpacity>
@@ -170,12 +252,16 @@ export default function SwipeableSidebar({
             <Text style={styles.newChatText}>New Chat</Text>
           </TouchableOpacity>
 
-          {/* Chat Sessions */}
+          {/* Chat Sessions - Scrollable */}
           {chatSessions.length > 0 && (
             <View style={styles.chatSection}>
-              <Text style={styles.chatSectionTitle}>Recent Chats</Text>
-              <View style={styles.chatList}>
-                {chatSessions.slice(0, 5).map((chat: any) => (
+              <Text style={styles.chatSectionTitle}>Chat History</Text>
+              <ScrollView
+                style={styles.chatScrollView}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled={true}
+              >
+                {chatSessions.map((chat: any) => (
                   <TouchableOpacity
                     key={chat.id}
                     style={styles.chatItem}
@@ -187,14 +273,11 @@ export default function SwipeableSidebar({
                     </Text>
                   </TouchableOpacity>
                 ))}
-              </View>
+              </ScrollView>
             </View>
           )}
 
-          {/* Spacer */}
-          <View style={styles.spacer} />
-
-          {/* Bottom Menu Section - 25% of sidebar */}
+          {/* Bottom Menu Section */}
           <View style={styles.bottomMenuSection}>
             <Text style={styles.menuSectionTitle}>Menu</Text>
             {sidebarItems.map((item) => {
@@ -208,10 +291,10 @@ export default function SwipeableSidebar({
                   ]}
                   onPress={() => handleNavigate(item.href)}
                 >
-                  <Feather 
-                    name={item.icon} 
-                    size={20} 
-                    color={isActive ? theme.colors.primary : theme.colors.textSecondary} 
+                  <Feather
+                    name={item.icon}
+                    size={20}
+                    color={isActive ? theme.colors.primary : theme.colors.textSecondary}
                   />
                   <Text style={[
                     styles.menuItemText,
@@ -222,7 +305,7 @@ export default function SwipeableSidebar({
                 </TouchableOpacity>
               )
             })}
-            
+
             {/* Logout */}
             {onLogout && (
               <TouchableOpacity style={styles.logoutButton} onPress={onLogout}>
@@ -254,7 +337,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     left: 0,
-    width: SIDEBAR_WIDTH,
     height: '100%',
     backgroundColor: theme.colors.backgroundSecondary,
     zIndex: 2,
@@ -271,17 +353,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: theme.spacing.lg,
-    paddingTop: theme.spacing['3xl'],
-  },
-  logoContainer: {
     paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
+    paddingTop: theme.spacing['3xl'],
+    paddingBottom: theme.spacing.lg,
   },
   logoImage: {
     width: 160,
     height: 40,
     tintColor: '#ffffff',
+  },
+  headerSpacer: {
+    flex: 1,
   },
   closeButton: {
     padding: theme.spacing.xs,
@@ -346,7 +428,9 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
   },
   chatSection: {
-    padding: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg,
+    flex: 1,
+    minHeight: 0,
   },
   chatSectionTitle: {
     fontSize: theme.typography.fontSize.sm,
@@ -355,8 +439,8 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
     textTransform: 'uppercase',
   },
-  chatList: {
-    gap: theme.spacing.sm,
+  chatScrollView: {
+    flex: 1,
   },
   chatItem: {
     flexDirection: 'row',
@@ -369,10 +453,8 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     flex: 1,
   },
-  spacer: {
-    flex: 1,
-  },
   bottomMenuSection: {
+    flexShrink: 0,
     padding: theme.spacing.lg,
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,

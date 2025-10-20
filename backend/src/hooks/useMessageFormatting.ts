@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { validateContent, repairPartialMarkdown, validateMarkdownIntegrity } from '../lib/content-validation'
 
 interface DetectedBlocks {
   code: Array<{ language: string; content: string }>
@@ -10,6 +11,9 @@ interface DetectedBlocks {
 
 export function useMessageFormatting(content: string) {
   return useMemo(() => {
+    // Validate and sanitize input content
+    const safeContent = validateContent(content)
+    
     const detectedBlocks: DetectedBlocks = {
       code: [],
       math: [],
@@ -18,13 +22,18 @@ export function useMessageFormatting(content: string) {
       tables: []
     }
 
-    let processedContent = content
+    let processedContent = safeContent
+
+    // Repair partial markdown that might occur during streaming
+    if (!validateMarkdownIntegrity(processedContent)) {
+      processedContent = repairPartialMarkdown(processedContent)
+    }
 
     // Extract and process different content types
     
     // Extract math blocks (LaTeX)
     const mathRegex = /\$\$([^$]+)\$\$/g
-    const mathMatches = content.match(mathRegex)
+    const mathMatches = processedContent.match(mathRegex)
     if (mathMatches) {
       mathMatches.forEach(match => {
         const mathContent = match.replace(/\$\$/g, '')
@@ -35,9 +44,12 @@ export function useMessageFormatting(content: string) {
     // Extract code blocks for special processing
     const codeBlockRegex = /```(\w+)?\n?([\s\S]*?)```/g
     let match
-    while ((match = codeBlockRegex.exec(content)) !== null) {
+    while ((match = codeBlockRegex.exec(processedContent)) !== null) {
       const language = match[1] || 'text'
-      const code = match[2].trim()
+      const code = validateContent(match[2]).trim()
+      
+      // Skip empty code blocks
+      if (!code) continue
       
       detectedBlocks.code.push({ language, content: code })
 
@@ -51,7 +63,7 @@ export function useMessageFormatting(content: string) {
 
     // Extract table patterns
     const tableRegex = /\|(.+)\|/g
-    const tableMatches = content.match(tableRegex)
+    const tableMatches = processedContent.match(tableRegex)
     if (tableMatches && tableMatches.length > 1) {
       // Simple table detection - if we have multiple lines with pipes
       detectedBlocks.tables.push(tableMatches.join('\n'))

@@ -74,13 +74,34 @@ export async function initializeRevenueCat(): Promise<void> {
 
     // Configure RevenueCat
     await Purchases.configure({ apiKey })
-    isConfigured = true
 
-    if (__DEV__) {
-      console.log('✅ RevenueCat initialized successfully')
+    // Verify configuration by attempting to get customer info
+    try {
+      await Purchases.getCustomerInfo()
+      isConfigured = true
+      if (__DEV__) {
+        console.log('✅ RevenueCat initialized and verified successfully')
+      }
+    } catch (verifyError: any) {
+      isConfigured = false
+      const errorMessage = verifyError?.message || String(verifyError)
+
+      if (errorMessage.includes('Invalid API key') || errorMessage.includes('Web Billing API key')) {
+        console.error('❌ RevenueCat API key is invalid!')
+        console.error('🔑 You need to use mobile SDK API keys from RevenueCat dashboard:')
+        console.error('   1. Go to https://app.revenuecat.com/')
+        console.error('   2. Navigate to Project Settings > API Keys')
+        console.error('   3. Copy the iOS API key (starts with "appl_" or similar)')
+        console.error('   4. Copy the Android API key (starts with "goog_" or similar)')
+        console.error('   5. Update app.json with these keys')
+      }
+
+      throw new Error(`RevenueCat configuration verification failed: ${errorMessage}`)
     }
-  } catch (error) {
+  } catch (error: any) {
+    isConfigured = false
     console.error('❌ Failed to initialize RevenueCat:', error)
+    console.error('💡 RevenueCat will not work until this is fixed')
     throw error
   }
 }
@@ -261,7 +282,13 @@ export async function restorePurchases(): Promise<{
  */
 export async function manageSubscription(): Promise<void> {
   try {
-    await Purchases.showManagementUI()
+    // Check if the method exists before calling
+    if ('showManagementUI' in Purchases && typeof (Purchases as any).showManagementUI === 'function') {
+      await (Purchases as any).showManagementUI()
+    } else {
+      // Fallback for older versions of react-native-purchases
+      console.warn('⚠️ showManagementUI not available in this version of RevenueCat SDK')
+    }
   } catch (error) {
     console.error('❌ Failed to open subscription management:', error)
   }
@@ -280,9 +307,10 @@ export function getPackagePrice(pkg: PurchasesPackage): string {
 export function getPackagePeriod(pkg: PurchasesPackage): string {
   const product = pkg.product
 
-  if (product.subscriptionPeriod) {
-    const unit = product.subscriptionPeriod.unit
-    const value = product.subscriptionPeriod.value || 1
+  if (product.subscriptionPeriod && typeof product.subscriptionPeriod === 'object') {
+    const period = product.subscriptionPeriod as { unit?: string; value?: number }
+    const unit = period.unit
+    const value = period.value || 1
 
     if (!unit) return 'subscription'
 

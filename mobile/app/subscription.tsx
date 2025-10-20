@@ -12,7 +12,7 @@ import {
 } from 'react-native'
 import { useAuth } from '../src/contexts/AuthContext'
 import { apiService } from '../src/lib/api'
-import { useRouter } from 'expo-router'
+import { useRouter, useFocusEffect } from 'expo-router'
 import AuthGuard from '../src/components/AuthGuard'
 import Navigation from '../src/components/Navigation'
 import { theme } from '../src/constants/theme'
@@ -48,14 +48,14 @@ export default function SubscriptionScreen() {
     }
   }, [isAuthLoading, isAuthenticated, isRevenueCatReady])
 
-  useEffect(() => {
-    // Refresh when coming back to this screen
-    const unsubscribe = router.addListener('focus', () => {
-      loadSubscription()
-    })
-
-    return unsubscribe
-  }, [])
+  // Refresh when coming back to this screen
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!isAuthLoading && isAuthenticated && isRevenueCatReady) {
+        loadSubscription()
+      }
+    }, [isAuthLoading, isAuthenticated, isRevenueCatReady])
+  )
 
   const loadSubscription = async () => {
     if (!user) return

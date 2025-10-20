@@ -1,5 +1,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { Platform } from 'react-native'
+import {
+  hasProSubscription,
+  purchasePackage,
+  restorePurchases as rcRestorePurchases,
+  getOfferings,
+  setupCustomerInfoListener,
+  isRevenueCatConfigured,
+  syncSubscriptionWithBackend,
+} from '../lib/revenuecat'
 
 type SubscriptionContextType = {
   isPro: boolean
@@ -7,6 +15,7 @@ type SubscriptionContextType = {
   error: string | null
   purchasePro: () => Promise<void>
   restorePurchases: () => Promise<void>
+  refreshStatus: () => Promise<void>
 }
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined)
@@ -16,78 +25,126 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // Function to refresh subscription status
+  const refreshStatus = useCallback(async () => {
+    if (!isRevenueCatConfigured()) {
+      console.warn('⚠️ RevenueCat not configured yet, skipping status refresh')
+      return
+    }
+
+    try {
+      console.log('🔄 Refreshing subscription status from RevenueCat...')
+      const hasPro = await hasProSubscription()
+      setIsPro(hasPro)
+      console.log('✅ Subscription status refreshed:', hasPro ? 'Pro' : 'Free')
+    } catch (e: any) {
+      console.error('❌ Failed to refresh subscription status:', e)
+    }
+  }, [])
+
   useEffect(() => {
     let mounted = true
-    ;(async () => {
+    let removeListener: (() => void) | null = null
+
+    async function initSubscription() {
       try {
-        // Dynamically import so the app still runs if module not installed yet
-        const Purchases = (await import('react-native-purchases')).default
+        // Wait for RevenueCat to be configured
+        let attempts = 0
+        while (!isRevenueCatConfigured() && attempts < 10) {
+          await new Promise(resolve => setTimeout(resolve, 100))
+          attempts++
+        }
 
-        // Configure with platform keys through the config plugin at build time
-        // No API key here; plugin injects keys into native projects
-        await Purchases.setLogLevel('WARN')
+        if (!isRevenueCatConfigured()) {
+          throw new Error('RevenueCat initialization timed out')
+        }
 
-        // Identify user if desired (we can set app user id to Clerk id elsewhere if needed)
-        // Here we rely on anonymous unless you later call Purchases.logIn(userId)
+        // Fetch initial customer info
+        const hasPro = await hasProSubscription()
+        if (mounted) setIsPro(hasPro)
 
-        // Fetch current customer info
-        const info = await Purchases.getCustomerInfo()
-        const active = !!info?.entitlements?.active?.pro
-        if (mounted) setIsPro(active)
+        // Setup listener for subscription updates
+        removeListener = setupCustomerInfoListener(async (customerInfo) => {
+          const activeNow = customerInfo?.entitlements?.active?.Pro !== undefined
+          if (mounted) setIsPro(activeNow)
 
-        // Listen for updates
-        const remove = Purchases.addCustomerInfoUpdateListener((ci: any) => {
-          const activeNow = !!ci?.entitlements?.active?.pro
-          setIsPro(activeNow)
+          // Sync with backend when subscription changes
+          await syncSubscriptionWithBackend()
         })
-        return () => { remove && remove() }
       } catch (e: any) {
-        if (mounted) setError(e?.message || 'Subscription init failed')
+        if (mounted) {
+          setError(e?.message || 'Subscription init failed')
+          console.error('❌ Subscription context initialization failed:', e)
+        }
       } finally {
         if (mounted) setLoading(false)
       }
-    })()
-    return () => { mounted = false }
+    }
+
+    initSubscription()
+
+    return () => {
+      mounted = false
+      if (removeListener) {
+        removeListener()
+      }
+    }
   }, [])
 
   const purchasePro = useCallback(async () => {
     setError(null)
     try {
-      const Purchases = (await import('react-native-purchases')).default
-      const offerings = await Purchases.getOfferings()
-      const current = offerings?.current
-      if (!current) throw new Error('No available offerings')
+      const offering = await getOfferings()
+      if (!offering) {
+        throw new Error('No available offerings')
+      }
 
       // Prefer a package with identifier 'pro_monthly' or first available
-      const pkg = current.availablePackages?.find((p: any) => p.identifier === 'pro_monthly')
-        || current.availablePackages?.[0]
-      if (!pkg) throw new Error('No available subscription package')
+      const pkg = offering.availablePackages?.find((p: any) =>
+        p.identifier === 'pro_monthly' || p.identifier === '$rc_monthly'
+      ) || offering.availablePackages?.[0]
 
-      await Purchases.purchasePackage(pkg)
-      const info = await Purchases.getCustomerInfo()
-      setIsPro(!!info?.entitlements?.active?.pro)
+      if (!pkg) {
+        throw new Error('No available subscription package')
+      }
+
+      const { customerInfo, error } = await purchasePackage(pkg)
+
+      if (error) {
+        throw error
+      }
+
+      // Refresh subscription status after purchase
+      await refreshStatus()
     } catch (e: any) {
       // User cancellations should not be treated as errors
       if (e?.userCancelled) return
       setError(e?.message || 'Purchase failed')
       throw e
     }
-  }, [])
+  }, [refreshStatus])
 
   const restorePurchases = useCallback(async () => {
     setError(null)
     try {
-      const Purchases = (await import('react-native-purchases')).default
-      await Purchases.restorePurchases()
-      const info = await Purchases.getCustomerInfo()
-      setIsPro(!!info?.entitlements?.active?.pro)
+      const { customerInfo, error } = await rcRestorePurchases()
+
+      if (error) {
+        throw error
+      }
+
+      // Refresh subscription status after restore
+      await refreshStatus()
     } catch (e: any) {
       setError(e?.message || 'Restore failed')
       throw e
     }
-  }, [])
+  }, [refreshStatus])
 
-  const value = useMemo(() => ({ isPro, loading, error, purchasePro, restorePurchases }), [isPro, loading, error, purchasePro, restorePurchases])
+  const value = useMemo(
+    () => ({ isPro, loading, error, purchasePro, restorePurchases, refreshStatus }),
+    [isPro, loading, error, purchasePro, restorePurchases, refreshStatus]
+  )
 
   return (
     <SubscriptionContext.Provider value={value}>

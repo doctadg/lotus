@@ -67,7 +67,7 @@ export async function POST(
     }
 
     // Parallelize permission checks and chat history retrieval
-    const [hasDeepResearch, hasUnlimited, messages] = await Promise.all([
+    const [hasDeepResearch, hasUnlimited, chatHistory] = await Promise.all([
       deepResearchMode ? canUseDeepResearch() : Promise.resolve(true),
       hasUnlimitedMessages(),
       prisma.message.findMany({
@@ -147,25 +147,32 @@ export async function POST(
     // Get relevant image context for the agent (do this early while we're creating messages)
     const imageContextPromise = imageContextManager.getImageContextForPrompt(chatId, content, 3)
 
-    // Create both messages in parallel for speed
-    const [userMessage, assistantMessage, imageContext] = await Promise.all([
-      prisma.message.create({
-        data: {
-          chatId,
-          role: 'user',
-          content,
-          images: userImageData.length > 0 ? userImageData : undefined
-        }
-      }),
-      prisma.message.create({
-        data: {
-          chatId,
-          role: 'assistant',
-          content: '' // Will be updated as stream progresses
-        }
+    // Create both messages in a single transaction for consistency and performance
+    const [createdMessages, imageContext] = await Promise.all([
+      prisma.$transaction(async (tx) => {
+        const userMessage = await tx.message.create({
+          data: {
+            chatId,
+            role: 'user',
+            content,
+            images: userImageData.length > 0 ? userImageData : undefined
+          }
+        })
+        
+        const assistantMessage = await tx.message.create({
+          data: {
+            chatId,
+            role: 'assistant',
+            content: '' // Will be updated as stream progresses
+          }
+        })
+        
+        return { userMessage, assistantMessage }
       }),
       imageContextPromise
     ])
+    
+    const { userMessage, assistantMessage } = createdMessages
 
     // Store image context asynchronously if needed
     if (userImages.length > 0) {
@@ -186,7 +193,7 @@ export async function POST(
           // Stream messages from the AI agent generator with image context
           for await (const event of aiAgent.streamMessage(
             enhancedContent,
-            messages.map(m => ({
+            chatHistory.map(m => ({
               role: m.role as 'user' | 'assistant',
               content: m.content
             })),
@@ -242,6 +249,7 @@ export async function POST(
               description: undefined
             }))
 
+            // Critical: Update the message content immediately
             await prisma.message.update({
               where: { id: assistantMessage.id },
               data: {
@@ -250,22 +258,35 @@ export async function POST(
               }
             })
 
-            // Store image context for assistant message if it contains images
-            if (generatedImages.length > 0) {
-              await imageContextManager.storeImageContext(chatId, assistantMessage.id, fullResponse, 'assistant')
-            }
+            // Send complete event to stop thinking animation
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'complete' })}\n\n`))
+            // Send done signal
+            controller.enqueue(encoder.encode(`data: [DONE]\n\n`))
+            controller.close()
 
-            // Cleanup old images periodically (every ~10 messages)
-            if (Math.random() < 0.1) {
-              await imageContextManager.cleanupOldImages(chatId, 7) // Keep images for 7 days
-            }
+            // Non-critical: Run these asynchronously after stream completes
+            ;(async () => {
+              try {
+                // Store image context for assistant message if it contains images
+                if (generatedImages.length > 0) {
+                  await imageContextManager.storeImageContext(chatId, assistantMessage.id, fullResponse, 'assistant')
+                }
+
+                // Cleanup old images periodically (every ~10 messages)
+                if (Math.random() < 0.1) {
+                  await imageContextManager.cleanupOldImages(chatId, 7) // Keep images for 7 days
+                }
+              } catch (error) {
+                console.error('Error in async cleanup operations:', error)
+              }
+            })()
+          } else {
+            // Send complete event to stop thinking animation
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'complete' })}\n\n`))
+            // Send done signal
+            controller.enqueue(encoder.encode(`data: [DONE]\n\n`))
+            controller.close()
           }
-
-          // Send complete event to stop thinking animation
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'complete' })}\n\n`))
-          // Send done signal
-          controller.enqueue(encoder.encode(`data: [DONE]\n\n`))
-          controller.close()
         } catch (error) {
           console.error('Stream error:', error)
           controller.error(error)

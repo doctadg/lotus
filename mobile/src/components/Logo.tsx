@@ -22,7 +22,7 @@ export function MrorFullLogo({ width = 200, height = 52 }: { width?: number; hei
   return (
     <View style={{ width, height }}>
       <Image
-        source={require('../../assets/images/icon.png')}
+        source={require('../../assets/images/mror-full.png')}
         style={{ width, height, tintColor: '#ffffff' }}
         resizeMode="contain"
       />

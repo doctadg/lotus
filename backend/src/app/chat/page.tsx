@@ -2,7 +2,8 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Menu, Plus, Trash2, Send, Search, BookOpen, Sparkles, FileText, Image as ImageIcon, X, ChevronDown, Check, Sun, Moon } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
+import { Menu, Plus, Trash2, Send, Search, BookOpen, Sparkles, FileText, Image as ImageIcon, X, ChevronDown, Check, Sun, Moon, Settings, LogOut, MessageSquare, ChevronLeft, ChevronRight, User } from 'lucide-react'
 import { AgentActivity } from '../../components/chat/AgentActivity'
 import { MessageRenderer } from '../../components/chat/MessageRenderer'
 import { useAuth } from '../../hooks/useAuth'
@@ -10,6 +11,8 @@ import UpgradeModal from '@/components/billing/UpgradeModal'
 import { useSubscription } from '@/hooks/useSubscription'
 import { useTheme } from '../../hooks/useTheme'
 import { Logo } from '@/components/ui/Logo'
+import AuthGateModal from '@/components/chat/AuthGateModal'
+import SettingsModal from '@/components/chat/SettingsModal'
 
 type Role = 'user' | 'assistant'
 
@@ -62,9 +65,11 @@ export default function ChatPage() {
 }
 
 function ChatLayout() {
+  const searchParams = useSearchParams()
   const { user, signOut, isAuthenticated, isLoading } = useAuth()
   const { isDark, theme, setTheme } = useTheme()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarMinimized, setSidebarMinimized] = useState(false)
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -78,6 +83,14 @@ function ChatLayout() {
   const [deepMode, setDeepMode] = useState(false)
   const [showUpgrade, setShowUpgrade] = useState(false)
   const { isPro } = useSubscription()
+
+  // Unauthenticated trial mode
+  const [isTrialMode, setIsTrialMode] = useState(false)
+  const [trialResponseCount, setTrialResponseCount] = useState(0)
+  const [showAuthGate, setShowAuthGate] = useState(false)
+  const hasProcessedQueryParam = useRef(false)
+  const hasLoadedChats = useRef(false)
+  const hasLoadedQuestions = useRef(false)
   // UI-only agent selector
   const agentOptions = [
     { id: 'general', label: 'General Assistant' },
@@ -103,6 +116,7 @@ function ChatLayout() {
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [agentMenuOpen, setAgentMenuOpen] = useState(false)
   const agentMenuRef = useRef<HTMLDivElement>(null)
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false)
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -114,6 +128,33 @@ function ChatLayout() {
     document.addEventListener('mousedown', onDocClick)
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [])
+
+  // Handle query param message from landing page
+  useEffect(() => {
+    // Only run once when auth is ready
+    if (isLoading) return
+    if (hasProcessedQueryParam.current) return
+
+    const messageFromUrl = searchParams?.get('message')
+    if (!messageFromUrl) return
+
+    hasProcessedQueryParam.current = true
+
+    if (!isAuthenticated) {
+      // Unauthenticated user - enter trial mode
+      setIsTrialMode(true)
+    }
+
+    setInput(messageFromUrl)
+
+    // Auto-send after a brief delay to let the UI render and chats to load
+    const timer = setTimeout(() => {
+      sendMessage(messageFromUrl)
+    }, 800)
+
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading])
 
   const uploadFile = async (file: File): Promise<{ url: string; contentType: string; name: string } | null> => {
     try {
@@ -142,8 +183,12 @@ function ChatLayout() {
   }
 
   useEffect(() => {
-    loadChats()
-  }, [isAuthenticated])
+    // Only load chats once when user becomes authenticated
+    if (!isLoading && isAuthenticated && !hasLoadedChats.current) {
+      hasLoadedChats.current = true
+      loadChats()
+    }
+  }, [isLoading, isAuthenticated])
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -151,7 +196,8 @@ function ChatLayout() {
 
   useEffect(() => {
     const loadDynamicQuestions = async () => {
-      if (!isAuthenticated) return
+      if (!isAuthenticated || hasLoadedQuestions.current) return
+      hasLoadedQuestions.current = true
       setQuestionsLoading(true)
       try {
         const res = await fetch('/api/user/questions', {
@@ -240,28 +286,16 @@ function ChatLayout() {
     }
   }
 
-  const newChat = async () => {
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ title: 'New Chat' }),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        const chat = data.data
-        setSessions((prev) => [chat, ...prev])
-        setCurrentChatId(chat.id)
-        setMessages([])
-        setSidebarOpen(false)
-      } else if (res.status === 401) {
-        console.error('Unauthorized access - please refresh the page')
-      }
-    } catch (e) {
-      console.error('Failed to create chat', e)
-    }
+  const newChat = () => {
+    // Optimistic UI update - clear immediately without database call
+    const tempChatId = `temp-${Date.now()}`
+    setCurrentChatId(tempChatId)
+    setMessages([])
+    setSidebarOpen(false)
+    setInput('')
+    setAttachments([])
+    setThinkingSteps([])
+    setSearchSteps([])
   }
 
   const selectChat = async (chatId: string) => {
@@ -312,12 +346,25 @@ function ChatLayout() {
     }
     if (!text) return
 
+    // Prevent sending more messages in trial mode after first response
+    if (isTrialMode && trialResponseCount >= 1) {
+      setShowAuthGate(true)
+      return
+    }
+
     try {
       setSending(true)
 
-      // Ensure we have a chat
+      // Ensure we have a chat - create only if we have a temporary ID or no ID
       let chatId = currentChatId
-      if (!chatId) {
+      let isTempChat = false
+
+      // For trial mode (unauthenticated users), use a temporary chat ID
+      if (isTrialMode) {
+        chatId = 'trial-temp'
+        setCurrentChatId(chatId)
+      } else if (!chatId || (chatId.startsWith('temp-'))) {
+        isTempChat = true
         const created = await fetch('/api/chat', {
           method: 'POST',
           headers: {
@@ -334,6 +381,9 @@ function ChatLayout() {
           signOut()
           return
         } else {
+          // Revert optimistic state on chat creation failure
+          setCurrentChatId(null)
+          setMessages([])
           throw new Error('Failed to create chat')
         }
       }
@@ -596,11 +646,43 @@ function ChatLayout() {
         }
       }
 
-      // Refresh chat list timestamps
-      await loadChats()
+      // Track trial response count and show auth gate for unauthenticated users
+      if (isTrialMode) {
+        setTrialResponseCount((prev) => prev + 1)
+        // Show auth gate modal after first response
+        setTimeout(() => {
+          setShowAuthGate(true)
+        }, 1000)
+      }
+
+      // Refresh chat list timestamps (skip for trial mode)
+      if (!isTrialMode) {
+        await loadChats()
+      }
     } catch (e) {
       console.error('Send failed', e)
-      setMessages((prev) => prev.map((m, i) => (i === prev.length - 1 && m.role === 'assistant' && !m.content ? { ...m, content: 'Something went wrong.' } : m)))
+      
+      // Handle optimistic update failure - revert to safe state
+      if (currentChatId?.startsWith('temp-')) {
+        setCurrentChatId(null)
+      }
+      
+      setMessages((prev) => {
+        // Remove the last user message and empty assistant message if send failed
+        const filtered = prev.filter((m, i) => {
+          const isLastAssistant = i === prev.length - 1 && m.role === 'assistant' && !m.content
+          const isLastUser = i === prev.length - 2 && m.role === 'user'
+          return !(isLastAssistant || isLastUser)
+        })
+        return filtered
+      })
+      
+      // Show appropriate error message
+      const errorMessage = e instanceof Error ? e.message : 'Something went wrong. Please try again.'
+      if (errorMessage.includes('Failed to create chat')) {
+        // Could add a toast notification here
+        console.error('Chat creation failed - reverted to safe state')
+      }
     } finally {
       setSending(false)
       setIsThinking(false)
@@ -610,67 +692,135 @@ function ChatLayout() {
   // Removed custom drawer timeline; using AgentActivity inline, always showing
 
   const sidebar = (
-    <div className={`flex h-full flex-col w-64 overflow-hidden p-2 ${isDark ? 'bg-black/20 backdrop-blur-2xl border-white/10' : 'bg-white/80 backdrop-blur-2xl border-gray-200/50'} border-r`}>
+    <div className={`flex h-full flex-col overflow-hidden p-2 transition-all ${sidebarMinimized ? 'w-16' : 'w-64'} ${isDark ? 'bg-black/20 backdrop-blur-2xl border-white/10' : 'bg-white/80 backdrop-blur-2xl border-gray-200/50'} border-r`}>
       {/* Top Bar */}
-      <div className={`flex items-center justify-between px-3 py-3 rounded-xl ${isDark ? 'bg-white/5 backdrop-blur-xl border-white/10' : 'bg-white/60 backdrop-blur-xl border-gray-200/50'} border shadow-lg`}>
+      <div className={`flex items-center px-3 py-3 ${sidebarMinimized ? 'flex-col gap-3' : 'justify-between'}`}>
         <Link href="/" className="flex items-center gap-2">
-          <Logo variant="full" height={28} className="opacity-90" />
+          {sidebarMinimized ? (
+            <Logo variant="icon" width={24} height={24} className="opacity-90" />
+          ) : (
+            <div className="scale-75 origin-left">
+              <Logo variant="full" height={28} className="opacity-90" />
+            </div>
+          )}
         </Link>
-        <button onClick={newChat} className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg ${isDark ? 'bg-white/10 backdrop-blur-xl text-white hover:bg-white/20 border-white/20' : 'bg-white/80 text-gray-900 hover:bg-white border-gray-300/50'} border shadow-sm transition-all`}>
-          <Plus className="w-3 h-3" /> New
+        <button
+          onClick={newChat}
+          className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-all ${isDark ? 'text-white hover:bg-white/10' : 'text-gray-900 hover:bg-white/60'}`}
+          title={sidebarMinimized ? "New chat" : undefined}
+        >
+          <Plus className="w-3 h-3" /> {!sidebarMinimized && 'New'}
         </button>
       </div>
       <div className="px-1 pt-2 space-y-1">
-        <button className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all ${isDark ? 'text-neutral-300 hover:bg-white/5 backdrop-blur-xl' : 'text-gray-600 hover:bg-white/60 backdrop-blur-xl'}`}>
-          <Search className={`w-3.5 h-3.5 ${isDark ? 'text-neutral-400' : 'text-gray-400'}`} /> Search chats
+        <button
+          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all ${sidebarMinimized ? 'justify-center' : ''} ${isDark ? 'text-neutral-300 hover:bg-white/5' : 'text-gray-600 hover:bg-white/60'}`}
+          title={sidebarMinimized ? "Search chats" : undefined}
+        >
+          <Search className={`w-3.5 h-3.5 ${isDark ? 'text-neutral-400' : 'text-gray-400'}`} />
+          {!sidebarMinimized && ' Search chats'}
         </button>
-        <button className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all ${isDark ? 'text-neutral-300 hover:bg-white/5 backdrop-blur-xl' : 'text-gray-600 hover:bg-white/60 backdrop-blur-xl'}`}>
-          <BookOpen className={`w-3.5 h-3.5 ${isDark ? 'text-neutral-400' : 'text-gray-400'}`} /> Library
+        <button
+          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all ${sidebarMinimized ? 'justify-center' : ''} ${isDark ? 'text-neutral-300 hover:bg-white/5' : 'text-gray-600 hover:bg-white/60'}`}
+          title={sidebarMinimized ? "Library" : undefined}
+        >
+          <BookOpen className={`w-3.5 h-3.5 ${isDark ? 'text-neutral-400' : 'text-gray-400'}`} />
+          {!sidebarMinimized && ' Library'}
         </button>
       </div>
       <div className="flex-1 overflow-y-auto px-1 py-2 space-y-1">
-        {(sessions || []).map((s) => (
-          <div
-            key={s.id}
-            onClick={() => selectChat(s.id)}
-            className={`group flex items-center gap-2 px-3 py-2 rounded-xl cursor-pointer border transition-all ${
-              isDark
-                ? 'hover:border-white/20 hover:bg-white/10 backdrop-blur-xl hover:shadow-lg'
-                : 'hover:border-gray-300/60 hover:bg-white/80 backdrop-blur-xl hover:shadow-md'
-            } ${
-              currentChatId === s.id
-                ? (isDark ? 'bg-white/10 backdrop-blur-xl border-white/20 shadow-lg' : 'bg-white/90 backdrop-blur-xl border-gray-300/60 shadow-md')
-                : 'border-transparent'
-            }`}
-          >
-            <div className={`flex-1 truncate text-sm ${isDark ? 'text-neutral-200' : 'text-gray-700'}`}>{s.title || 'Untitled Chat'}</div>
+        {sidebarMinimized ? (
+          (sessions || []).map((s) => (
             <button
-              onClick={(e) => {
-                e.stopPropagation()
-                deleteChat(s.id)
-              }}
-              className={`opacity-0 group-hover:opacity-100 p-1 rounded-lg ${
-                isDark 
-                  ? 'text-neutral-400 hover:text-red-400 hover:bg-red-500/10' 
-                  : 'text-gray-400 hover:text-red-500 hover:bg-red-50'
+              key={s.id}
+              onClick={() => selectChat(s.id)}
+              className={`w-full flex items-center justify-center p-2 rounded-lg cursor-pointer border transition-all ${
+                isDark
+                  ? 'hover:border-white/20 hover:bg-white/10 hover:shadow-lg'
+                  : 'hover:border-gray-300/60 hover:bg-white/80 hover:shadow-md'
+              } ${
+                currentChatId === s.id
+                  ? (isDark ? 'bg-white/10 border-white/20 shadow-lg' : 'bg-white/90 border-gray-300/60 shadow-md')
+                  : 'border-transparent'
               }`}
-              title="Delete"
+              title={s.title || 'Untitled Chat'}
             >
-              <Trash2 className="w-3 h-3" />
+              <MessageSquare className={`w-4 h-4 ${isDark ? 'text-neutral-300' : 'text-gray-600'}`} />
             </button>
-          </div>
-        ))}
-        {sessions.length === 0 && (
+          ))
+        ) : (
+          (sessions || []).map((s) => (
+            <div
+              key={s.id}
+              onClick={() => selectChat(s.id)}
+              className={`group flex items-center gap-2 px-3 py-2 rounded-xl cursor-pointer border transition-all ${
+                isDark
+                  ? 'hover:border-white/20 hover:bg-white/10 hover:shadow-lg'
+                  : 'hover:border-gray-300/60 hover:bg-white/80 hover:shadow-md'
+              } ${
+                currentChatId === s.id
+                  ? (isDark ? 'bg-white/10 border-white/20 shadow-lg' : 'bg-white/90 border-gray-300/60 shadow-md')
+                  : 'border-transparent'
+              }`}
+            >
+              <div className={`flex-1 truncate text-sm ${isDark ? 'text-neutral-200' : 'text-gray-700'}`}>{s.title || 'Untitled Chat'}</div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  deleteChat(s.id)
+                }}
+                className={`opacity-0 group-hover:opacity-100 p-1 rounded-lg ${
+                  isDark
+                    ? 'text-neutral-400 hover:text-red-400 hover:bg-red-500/10'
+                    : 'text-gray-400 hover:text-red-500 hover:bg-red-50'
+                }`}
+                title="Delete"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+          ))
+        )}
+        {sessions.length === 0 && !sidebarMinimized && (
           <div className={`text-xs px-3 py-8 text-center ${isDark ? 'text-neutral-500' : 'text-gray-400'}`}>No conversations yet</div>
         )}
       </div>
       {/* Bottom Bar */}
-      <div className="px-1 pt-2">
-        <div className={`rounded-xl p-2 space-y-1 ${isDark ? 'bg-white/5 backdrop-blur-xl border-white/10' : 'bg-white/60 backdrop-blur-xl border-gray-200/50'} border shadow-lg`}>
-          <Link href="/memories" className={`block text-xs px-3 py-2 rounded-lg transition-all ${isDark ? 'text-neutral-300 hover:bg-white/10 backdrop-blur-xl' : 'text-gray-600 hover:bg-white/80 backdrop-blur-xl'}`}>Memories</Link>
-          <Link href="/settings" className={`block text-xs px-3 py-2 rounded-lg transition-all ${isDark ? 'text-neutral-300 hover:bg-white/10 backdrop-blur-xl' : 'text-gray-600 hover:bg-white/80 backdrop-blur-xl'}`}>Settings</Link>
-          <button onClick={signOut} className={`w-full text-left text-xs px-3 py-2 rounded-lg transition-all ${isDark ? 'text-neutral-300 hover:bg-white/10 backdrop-blur-xl' : 'text-gray-600 hover:bg-white/80 backdrop-blur-xl'}`}>Logout</button>
-        </div>
+      <div className="px-1 pt-2 space-y-1">
+        <Link
+          href="/memories"
+          className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg transition-all ${sidebarMinimized ? 'justify-center' : ''} ${isDark ? 'text-neutral-300 hover:bg-white/10' : 'text-gray-600 hover:bg-white/80'}`}
+          title={sidebarMinimized ? "Memories" : undefined}
+        >
+          <BookOpen className="w-3.5 h-3.5" />
+          {!sidebarMinimized && 'Memories'}
+        </Link>
+        <button
+          onClick={() => setSettingsModalOpen(true)}
+          className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg transition-all ${sidebarMinimized ? 'justify-center' : ''} ${isDark ? 'text-neutral-300 hover:bg-white/10' : 'text-gray-600 hover:bg-white/80'}`}
+          title={sidebarMinimized ? "Settings" : undefined}
+        >
+          <Settings className="w-3.5 h-3.5" />
+          {!sidebarMinimized && 'Settings'}
+        </button>
+        <button
+          onClick={signOut}
+          className={`w-full flex items-center gap-2 text-xs px-3 py-2 rounded-lg transition-all ${sidebarMinimized ? 'justify-center' : ''} ${isDark ? 'text-neutral-300 hover:bg-white/10' : 'text-gray-600 hover:bg-white/80'}`}
+          title={sidebarMinimized ? "Logout" : undefined}
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          {!sidebarMinimized && 'Logout'}
+        </button>
+      </div>
+      {/* Toggle button */}
+      <div className="px-1 pb-2">
+        <button
+          onClick={() => setSidebarMinimized(!sidebarMinimized)}
+          className={`w-full flex items-center gap-2 text-xs px-3 py-2 rounded-lg transition-all ${sidebarMinimized ? 'justify-center' : ''} ${isDark ? 'text-neutral-400 hover:bg-white/10 hover:text-neutral-300' : 'text-gray-500 hover:bg-white/80 hover:text-gray-700'}`}
+          title={sidebarMinimized ? "Expand sidebar" : "Minimize sidebar"}
+        >
+          {sidebarMinimized ? <ChevronRight className="w-3.5 h-3.5" /> : <><ChevronLeft className="w-3.5 h-3.5" /> Collapse</>}
+        </button>
       </div>
     </div>
   )
@@ -678,7 +828,7 @@ function ChatLayout() {
   return (
     <div className={`flex h-screen overflow-hidden ${isDark ? 'bg-gradient-to-br from-black via-neutral-950 to-black text-white' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100 text-gray-900'}`}>
       {/* Sidebar - desktop */}
-      <div className="hidden md:flex w-64 h-screen">{sidebar}</div>
+      <div className={`hidden md:flex h-screen transition-all ${sidebarMinimized ? 'w-16' : 'w-64'}`}>{sidebar}</div>
 
       {/* Sidebar toggle - mobile */}
       <button
@@ -692,7 +842,7 @@ function ChatLayout() {
       {/* Sidebar drawer - mobile */}
       {sidebarOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex">
-          <div className="w-64 h-full">{sidebar}</div>
+          <div className={`h-full transition-all ${sidebarMinimized ? 'w-16' : 'w-64'}`}>{sidebar}</div>
           <div onClick={() => setSidebarOpen(false)} className="flex-1 h-full bg-black/50" />
         </div>
       )}
@@ -766,33 +916,58 @@ function ChatLayout() {
               )}
             </div>
           </div>
-          {/* Theme toggle button */}
-          <button
-            onClick={() => {
-              if (theme === 'system') {
-                setTheme(isDark ? 'light' : 'dark')
-              } else {
-                setTheme(theme === 'dark' ? 'light' : 'dark')
-              }
-            }}
-            className={`p-2 rounded-lg transition-all ${
-              isDark
-                ? 'bg-white/10 backdrop-blur-xl border border-white/20 text-yellow-400 hover:bg-white/20 hover:shadow-lg'
-                : 'bg-white/80 backdrop-blur-xl border border-gray-300/50 text-gray-600 hover:bg-white hover:shadow-md'
-            }`}
-            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-          </button>
+          {/* Profile picture and settings */}
+          <div className="flex items-center gap-2">
+            {/* Profile picture */}
+            <button
+              onClick={() => setSettingsModalOpen(true)}
+              className={`w-10 h-10 rounded-full border-2 transition-all ${
+                isDark
+                  ? 'border-white/20 hover:border-white/40'
+                  : 'border-gray-300/50 hover:border-gray-400'
+              }`}
+              title="Profile & Settings"
+            >
+              {user?.imageUrl ? (
+                <img 
+                  src={user.imageUrl} 
+                  alt="Profile" 
+                  className="w-full h-full rounded-full object-cover"
+                />
+              ) : (
+                <div className={`w-full h-full rounded-full flex items-center justify-center ${
+                  isDark ? 'bg-white/10 text-white/60' : 'bg-gray-200 text-gray-500'
+                }`}>
+                  <User className="w-5 h-5" />
+                </div>
+              )}
+            </button>
+            
+            {/* Theme toggle button */}
+            <button
+              onClick={() => {
+                if (theme === 'system') {
+                  setTheme(isDark ? 'light' : 'dark')
+                } else {
+                  setTheme(theme === 'dark' ? 'light' : 'dark')
+                }
+              }}
+              className={`p-2 rounded-lg transition-all ${
+                isDark
+                  ? 'bg-white/10 backdrop-blur-xl border border-white/20 text-yellow-400 hover:bg-white/20 hover:shadow-lg'
+                  : 'bg-white/80 backdrop-blur-xl border border-gray-300/50 text-gray-600 hover:bg-white hover:shadow-md'
+              }`}
+              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
+          </div>
         </div>
 
-        {/* Messages container: wider black panel with rounded corners */}
+        {/* Messages container */}
         <div className="flex-1 overflow-y-auto px-4 pt-4">
-          <div
-            className={`mx-auto w-full max-w-6xl rounded-2xl overflow-hidden transition-all ${
-              messages.length === 0 ? '' : (isDark ? 'bg-black/40 backdrop-blur-xl border border-white/10 shadow-2xl' : 'bg-white/80 backdrop-blur-xl border border-gray-200/50 shadow-xl')
-            }`}
-          >
+          <div className="mx-auto w-full max-w-6xl">
+
             <div className="mx-auto w-full max-w-4xl px-4 py-6 space-y-4">
               {messages.length === 0 ? (
                 <div className="min-h-[70vh] flex flex-col items-center justify-center text-center gap-6">
@@ -835,7 +1010,7 @@ function ChatLayout() {
                           ))}
                         </div>
                       )}
-                      <div className="flex items-end gap-2">
+                      <div className="flex items-center gap-2">
                         <div className="relative">
                           <button
                             onClick={() => setAttachOpenHero((v) => !v)}
@@ -1030,14 +1205,14 @@ function ChatLayout() {
                       {shouldShowAIMessage && (
                         <div className="w-full">
                           <div
-                             className={`rounded-2xl px-4 py-3 border max-w-[90%] md:max-w-[85%] transition-all ${
+                             className={`px-4 py-3 transition-all ${
                                m.role === 'user'
                                  ? (isDark
-                                     ? 'bg-gradient-to-br from-blue-600/90 to-blue-700/90 backdrop-blur-xl text-white border-blue-500/30 shadow-lg shadow-blue-500/20 ml-auto md:mr-2'
-                                     : 'bg-gradient-to-br from-blue-500/95 to-blue-600/95 backdrop-blur-xl text-white border-blue-400/30 shadow-lg shadow-blue-400/20 ml-auto md:mr-2')
+                                     ? 'rounded-2xl bg-white/5 backdrop-blur-2xl text-white border border-white/10 shadow-xl ml-auto md:mr-2 max-w-[90%] md:max-w-[85%]'
+                                     : 'rounded-2xl bg-white/90 backdrop-blur-2xl text-gray-900 border border-gray-300/50 shadow-lg ml-auto md:mr-2 max-w-[90%] md:max-w-[85%]')
                                  : (isDark
-                                     ? 'bg-white/5 backdrop-blur-2xl text-neutral-200 border-white/10 shadow-xl mr-auto md:ml-2'
-                                     : 'bg-white/90 backdrop-blur-2xl text-gray-900 border-gray-300/50 shadow-lg mr-auto md:ml-2')
+                                     ? 'text-neutral-200 max-w-[70%]'
+                                     : 'text-gray-900 max-w-[70%]')
                              }`}
                           >
                             <MessageRenderer
@@ -1092,7 +1267,7 @@ function ChatLayout() {
                       ))}
                     </div>
                   )}
-                  <div className="flex items-end gap-2">
+                  <div className="flex items-center gap-2">
                     <div className="relative">
                       <button
                         onClick={() => setAttachOpen((v) => !v)}
@@ -1238,6 +1413,8 @@ function ChatLayout() {
 
       {/* Removed timeline drawer; AgentActivity is always visible above messages */}
       <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} />
+      <AuthGateModal isOpen={showAuthGate} />
+      <SettingsModal isOpen={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} />
     </div>
   )
 }

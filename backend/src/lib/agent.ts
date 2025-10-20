@@ -41,6 +41,7 @@ import { getRelevantMemories, processMessageForMemories } from './memory-extract
 import { getUserWithMemories } from './auth'
 import { StreamingCallbackHandler, StreamingEvent } from './streaming-callback'
 import { responseCache } from './response-cache'
+import { smartChunkIterator } from './smart-chunking'
 
 config({ path: path.join(process.cwd(), '.env') })
 
@@ -1164,28 +1165,32 @@ class AIAgent {
         }
       }
       
-      // Stream the response in optimized chunks for faster display
-      const chunkSize = 100 // Increased chunk size for less overhead
+      // Stream the response using smart chunking that respects markdown boundaries
       const content = result.output || ''
       
-      console.log('📝 [AGENT] Streaming response content, length:', content.length)
+      console.log('📝 [AGENT] Streaming response content with smart chunking, length:', content.length)
       
       if (content.length > 0) {
-        for (let i = 0; i < content.length; i += chunkSize) {
-          const chunk = content.slice(i, Math.min(i + chunkSize, content.length))
-          console.log(`📝 [AGENT] Streaming chunk ${Math.floor(i / chunkSize) + 1}/${Math.ceil(content.length / chunkSize)}:`, chunk.substring(0, 50))
+        let chunkIndex = 0
+        const totalChunks = Math.ceil(content.length / 150) // Approximate total for progress
+        
+        for (const chunk of smartChunkIterator(content, { 
+          maxChunkSize: 150, 
+          minChunkSize: 30 
+        })) {
+          chunkIndex++
+          console.log(`📝 [AGENT] Streaming smart chunk ${chunkIndex}:`, chunk.substring(0, 50))
           yield { 
             type: 'content', 
             content: chunk,
             metadata: {
-              progress: Math.floor((i / content.length) * 100),
-              chunkIndex: Math.floor(i / chunkSize),
-              totalChunks: Math.ceil(content.length / chunkSize)
+              progress: Math.floor((chunkIndex / totalChunks) * 100),
+              chunkIndex,
+              totalChunks,
+              smartChunking: true
             }
           }
-          
-          // No artificial delay between chunks
-      }
+        }
       } else {
         console.error('❌ [AGENT] No content to stream! Result:', result)
         yield {

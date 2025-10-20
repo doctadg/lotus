@@ -30,7 +30,7 @@ import * as DocumentPicker from 'expo-document-picker'
 import { useAuth as useClerkAuth } from '@clerk/clerk-expo'
 import { canUseDeepResearch, isProUser } from '../src/lib/billing'
 import SwipeableSidebar from '../src/components/SwipeableSidebar'
-import SwipeGestureWrapper from '../src/components/SwipeGestureWrapper'
+import { PanGestureHandler, State, GestureHandlerRootView } from 'react-native-gesture-handler'
 
 interface Message {
   id: string
@@ -72,6 +72,10 @@ export default function HomeScreen() {
   const inputRef = useRef<TextInput>(null)
   const slideAnim = useRef(new Animated.Value(-300)).current
   const keyboardAnim = useRef(new Animated.Value(0)).current
+  const panGestureRef = useRef(null)
+
+  // Edge detection constants
+  const EDGE_DETECTION_WIDTH = 80 // 80px from left edge
 
   // Load chats only after auth AND token provider are ready and user is signed in
   useEffect(() => {
@@ -443,14 +447,41 @@ export default function HomeScreen() {
     }
   }
 
+  // Gesture handler for opening sidebar from edge
+  const gestureStartX = useRef(0)
+
+  const handleGestureEvent = (event: any) => {
+    // Track gesture progress
+  }
+
+  const handleGestureStateChange = (event: any) => {
+    const { state, translationX, x, absoluteX } = event.nativeEvent
+
+    if (state === State.BEGAN) {
+      // Record where the gesture started
+      gestureStartX.current = absoluteX
+    }
+
+    if (state === State.END) {
+      // Only open if gesture started from left edge AND swiped right enough
+      if (gestureStartX.current <= EDGE_DETECTION_WIDTH && translationX > 60) {
+        setSidebarOpen(true)
+      }
+    }
+  }
+
   return (
     <AuthGuard>
-      <SwipeGestureWrapper
-        onSwipeToOpen={() => setSidebarOpen(true)}
-        onSwipeToClose={() => setSidebarOpen(false)}
-        sidebarOpen={sidebarOpen}
+      <PanGestureHandler
+        ref={panGestureRef}
+        onGestureEvent={handleGestureEvent}
+        onHandlerStateChange={handleGestureStateChange}
+        activeOffsetX={10}
+        failOffsetY={[-20, 20]}
+        simultaneousHandlers={messagesEndRef}
+        enabled={!sidebarOpen}
       >
-        <View style={styles.container}>
+        <Animated.View style={styles.container}>
           {/* New Swipeable Sidebar */}
           <SwipeableSidebar
             isOpen={sidebarOpen}
@@ -470,8 +501,7 @@ export default function HomeScreen() {
             <Feather name="menu" size={24} color={theme.colors.text} />
           </TouchableOpacity>
           <View style={styles.headerLogoContainer}>
-            <LotusIcon size={24} color={theme.colors.text} />
-            <Text style={styles.headerTitle}>Mror</Text>
+            <LotusFullLogo width={80} height={28} />
           </View>
           <View style={styles.headerSpacer} />
         </View>
@@ -600,8 +630,8 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
         </Animated.View>
-      </View>
-        </SwipeGestureWrapper>
+        </Animated.View>
+      </PanGestureHandler>
     </AuthGuard>
   )
 }

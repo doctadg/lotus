@@ -59,6 +59,7 @@ async function syncUserWithDatabase(clerkUser: any) {
         data: {
           email,
           name,
+          imageUrl: clerkUser.imageUrl,
           clerkId: clerkUser.id,
           password: '', // No password needed with Clerk
           role: 'user'
@@ -71,7 +72,8 @@ async function syncUserWithDatabase(clerkUser: any) {
       where: { id: user.id },
       data: {
         email,
-        name: name || user.name
+        name: name || user.name,
+        imageUrl: clerkUser.imageUrl || user.imageUrl
       }
     });
   }

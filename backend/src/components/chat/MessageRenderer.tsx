@@ -13,6 +13,7 @@ import { MermaidBlock } from './ContentBlocks/MermaidBlock'
 import { MathBlock } from './ContentBlocks/MathBlock'
 import { LinkPreview } from './ContentBlocks/LinkPreview'
 import { useMessageFormatting } from '../../hooks/useMessageFormatting'
+import { validateContent, sanitizeCodeContent } from '../../lib/content-validation'
 import 'katex/dist/katex.min.css'
 
 interface MessageRendererProps {
@@ -28,7 +29,9 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(({
   messageId,
   isStreaming = false
 }) => {
-  const { processedContent, detectedBlocks } = useMessageFormatting(content)
+  // Validate content before processing
+  const safeContent = validateContent(content)
+  const { processedContent, detectedBlocks } = useMessageFormatting(safeContent)
 
   // Enhanced custom components for ReactMarkdown with professional styling
   const components = {
@@ -37,8 +40,13 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(({
       const language = match ? match[1] : ''
 
       if (!inline && match) {
-        // Check if it's a special block type
-        const content = String(children).replace(/\n$/, '')
+        // Safe content extraction and sanitization
+        const content = sanitizeCodeContent(children).replace(/\n$/, '')
+        
+        // Skip empty or invalid content
+        if (!content || content.trim() === '') {
+          return null
+        }
         
         if (language === 'mermaid') {
           return <MermaidBlock code={content} />
@@ -51,13 +59,14 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(({
         return <CodeBlock code={content} language={language} />
       }
 
-      // Enhanced inline code styling
+      // Enhanced inline code styling with safe content
+      const safeInlineContent = validateContent(children)
       return (
         <code 
           className="px-1 md:px-1.5 py-0.5 bg-white/10 text-white/95 rounded text-xs md:text-sm font-mono font-medium border border-white/5" 
           {...props}
         >
-          {children}
+          {safeInlineContent}
         </code>
       )
     },

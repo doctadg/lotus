@@ -17,6 +17,7 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+KEYSTORE_CREDENTIALS.txt
 
 # Prebuild (CNG) - uncomment below to ignore native folders for EAS builds  
 # /android

@@ -1,32 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { authenticateUser, createOrGetUser } from '@/lib/auth'
+import { getAuthenticatedUser } from '@/lib/clerk-auth'
 import { ApiResponse } from '@/types'
 
 export async function GET(request: NextRequest) {
   try {
-    const authData = await authenticateUser(request)
+    const user = await getAuthenticatedUser()
     
-    if (!authData) {
+    if (!user?.userId) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 })
     }
     
-    const userId = authData.userId
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        chats: {
-          orderBy: { updatedAt: 'desc' },
-          take: 10
-        }
+    const userData = await prisma.user.findUnique({
+      where: { id: user.userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        imageUrl: true,
+        role: true,
+        createdAt: true,
+        updatedAt: true
       }
     })
 
-    if (!user) {
+    if (!userData) {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'User not found'
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json<ApiResponse>({
       success: true,
-      data: user
+      data: userData
     })
   } catch (error) {
     console.error('Error fetching user profile:', error)
@@ -46,32 +47,46 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function PUT(request: NextRequest) {
   try {
-    const { email, name } = await request.json()
-    
-    if (!email) {
+    const user = await getAuthenticatedUser()
+    if (!user?.userId) {
       return NextResponse.json<ApiResponse>({
         success: false,
-        error: 'Email is required'
-      }, { status: 400 })
+        error: 'Unauthorized'
+      }, { status: 401 })
     }
 
-    const userId = await createOrGetUser(email, name)
-    
-    const user = await prisma.user.findUnique({
-      where: { id: userId }
+    const { name, email } = await request.json()
+
+    // Update user profile
+    const updatedUser = await prisma.user.update({
+      where: { id: user.userId },
+      data: {
+        ...(name && { name }),
+        ...(email && { email })
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        imageUrl: true,
+        role: true,
+        createdAt: true,
+        updatedAt: true
+      }
     })
 
     return NextResponse.json<ApiResponse>({
       success: true,
-      data: user
+      data: updatedUser
     })
+
   } catch (error) {
-    console.error('Error creating/getting user:', error)
+    console.error('Error updating profile:', error)
     return NextResponse.json<ApiResponse>({
       success: false,
-      error: 'Internal server error'
+      error: 'Failed to update profile'
     }, { status: 500 })
   }
 }

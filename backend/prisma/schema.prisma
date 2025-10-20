@@ -18,6 +18,7 @@ model User {
   email         String        @unique
   password      String?       // Made optional for migration
   name          String?
+  imageUrl      String?       // Profile picture URL
   role          String        @default("user") // 'user' or 'admin'
   clerkId       String?       @unique // Clerk user ID for authentication
   stripeCustomerId String?      @unique
@@ -33,6 +34,7 @@ model User {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
+  @@index([clerkId])
   @@map("users")
 }
 
@@ -46,6 +48,8 @@ model Chat {
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
+  @@index([userId, createdAt])
+  @@index([userId])
   @@map("chats")
 }
 
@@ -59,6 +63,8 @@ model Message {
   chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
+  @@index([chatId, createdAt])
+  @@index([chatId])
   @@map("messages")
 }
 

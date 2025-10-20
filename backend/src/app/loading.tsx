@@ -1,17 +1,25 @@
+import { Logo } from "@/components/ui/Logo"
+
 export default function Loading() {
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="text-center">
-        <div className="inline-flex items-center gap-3 mb-4">
-          <div className="w-8 h-8 rounded-lg bg-accent-primary animate-pulse"></div>
-          <span className="text-xl font-semibold text-text-primary">Lotus AI</span>
+    <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="relative">
+        {/* MROR Logo */}
+        <div className="relative z-10">
+          <Logo variant="full" height={60} className="opacity-90" />
         </div>
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 bg-accent-primary rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
-          <div className="w-2 h-2 bg-accent-primary rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
-          <div className="w-2 h-2 bg-accent-primary rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+
+        {/* Spinning dots around logo */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="relative w-32 h-32 animate-spin" style={{ animationDuration: '3s' }}>
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-white/60 rounded-full"></div>
+            <div className="absolute top-1/4 right-0 -translate-y-1/2 w-2 h-2 bg-white/60 rounded-full"></div>
+            <div className="absolute bottom-1/4 right-0 translate-y-1/2 w-2 h-2 bg-white/60 rounded-full"></div>
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-white/60 rounded-full"></div>
+            <div className="absolute bottom-1/4 left-0 translate-y-1/2 w-2 h-2 bg-white/60 rounded-full"></div>
+            <div className="absolute top-1/4 left-0 -translate-y-1/2 w-2 h-2 bg-white/60 rounded-full"></div>
+          </div>
         </div>
-        <p className="text-sm text-text-secondary mt-2">Loading...</p>
       </div>
     </div>
   )

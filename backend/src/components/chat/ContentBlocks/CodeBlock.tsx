@@ -3,8 +3,9 @@
 import React, { useState } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { Copy, Check, Play, Download } from 'lucide-react'
+import { Copy, Check } from 'lucide-react'
 import { useTheme } from '../../../hooks/useTheme'
+import { validateContent } from '../../../lib/content-validation'
 
 interface CodeBlockProps {
   code: string
@@ -19,46 +20,22 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
   language,
   fileName,
   showLineNumbers = true,
-  maxHeight = 400
+  maxHeight = 500
 }) => {
   const [copied, setCopied] = useState(false)
-  const [isExecuting, setIsExecuting] = useState(false)
   const { theme } = useTheme()
+
+  // Validate and sanitize code content
+  const safeCode = validateContent(code)
 
   const copyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(code)
+      await navigator.clipboard.writeText(safeCode)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
       console.error('Failed to copy code:', err)
     }
-  }
-
-  const downloadCode = () => {
-    const blob = new Blob([code], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = fileName || `code.${getFileExtension(language)}`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }
-
-  const executeCode = async () => {
-    if (!isExecutable(language)) return
-    
-    setIsExecuting(true)
-    // Placeholder for code execution - would integrate with a code runner API
-    setTimeout(() => {
-      setIsExecuting(false)
-    }, 2000)
-  }
-
-  const isExecutable = (lang: string) => {
-    return ['javascript', 'python', 'typescript', 'js', 'ts', 'py'].includes(lang.toLowerCase())
   }
 
   const getFileExtension = (lang: string) => {
@@ -81,65 +58,58 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
     return extensions[lang.toLowerCase()] || 'txt'
   }
 
+  const getLanguageColor = (lang: string): string => {
+    const colors: Record<string, string> = {
+      javascript: '#f7df1e',
+      typescript: '#3178c6',
+      python: '#3776ab',
+      java: '#ed8b00',
+      cpp: '#00599c',
+      c: '#a8b9cc',
+      css: '#1572b6',
+      html: '#e34f26',
+      json: '#000000',
+      yaml: '#cb171e',
+      sql: '#336791',
+      bash: '#4eaa25',
+      shell: '#4eaa25'
+    }
+    return colors[lang.toLowerCase()] || '#6b7280'
+  }
+
+  // Don't render if code is empty
+  if (!safeCode.trim()) {
+    return null
+  }
+
   return (
-    <div className="code-block group relative bg-black/40 border border-white/10 rounded-xl overflow-hidden my-4 backdrop-blur-sm">
-      {/* Professional Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-black/60 border-b border-white/10">
-        <div className="flex items-center space-x-3">
-          <div className="flex space-x-1.5">
-            <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
-            <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
-            <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div 
-              className="w-2 h-2 rounded-full" 
-              style={{ backgroundColor: getLanguageColor(language) }}
-            />
-            <span className="text-sm font-mono text-white/70 font-medium">
-              {fileName || language.toUpperCase()}
-            </span>
-          </div>
+    <div className="code-block group relative bg-black/30 border border-white/10 rounded-lg overflow-hidden my-3 backdrop-blur-sm">
+      {/* Minimalist Header */}
+      <div className="flex items-center justify-between px-3 py-2 bg-black/40 border-b border-white/5">
+        <div className="flex items-center space-x-2">
+          <div 
+            className="w-2 h-2 rounded-full" 
+            style={{ backgroundColor: getLanguageColor(language) }}
+          />
+          <span className="text-xs font-mono text-white/60">
+            {fileName || language.toUpperCase()}
+          </span>
         </div>
         
-        <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
-          {isExecutable(language) && (
-            <button
-              onClick={executeCode}
-              disabled={isExecuting}
-              className="p-2 rounded-lg hover:bg-white/10 transition-colors group/btn"
-              title="Run code"
-            >
-              <Play 
-                size={14} 
-                className={`text-white/60 group-hover/btn:text-green-400 transition-colors ${isExecuting ? 'animate-spin' : ''}`}
-              />
-            </button>
+        <button
+          onClick={copyToClipboard}
+          className="p-1.5 rounded hover:bg-white/10 transition-colors opacity-0 group-hover:opacity-100"
+          title="Copy code"
+        >
+          {copied ? (
+            <Check size={12} className="text-green-400" />
+          ) : (
+            <Copy size={12} className="text-white/50 hover:text-white/80" />
           )}
-          
-          <button
-            onClick={downloadCode}
-            className="p-2 rounded-lg hover:bg-white/10 transition-colors group/btn"
-            title="Download code"
-          >
-            <Download size={14} className="text-white/60 group-hover/btn:text-blue-400 transition-colors" />
-          </button>
-          
-          <button
-            onClick={copyToClipboard}
-            className="p-2 rounded-lg hover:bg-white/10 transition-colors group/btn"
-            title="Copy code"
-          >
-            {copied ? (
-              <Check size={14} className="text-green-400" />
-            ) : (
-              <Copy size={14} className="text-white/60 group-hover/btn:text-white/90 transition-colors" />
-            )}
-          </button>
-        </div>
+        </button>
       </div>
 
-      {/* Enhanced Code Content */}
+      {/* Clean Code Content */}
       <div className="relative overflow-auto" style={{ maxHeight }}>
         <SyntaxHighlighter
           language={language.toLowerCase()}
@@ -148,55 +118,36 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
           wrapLines={true}
           customStyle={{
             margin: 0,
-            padding: '1.25rem',
+            padding: '1rem',
             background: 'transparent',
-            fontSize: '14px',
-            lineHeight: '1.6',
+            fontSize: '13px',
+            lineHeight: '1.5',
             fontFamily: 'JetBrains Mono, SF Mono, Monaco, Inconsolata, Roboto Mono, Menlo, Consolas, monospace',
           }}
           codeTagProps={{
             style: {
               fontFamily: 'JetBrains Mono, SF Mono, Monaco, Inconsolata, Roboto Mono, Menlo, Consolas, monospace',
               fontFeatureSettings: '"liga" 1, "calt" 1',
-              fontWeight: '450',
+              fontWeight: '400',
             }
           }}
           lineNumberStyle={{
-            color: 'rgba(255, 255, 255, 0.3)',
-            fontSize: '12px',
-            paddingRight: '1rem',
-            minWidth: '2.5rem',
+            color: 'rgba(255, 255, 255, 0.25)',
+            fontSize: '11px',
+            paddingRight: '0.75rem',
+            minWidth: '2rem',
             textAlign: 'right',
             userSelect: 'none',
           }}
         >
-          {code}
+          {safeCode}
         </SyntaxHighlighter>
       </div>
 
-      {/* Enhanced fade overlay for long content */}
-      {code.split('\n').length > 25 && (
-        <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black/40 via-black/20 to-transparent pointer-events-none"></div>
+      {/* Subtle fade for long content */}
+      {safeCode.split('\n').length > 20 && (
+        <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-black/30 to-transparent pointer-events-none"></div>
       )}
     </div>
   )
-}
-
-function getLanguageColor(language: string): string {
-  const colors: Record<string, string> = {
-    javascript: '#f7df1e',
-    typescript: '#3178c6',
-    python: '#3776ab',
-    java: '#ed8b00',
-    cpp: '#00599c',
-    c: '#a8b9cc',
-    css: '#1572b6',
-    html: '#e34f26',
-    json: '#000000',
-    yaml: '#cb171e',
-    sql: '#336791',
-    bash: '#4eaa25',
-    shell: '#4eaa25'
-  }
-  return colors[language.toLowerCase()] || '#6b7280'
 }

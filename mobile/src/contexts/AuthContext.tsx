@@ -193,24 +193,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
     throw new Error('Missing Clerk Publishable Key. Please add it to your app configuration.')
   }
 
-  // Initialize RevenueCat on mount
+  // Set up sync function and wait for RevenueCat to be ready
   useEffect(() => {
-    const initialize = async () => {
-      try {
-        console.log('🔧 AuthProvider: Starting RevenueCat initialization...')
+    // Set up sync function implementation to avoid circular dependency
+    setSyncSubscriptionImpl((data) => apiService.syncRevenueCatSubscription(data))
 
-        // Set up sync function implementation to avoid circular dependency
-        setSyncSubscriptionImpl((data) => apiService.syncRevenueCatSubscription(data))
-
-        await initializeRevenueCat()
-        console.log('✅ AuthProvider: RevenueCat initialization complete')
+    // Wait for RevenueCat to be configured by _layout.tsx
+    const checkRevenueCatReady = () => {
+      const { isRevenueCatConfigured } = require('../lib/revenuecat')
+      if (isRevenueCatConfigured()) {
         setIsRevenueCatReady(true)
-      } catch (error) {
-        console.error('❌ AuthProvider: Failed to initialize RevenueCat:', error)
-        setIsRevenueCatReady(false)
+        console.log('✅ AuthProvider: RevenueCat is ready')
+      } else {
+        // Check again in 100ms
+        setTimeout(checkRevenueCatReady, 100)
       }
     }
-    initialize()
+    checkRevenueCatReady()
   }, [])
 
   // Persist Clerk session securely on device (if expo-secure-store is available)
