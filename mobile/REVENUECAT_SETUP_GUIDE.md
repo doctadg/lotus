@@ -45,7 +45,7 @@ Before starting, you need:
 
 ### Step 1.2: Create In-App Products
 
-1. In your app dashboard, go to **Monetize** → **Products** → **In-app products**
+1. In your appdashboard, go to **Monetize** → **Products** → **In-app products**
 2. Click **Create product**
 
 **Product 1: Monthly Subscription**
