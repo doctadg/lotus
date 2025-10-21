@@ -128,39 +128,6 @@ export default function LandingPage() {
                 </motion.p>
               </motion.div>
 
-              {/* Value Props */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.8, delay: 0.9 }}
-              >
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8 max-w-5xl mx-auto">
-                  <div className="flex flex-col items-center text-center space-y-3">
-                    <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 flex items-center justify-center">
-                      <Brain className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
-                    </div>
-                    <p className="text-white/90 text-sm sm:text-base font-medium">Persistent Memory</p>
-                  </div>
-                  <div className="flex flex-col items-center text-center space-y-3">
-                    <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 flex items-center justify-center">
-                      <Sparkles className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
-                    </div>
-                    <p className="text-white/90 text-sm sm:text-base font-medium">Adaptive Intelligence</p>
-                  </div>
-                  <div className="flex flex-col items-center text-center space-y-3">
-                    <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 flex items-center justify-center">
-                      <Zap className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
-                    </div>
-                    <p className="text-white/90 text-sm sm:text-base font-medium">Multi-Modal Mastery</p>
-                  </div>
-                  <div className="flex flex-col items-center text-center space-y-3">
-                    <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 flex items-center justify-center">
-                      <Shield className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
-                    </div>
-                    <p className="text-white/90 text-sm sm:text-base font-medium">Privacy First</p>
-                  </div>
-                </div>
-              </motion.div>
             </FadeInView>
           </div>
         </div>
@@ -188,28 +155,28 @@ export default function LandingPage() {
             {/* Feature Cards Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 md:gap-6 mb-12 sm:mb-16 md:mb-20">
               <AdaptiveFeatureCard
-                icon={Brain}
+                image="/images/aurora.png"
                 title="Never repeat yourself"
                 description="MROR builds a living memory of your conversations, projects, and preferences"
                 gradient={["#6366f1", "#8b5cf6"]}
                 delay={0.1}
               />
               <AdaptiveFeatureCard
-                icon={Layers}
+                image="/images/bird.png"
                 title="Speaks your language"
                 description="Adapts responses based on your background, expertise level, and goals"
                 gradient={["#8b5cf6", "#d946ef"]}
                 delay={0.2}
               />
               <AdaptiveFeatureCard
-                icon={Sparkles}
+                image="/images/engine.png"
                 title="Explores with you"
                 description="Tracks topics you're curious about and proactively provides insights"
                 gradient={["#6366f1", "#3b82f6"]}
                 delay={0.3}
               />
               <AdaptiveFeatureCard
-                icon={Zap}
+                image="/images/geodes.png"
                 title="Goes deeper"
                 description="Comprehensive analysis with verified sources when you need it"
                 gradient={["#8b5cf6", "#6366f1"]}

@@ -258,7 +258,7 @@ class AIAgent {
       agent,
       tools: this.tools,
       verbose: false, // Disabled for speed
-      maxIterations: Math.min(Number(process.env.AGENT_MAX_ITERATIONS || 6), 4) // Reduced max iterations
+      maxIterations: Number(process.env.AGENT_MAX_ITERATIONS || 8) // Increased to prevent failures
     })
 
     // Create streaming agent with callback handler
@@ -273,7 +273,7 @@ class AIAgent {
       tools: this.tools,
       verbose: false, // Disabled for speed
       returnIntermediateSteps: true,
-      maxIterations: Math.min(Number(process.env.AGENT_MAX_ITERATIONS || 6), 4) // Reduced max iterations
+      maxIterations: Number(process.env.AGENT_MAX_ITERATIONS || 8) // Increased to prevent failures
     })
   }
 
@@ -442,24 +442,24 @@ class AIAgent {
               totalAvailable: memoryResult.metadata.totalAvailableMemories
             })
             
-            // Only add personalization context if we have highly relevant memories
+            // Include relevant memories with improved filtering
             if (memoryResult.memories.length > 0) {
-              const highlyRelevantMemories = memoryResult.memories.filter((memory: any) => 
-                (memory.relevanceScore || 0) > 0.85 && 
-                memory.value && 
-                !memory.value.includes('User:') && 
+              const relevantMemories = memoryResult.memories.filter((memory: any) =>
+                (memory.relevanceScore || 0) >= 0.6 && // Lower threshold from 0.85 to 0.6
+                memory.value &&
+                !memory.value.includes('User:') &&
                 !memory.value.includes('Assistant:') &&
                 !memory.value.includes('\nUser:') &&
                 !memory.value.includes('\nAssistant:')
-              ).slice(0, 2) // Max 2 memories for speed
-              
-              if (highlyRelevantMemories.length > 0) {
+              ).slice(0, 5) // Increased from 2 to 5 memories max
+
+              if (relevantMemories.length > 0) {
                 userMemoriesContext = '\n\n=== USER CONTEXT ===\n'
-                userMemoriesContext += `Relevant Information:\n`
-                highlyRelevantMemories.forEach((memory: any) => {
+                userMemoriesContext += `I have access to your personal context. Relevant information about you:\n`
+                relevantMemories.forEach((memory: any) => {
                   userMemoriesContext += `- ${memory.key}: ${memory.value}\n`
                 })
-                userMemoriesContext += '\nUse this context naturally where relevant.\n=== END CONTEXT ===\n\n'
+                userMemoriesContext += '\nUSE THIS CONTEXT in your response where relevant. This is information you know about the user.\n=== END CONTEXT ===\n\n'
               } else if (memoryResult.context?.communicationStyle) {
                 userMemoriesContext = `\n[User prefers ${memoryResult.context.communicationStyle} communication]\n`
               }
@@ -623,13 +623,6 @@ class AIAgent {
         return
       }
 
-      // Initial thinking stream for non-simple queries
-      yield {
-        type: 'thinking_stream',
-        content: 'Analyzing your query...',
-        metadata: { phase: 'initialization', timestamp: Date.now() }
-      }
-      
       // Skip memory retrieval for simple/fast queries - matching processMessage logic
       const skipMemory = simpleCheck.type === 'greeting' || simpleCheck.type === 'math' ||
                          simpleCheck.type === 'factual' || simpleCheck.type === 'temporal' ||
@@ -642,21 +635,9 @@ class AIAgent {
       const userProfile: any = null
 
       if (userId && !skipMemory) {
-        yield {
-          type: 'thinking_stream',
-          content: 'Accessing your personal context and memories...',
-          metadata: { phase: 'memory_access', timestamp: Date.now() }
-        }
-        
         try {
           console.log(`🧠 [TRACE] Starting adaptive memory retrieval for user: ${userId}`)
           const memoryStartTime = Date.now()
-          
-          yield {
-            type: 'memory_access',
-            content: 'Analyzing query and retrieving personalized context...',
-            metadata: { phase: 'adaptive_searching', userId, timestamp: Date.now() }
-          }
           
           // Use adaptive memory retrieval
           const memoryResult = await adaptiveMemory.retrieveAdaptiveMemories(userId, message)
@@ -665,42 +646,20 @@ class AIAgent {
             strategy: memoryResult.strategy.reasoning,
             totalAvailable: memoryResult.metadata.totalAvailableMemories
           })
-          
+
+
           const memoryDuration = Date.now() - memoryStartTime
-          
-          yield {
-            type: 'memory_access',
-            content: `Applied ${memoryResult.strategy.reasoning.toLowerCase()} - found ${memoryResult.memories.length} relevant insights`,
-            metadata: {
-              phase: 'complete',
-              relevantCount: memoryResult.memories.length,
-              totalMemories: memoryResult.metadata.totalAvailableMemories,
-              strategy: memoryResult.strategy.reasoning,
-              duration: memoryDuration,
-              timestamp: Date.now()
-            }
-          }
-          
+
           // Only add personalization context if we have meaningful memories
           if (memoryResult.memories.length > 0) {
             userMemoriesContext = '\n\n=== USER CONTEXT ===\n'
             
-            yield {
-              type: 'thinking_stream',
-              content: 'Applying relevant user context...',
-              metadata: { 
-                phase: 'context_integration', 
-                strategy: memoryResult.strategy.reasoning,
-                timestamp: Date.now() 
-              }
-            }
-            
-            // Add only highly relevant memories
-            userMemoriesContext += `Relevant Information:\n`
+            // Add relevant memories
+            userMemoriesContext += `I have access to your personal context. Relevant information about you:\n`
             memoryResult.memories.forEach((memory: any) => {
               // Skip if value looks like a conversation exchange
               if (memory.value && (
-                memory.value.includes('User:') || 
+                memory.value.includes('User:') ||
                 memory.value.includes('Assistant:') ||
                 memory.value.includes('\nUser:') ||
                 memory.value.includes('\nAssistant:')
@@ -708,25 +667,21 @@ class AIAgent {
                 console.log('🚫 [AGENT] Skipping conversation-like memory in streaming context')
                 return
               }
-              
-              // Only include high-relevance memories
-              if (!memory.relevanceScore || memory.relevanceScore > 0.7) {
+
+              // Include memories with relevance score >= 0.6 (fixed from > 0.7)
+              if (!memory.relevanceScore || memory.relevanceScore >= 0.6) {
                 userMemoriesContext += `- ${memory.key}: ${memory.value}\n`
               }
             })
-            
-            userMemoriesContext += '\nUse this context naturally where relevant.\n=== END CONTEXT ===\n\n'
+
+            userMemoriesContext += '\nUSE THIS CONTEXT in your response where relevant. This is information you know about the user.\n=== END CONTEXT ===\n\n'
           } else if (memoryResult.context?.communicationStyle) {
             // For greetings or minimal personalization, only add style preference
             userMemoriesContext = `\n[User prefers ${memoryResult.context.communicationStyle} communication]\n`
           }
         } catch (memoryError) {
           console.error('❌ [TRACE] Error fetching user memories:', memoryError)
-          yield {
-            type: 'thinking_stream',
-            content: 'Continuing without personal context due to memory access error...',
-            metadata: { phase: 'memory_error', timestamp: Date.now() }
-          }
+          // Continue silently without memories
         }
       }
 
@@ -765,40 +720,10 @@ class AIAgent {
 
       const safeMessage = this.truncate(String(message || ''), 4000)
       let processedMessage = `[CURRENT DATE & TIME: ${currentDateTime} (${localDateTime})]${userMemoriesContext}${safeMessage}`
-      
-      // Enhanced query analysis thinking
-      yield {
-        type: 'thinking_stream',
-        content: 'Analyzing query complexity and information requirements...',
-        metadata: { phase: 'query_analysis', timestamp: Date.now() }
-      }
-      
-      // Query categorization thinking
-      yield {
-        type: 'context_analysis',
-        content: 'Categorizing query type and determining optimal approach',
-        metadata: {
-          queryLength: message.length,
-          deepResearch: deepResearchMode,
-          hasContext: userMemoriesContext.length > 0,
-          timestamp: Date.now()
-        }
-      }
-      
+
       // If deep research mode is explicitly requested, hint to the agent
       if (deepResearchMode) {
-        yield {
-          type: 'thinking_stream',
-          content: 'Deep research mode activated - preparing comprehensive analysis strategy...',
-          metadata: { phase: 'deep_research_planning', timestamp: Date.now() }
-        }
         processedMessage = `[CURRENT DATE & TIME: ${currentDateTime} (${localDateTime})]${userMemoriesContext}[COMPREHENSIVE RESEARCH MODE] Please provide a thorough, well-researched response using the comprehensive_search tool if needed: ${message}`
-      }
-
-      yield {
-        type: 'thinking_stream',
-        content: 'Initializing agent reasoning engine...',
-        metadata: { phase: 'agent_initialization', timestamp: Date.now() }
       }
       
       console.log(`🤖 [TRACE] Invoking agent with ${formattedHistory.length} history messages`)
@@ -1064,7 +989,7 @@ class AIAgent {
         tools: streamingTools,
         verbose: process.env.NODE_ENV === 'development',
         returnIntermediateSteps: true,
-        maxIterations: Number(process.env.AGENT_MAX_ITERATIONS || 6)
+        maxIterations: Number(process.env.AGENT_MAX_ITERATIONS || 8)
       })
 
       // Start agent execution in background
@@ -1121,49 +1046,7 @@ class AIAgent {
       console.log('🤖 [AGENT] Result keys:', Object.keys(result))
       console.log('🤖 [AGENT] Result output length:', result.output?.length || 0)
 
-      // The events have already been streamed in real-time via callbacks
-      // Just add final synthesis events if tools were used
-      if (result.intermediateSteps && result.intermediateSteps.length > 0) {
-        // Enhanced synthesis step (this happens after all tools complete)
-        yield {
-          type: 'context_synthesis',
-          content: 'Synthesizing all gathered information to create comprehensive response',
-          metadata: {
-            sourcesUsed: result.intermediateSteps.length,
-            totalInformation: result.intermediateSteps.reduce((acc: number, step: any) => acc + (step.observation?.length || 0), 0),
-            synthesisStrategy: 'comprehensive_integration',
-            timestamp: Date.now()
-          }
-        }
-        
-        yield {
-          type: 'thinking_stream',
-          content: 'Crafting final response structure...',
-          metadata: { phase: 'response_structuring', timestamp: Date.now() }
-        }
-      } else {
-        // No tools used - agent is using its knowledge
-        yield {
-          type: 'thinking_stream',
-          content: 'Query answered using existing knowledge',
-          metadata: {
-            phase: 'knowledge_based_response',
-            reasoning: 'sufficient_internal_knowledge',
-            timestamp: Date.now()
-          }
-        }
-      }
-      
-      // Final response preparation thinking
-      yield {
-        type: 'response_planning',
-        content: 'Finalizing response structure and beginning content generation',
-        metadata: {
-          responseLength: result.output.length,
-          complexity: result.output.length > 1000 ? 'detailed' : 'concise',
-          timestamp: Date.now()
-        }
-      }
+      // Skip verbose thinking events - just stream the actual content faster
       
       // Stream the response using smart chunking that respects markdown boundaries
       const content = result.output || ''

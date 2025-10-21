@@ -6,7 +6,7 @@ export default function Loading() {
       <div className="relative">
         {/* MROR Logo */}
         <div className="relative z-10">
-          <Logo variant="full" height={60} className="opacity-90" />
+          <Logo variant="icon" height={60} className="opacity-90" />
         </div>
 
         {/* Spinning dots around logo */}

@@ -92,17 +92,10 @@ export class AdaptiveMemoryService {
       return true
     }
 
-    // Skip for pure factual/definitional queries - expanded patterns
+    // Skip for pure factual/definitional queries - reduced patterns for better memory usage
     const skipPatterns = [
-      /^(what is|define|explain)\s+[\w\s]+$/i,     // Definitions
-      /^(calculate|compute|solve|what'?s)\s+[\d\s\+\-\*\/\(\)\%]+$/i,  // Math
-      /^(how to|tutorial for|guide to)\s+[\w\s]+$/i,  // Generic how-tos
-      /\b(documentation|docs|syntax|api reference)\b/i,  // Technical docs
-      /^(tell me about|describe)\s+(the\s+)?(concept|theory|principle)/i,  // Concepts
-      /^(who|when|where|why)\s+(is|are|was|were)\s+/i,  // Simple factual questions
-      /^(list|show|give)\s+me\s+/i,  // Simple list requests
-      /\b(example|examples?)\b/i,  // Example requests
-      /^(compare|difference)\s+/i  // Comparisons
+      /^(calculate|compute|solve|what'?s)\s+[\d\s\+\-\*\/\(\)\%]+$/i,  // Math only
+      /^(what is|define)\s+[\w]+$/i  // Very simple definitions only
     ]
     return skipPatterns.some(pattern => pattern.test(query))
   }
@@ -278,9 +271,9 @@ export class AdaptiveMemoryService {
     
     if (personalizationLevel === 'minimal') {
       return {
-        maxMemories: 2,
-        confidenceThreshold: 0.85,
-        diversityWeight: 0.3,
+        maxMemories: 3,
+        confidenceThreshold: 0.7,
+        diversityWeight: 0.4,
         recencyWeight: 0.7,
         reasoning: 'Minimal personalization - focus on most relevant memories only'
       }
@@ -288,8 +281,8 @@ export class AdaptiveMemoryService {
     
     if (personalizationLevel === 'high') {
       return {
-        maxMemories: 6,
-        confidenceThreshold: 0.65,
+        maxMemories: 8,
+        confidenceThreshold: 0.6,
         diversityWeight: 0.7,
         recencyWeight: 0.8,
         reasoning: 'High personalization - comprehensive user context'
@@ -305,8 +298,8 @@ export class AdaptiveMemoryService {
     // Override for complex queries if needed
     if (queryAnalysis.factors.queryComplexity === 'complex' && isPersonalQuery) {
       return {
-        maxMemories: 5,
-        confidenceThreshold: 0.7,
+        maxMemories: 6,
+        confidenceThreshold: 0.65,
         diversityWeight: 0.6,
         recencyWeight: 0.6,
         reasoning: 'Complex personal query - balanced memory retrieval'
@@ -315,8 +308,8 @@ export class AdaptiveMemoryService {
 
     if (isPersonalQuery) {
       return {
-        maxMemories: 4,
-        confidenceThreshold: 0.75,
+        maxMemories: 5,
+        confidenceThreshold: 0.7,
         diversityWeight: 0.5,
         recencyWeight: 0.8,
         reasoning: 'Personal query - focus on user preferences'
@@ -325,52 +318,52 @@ export class AdaptiveMemoryService {
 
     if (isTechnicalQuery) {
       return {
-        maxMemories: 3,
-        confidenceThreshold: 0.8,
+        maxMemories: 4,
+        confidenceThreshold: 0.7,
         diversityWeight: 0.6,
         recencyWeight: 0.5,
-        reasoning: 'Technical query - limited technical context'
+        reasoning: 'Technical query - relevant technical context'
       }
     }
 
     if (isCreativeQuery) {
       return {
-        maxMemories: 3,
-        confidenceThreshold: 0.7,
+        maxMemories: 4,
+        confidenceThreshold: 0.65,
         diversityWeight: 0.8,
         recencyWeight: 0.4,
-        reasoning: 'Creative query - some preference context'
+        reasoning: 'Creative query - preference context'
       }
     }
 
     if (isFactualQuery || queryAnalysis.factors.hasFactualDataKeywords) {
       return {
-        maxMemories: 1,
-        confidenceThreshold: 0.9,
-        diversityWeight: 0.2,
+        maxMemories: 2,
+        confidenceThreshold: 0.75,
+        diversityWeight: 0.3,
         recencyWeight: 0.8,
-        reasoning: 'Factual query - minimal personalization'
+        reasoning: 'Factual query - some personalization'
       }
     }
 
     // Simple queries
     if (queryAnalysis.factors.queryComplexity === 'simple' || wordCount <= 5) {
       return {
-        maxMemories: 2,
-        confidenceThreshold: 0.8,
+        maxMemories: 3,
+        confidenceThreshold: 0.7,
         diversityWeight: 0.4,
         recencyWeight: 0.7,
-        reasoning: 'Simple query - minimal context'
+        reasoning: 'Simple query - moderate context'
       }
     }
 
     // Default moderate strategy
     return {
-      maxMemories: 3,
-      confidenceThreshold: 0.75,
+      maxMemories: 4,
+      confidenceThreshold: 0.7,
       diversityWeight: 0.5,
       recencyWeight: 0.6,
-      reasoning: 'Moderate query - balanced but limited memory retrieval'
+      reasoning: 'Moderate query - balanced memory retrieval'
     }
   }
 

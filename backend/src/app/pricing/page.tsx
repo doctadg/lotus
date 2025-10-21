@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Check, Crown, Sparkles, Search, Zap, Shield } from 'lucide-react'
 import Link from 'next/link'
 import { SignedIn, SignedOut, PricingTable } from '@clerk/nextjs'
+import DynamicNavbar from '@/components/landing/DynamicNavbar'
 
 export default function PricingPage() {
   const [isAnnual, setIsAnnual] = useState(false)
@@ -64,7 +65,8 @@ export default function PricingPage() {
 
   return (
     <div className="min-h-screen bg-white dark:bg-black text-neutral-900 dark:text-white">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+      <DynamicNavbar />
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 pt-24">
         <div className="text-center mb-16">
           <h1 className="text-4xl md:text-5xl font-bold mb-6 dark:text-white text-neutral-900">Simple, transparent pricing</h1>
           <p className="text-xl dark:text-white/70 text-neutral-600 max-w-2xl mx-auto mb-10">

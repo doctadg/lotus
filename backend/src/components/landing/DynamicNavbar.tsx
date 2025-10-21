@@ -2,17 +2,21 @@
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { ArrowRight, Menu, X, Sun, Moon, ChevronDown, Brain, ImageIcon, Layers } from "lucide-react"
-import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs"
+import { ArrowRight, Menu, X, ChevronDown, Brain, ImageIcon, Layers, LogIn, User, LogOut } from "lucide-react"
 import { Logo } from "@/components/ui/Logo"
+import { useAuth } from "@/hooks/useAuth"
+import { useClerk } from "@clerk/nextjs"
 
 export default function DynamicNavbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [featuresDropdownOpen, setFeaturesDropdownOpen] = useState(false)
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
-  const [dark, setDark] = useState<boolean | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const userDropdownRef = useRef<HTMLDivElement>(null)
+
+  const { isAuthenticated, user, signOut } = useAuth()
+  const { openSignIn, openSignUp } = useClerk()
 
   useEffect(() => {
     const handleScroll = () => {
@@ -25,15 +29,12 @@ export default function DynamicNavbar() {
   }, [])
 
   useEffect(() => {
-    const ls = localStorage.getItem('theme')
-    if (ls) setDark(ls === 'dark')
-    else setDark(document.documentElement.classList.contains('dark'))
-  }, [])
-
-  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setFeaturesDropdownOpen(false)
+      }
+      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target as Node)) {
+        setUserDropdownOpen(false)
       }
     }
 
@@ -41,28 +42,20 @@ export default function DynamicNavbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const toggleTheme = () => {
-    const next = !(dark ?? false)
-    setDark(next)
-    document.documentElement.classList.toggle('dark', next)
-    try { localStorage.setItem('theme', next ? 'dark' : 'light') } catch {}
-  }
-
   return (
-    <nav
-      className={`fixed top-0 left-0 right-0 z-50 px-4 lg:px-8 py-4 transition-all duration-500 ${
+    <nav className={`fixed top-0 left-0 right-0 z-50 px-4 lg:px-8 transition-all duration-500 ${scrolled ? 'pt-4' : 'pt-6'}`}>
+      <div className={`max-w-7xl mx-auto transition-all duration-500 ${
         scrolled
-          ? "dark:bg-black/80 bg-white/80 backdrop-blur-xl dark:border-b dark:border-white/10 border-b border-black/10 shadow-2xl"
-          : "bg-transparent backdrop-blur-sm"
-      }`}
-    >
-      <div className="flex items-center justify-between">
+          ? "premium-card backdrop-blur-2xl border-2 border-white/20 shadow-2xl rounded-2xl px-6 py-3"
+          : "bg-transparent px-6 py-4"
+      }`}>
+        <div className="flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center group">
-          <Logo 
-            variant="full" 
-            height={40}
-            className="opacity-80 group-hover:opacity-100 transition-all duration-300 group-hover:scale-110"
+          <Logo
+            variant="full"
+            height={28}
+            className="opacity-80 group-hover:opacity-100 transition-all duration-300 group-hover:scale-105"
           />
         </Link>
 
@@ -80,7 +73,7 @@ export default function DynamicNavbar() {
 
             {/* Dropdown Menu */}
             {featuresDropdownOpen && (
-              <div className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-black/90 backdrop-blur-xl border dark:border-white/10 border-black/10 rounded-xl shadow-2xl py-2 z-50">
+              <div className="absolute top-full left-0 mt-2 w-64 premium-card backdrop-blur-2xl rounded-xl border-2 border-white/20 shadow-2xl py-2 z-50">
                 <Link
                   href="/features"
                   className="flex items-center px-4 py-3 text-neutral-700 dark:text-white/80 hover:text-neutral-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-all duration-200"
@@ -140,50 +133,87 @@ export default function DynamicNavbar() {
         </div>
 
         {/* Desktop CTA */}
-        <div className="hidden md:flex items-center space-x-4">
-          <SignedOut>
-            <Link href="/login">
-              <span className="text-neutral-700 hover:text-neutral-900 dark:text-white/80 dark:hover:text-white text-sm font-medium transition-all duration-300 hover:scale-105 cursor-pointer">
-                Login
-              </span>
-            </Link>
-          </SignedOut>
-          <SignedIn>
-            <Link
-              href="/chat"
-              className="text-neutral-700 hover:text-neutral-900 dark:text-white/80 dark:hover:text-white text-sm font-medium transition-all duration-300 hover:scale-105"
-            >
-              Open App
-            </Link>
-          </SignedIn>
-          <button
-            aria-label="Toggle theme"
-            onClick={toggleTheme}
-            className="p-2 rounded-lg transition-colors border dark:border-white/10 border-black/10 bg-black/5 dark:bg-white/10 text-neutral-800 dark:text-white hover:bg-black/10 dark:hover:bg-white/20"
-          >
-            {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </button>
-          <SignedOut>
-            <Link href="/register">
-              <Button
-                className="relative overflow-hidden transition-all duration-300 hover:-translate-y-1 premium-button text-sm font-bold"
-                size="sm"
+        <div className="hidden md:flex items-center space-x-3">
+          {!isAuthenticated ? (
+            <>
+              <button
+                onClick={() => openSignIn()}
+                className="group relative px-4 py-2 rounded-xl text-sm font-medium text-white transition-all duration-300 hover:scale-105 bg-white/5 backdrop-blur-xl border border-white/20 hover:bg-white/10 hover:border-white/30 hover:shadow-lg"
               >
-                <span className="relative z-10 flex items-center">
-                  Start Free Trial
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                <span className="flex items-center gap-2">
+                  <LogIn className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+                  Login
                 </span>
-              </Button>
-            </Link>
-          </SignedOut>
-          <SignedIn>
-            <UserButton afterSignOutUrl="/" />
-          </SignedIn>
+              </button>
+              <button
+                onClick={() => openSignUp()}
+                className="group relative px-5 py-2 rounded-xl text-sm font-bold transition-all duration-300 hover:scale-105 premium-button hover:shadow-2xl overflow-hidden"
+              >
+                <span className="relative z-10 flex items-center gap-2">
+                  Start Free Trial
+                  <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
+                </span>
+              </button>
+            </>
+          ) : (
+            <>
+              <Link href="/chat">
+                <button className="group relative px-4 py-2 rounded-xl text-sm font-medium text-white transition-all duration-300 hover:scale-105 bg-white/5 backdrop-blur-xl border border-white/20 hover:bg-white/10 hover:border-white/30 hover:shadow-lg">
+                  <span className="flex items-center gap-2">
+                    Open App
+                    <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
+                  </span>
+                </button>
+              </Link>
+              <div className="relative" ref={userDropdownRef}>
+                <button
+                  onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                  className="w-9 h-9 rounded-full overflow-hidden border-2 border-white/20 hover:border-white/40 transition-all duration-300 hover:scale-105"
+                >
+                  {user?.imageUrl ? (
+                    <img src={user.imageUrl} alt={user.name || 'User'} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-white/5 backdrop-blur-xl border border-white/20 hover:bg-white/10 hover:border-white/30 flex items-center justify-center">
+                      <User className="w-5 h-5 text-white" />
+                    </div>
+                  )}
+                </button>
+
+                {/* User Dropdown */}
+                {userDropdownOpen && (
+                  <div className="absolute top-full right-0 mt-2 w-64 premium-card backdrop-blur-2xl rounded-xl border-2 border-white/20 shadow-2xl py-2 z-50">
+                    <div className="px-4 py-3 border-b border-white/10">
+                      <div className="font-medium text-white text-sm">{user?.name || 'User'}</div>
+                      <div className="text-white/60 text-xs mt-0.5">{user?.email}</div>
+                    </div>
+                    <Link
+                      href="/settings"
+                      onClick={() => setUserDropdownOpen(false)}
+                      className="flex items-center px-4 py-3 text-white/80 hover:text-white hover:bg-white/5 transition-all duration-200"
+                    >
+                      <User className="w-4 h-4 mr-3" />
+                      <span className="text-sm">Settings</span>
+                    </Link>
+                    <button
+                      onClick={() => {
+                        signOut()
+                        setUserDropdownOpen(false)
+                      }}
+                      className="w-full flex items-center px-4 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all duration-200"
+                    >
+                      <LogOut className="w-4 h-4 mr-3" />
+                      <span className="text-sm">Sign Out</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Mobile Menu Button */}
         <button
-          className="md:hidden text-neutral-900 dark:text-white p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all duration-300"
+          className="md:hidden text-neutral-900 dark:text-white p-2 rounded-lg hover:bg-white/10 transition-all duration-300"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
         >
           <div className="relative w-6 h-6">
@@ -195,15 +225,16 @@ export default function DynamicNavbar() {
             />
           </div>
         </button>
+        </div>
       </div>
 
       {/* Mobile Menu */}
       <div
         className={`md:hidden overflow-hidden transition-all duration-500 ${
-          mobileMenuOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+          mobileMenuOpen ? "max-h-96 opacity-100 mt-4" : "max-h-0 opacity-0"
         }`}
       >
-        <div className="mt-4 p-6 dark:bg-black/60 bg-white/80 backdrop-blur-xl rounded-2xl border dark:border-white/10 border-black/10 shadow-2xl">
+        <div className="premium-card p-6 backdrop-blur-2xl rounded-2xl border-2 border-white/20 shadow-2xl">
           <div className="flex flex-col space-y-4">
             {/* Mobile Navigation Links */}
             <Link
@@ -235,40 +266,72 @@ export default function DynamicNavbar() {
               Pricing
             </Link>
             <hr className="border-white/20 my-2" />
-            <SignedOut>
-              <Link href="/login">
-                <span className="text-neutral-700 hover:text-neutral-900 dark:text-white/80 dark:hover:text-white text-sm font-medium transition-all duration-300 hover:translate-x-2 cursor-pointer">
-                  Login
-                </span>
-              </Link>
-              <Link href="/register">
-                <Button
-                  className="mt-2 premium-button w-full justify-center font-bold"
-                  size="sm"
+            {!isAuthenticated ? (
+              <>
+                <button
+                  onClick={() => {
+                    openSignIn()
+                    setMobileMenuOpen(false)
+                  }}
+                  className="group w-full px-4 py-2 rounded-xl text-sm font-medium text-white transition-all duration-300 bg-white/5 backdrop-blur-xl border border-white/20 hover:bg-white/10 hover:border-white/30"
                 >
-                  Start Free Trial
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-            </SignedOut>
-            <SignedIn>
-              <Link
-                href="/chat"
-                className="text-neutral-700 hover:text-neutral-900 dark:text-white/80 dark:hover:text-white text-sm font-medium transition-all duration-300 hover:translate-x-2"
-              >
-                Open App
-              </Link>
-              <div className="mt-3">
-                <UserButton afterSignOutUrl="/" />
-              </div>
-            </SignedIn>
-            <button
-              aria-label="Toggle theme"
-              onClick={toggleTheme}
-              className="mt-3 p-2 rounded-lg transition-colors border dark:border-white/10 border-black/10 bg-black/5 dark:bg-white/10 text-neutral-800 dark:text-white hover:bg-black/10 dark:hover:bg-white/20 w-full"
-            >
-              {dark ? 'Light mode' : 'Dark mode'}
-            </button>
+                  <span className="flex items-center gap-2">
+                    <LogIn className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+                    Login
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    openSignUp()
+                    setMobileMenuOpen(false)
+                  }}
+                  className="group w-full mt-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 premium-button"
+                >
+                  <span className="relative z-10 flex items-center justify-center gap-2">
+                    Start Free Trial
+                    <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
+                  </span>
+                </button>
+              </>
+            ) : (
+              <>
+                <Link href="/chat" onClick={() => setMobileMenuOpen(false)}>
+                  <button className="group w-full px-4 py-2 rounded-xl text-sm font-medium text-white transition-all duration-300 bg-white/5 backdrop-blur-xl border border-white/20 hover:bg-white/10 hover:border-white/30">
+                    <span className="flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        Open App
+                        <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
+                      </span>
+                    </span>
+                  </button>
+                </Link>
+                <div className="mt-3 flex items-center gap-3 px-4 py-3 rounded-xl bg-white/5 backdrop-blur-xl border border-white/20">
+                  {user?.imageUrl ? (
+                    <img src={user.imageUrl} alt={user.name || 'User'} className="w-10 h-10 rounded-full border-2 border-white/20" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center">
+                      <User className="w-5 h-5 text-white" />
+                    </div>
+                  )}
+                  <div className="flex-1 text-sm">
+                    <div className="font-medium text-white">{user?.name || 'User'}</div>
+                    <div className="text-white/60 text-xs">{user?.email}</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    signOut()
+                    setMobileMenuOpen(false)
+                  }}
+                  className="group w-full mt-2 px-4 py-2 rounded-xl text-sm font-medium text-white transition-all duration-300 bg-white/5 backdrop-blur-xl border border-white/20 hover:bg-red-500/10 hover:border-red-500/30"
+                >
+                  <span className="flex items-center gap-2 text-red-400">
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

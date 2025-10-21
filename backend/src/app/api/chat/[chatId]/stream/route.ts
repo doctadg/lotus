@@ -30,19 +30,100 @@ export async function POST(
   try {
     const { chatId } = await params
     console.log('💬 Chat ID:', chatId)
-    
-    const { userId: clerkUserId } = await auth()
-    console.log('👤 Clerk User ID:', clerkUserId)
-    
-    if (!clerkUserId) {
-      return new Response('Unauthorized', { status: 401 })
-    }
-    
+
     // Parse request body first
     const { content, deepResearchMode = false } = await request.json()
 
     if (!content) {
       return new Response('Message content is required', { status: 400 })
+    }
+
+    // ========== TRIAL MODE HANDLING ==========
+    // Handle unauthenticated trial users who get one free message
+    if (chatId === 'trial-temp') {
+      console.log('🎁 Trial mode request detected')
+
+      // Trial users cannot use deep research
+      if (deepResearchMode) {
+        return new Response(
+          JSON.stringify({
+            error: 'Deep Research requires sign-up',
+            message: 'Sign up for free to access Deep Research mode.',
+            upgradeUrl: '/register'
+          }),
+          {
+            status: 403,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        )
+      }
+
+      // Create streaming response for trial user (no database persistence)
+      const stream = new ReadableStream({
+        async start(controller) {
+          const encoder = new TextEncoder()
+
+          try {
+            // Stream messages from the AI agent without history or images
+            for await (const event of aiAgent.streamMessage(
+              content,
+              [], // No chat history for trial users
+              '', // No user ID for trial
+              false // No deep research
+            )) {
+              // Handle different event types
+              if (event.type === 'content') {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                  type: 'ai_chunk',
+                  data: { content: event.content }
+                })}\n\n`))
+              } else if (event.type === 'thinking_stream') {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                  type: 'thinking_stream',
+                  data: {
+                    content: event.content,
+                    metadata: event.metadata
+                  }
+                })}\n\n`))
+              } else if (event.type === 'error') {
+                console.error('Stream error:', event.content)
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                  type: 'error',
+                  content: event.content
+                })}\n\n`))
+              } else {
+                // Pass through any other event types
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
+              }
+            }
+
+            // Send complete event
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'complete' })}\n\n`))
+            controller.enqueue(encoder.encode(`data: [DONE]\n\n`))
+            controller.close()
+          } catch (error) {
+            console.error('Trial stream error:', error)
+            controller.error(error)
+          }
+        }
+      })
+
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+        },
+      })
+    }
+    // ========== END TRIAL MODE HANDLING ==========
+
+    const { userId: clerkUserId } = await auth()
+    console.log('👤 Clerk User ID:', clerkUserId)
+
+    if (!clerkUserId) {
+      return new Response('Unauthorized', { status: 401 })
     }
 
     // Parallelize user sync and chat verification for speed

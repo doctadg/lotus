@@ -15,13 +15,19 @@ const isPublicRoute = createRouteMatcher([
   '/api/webhooks(.*)',   // Webhooks
 ]);
 
+// Define trial routes that allow unauthenticated access
+const isTrialRoute = createRouteMatcher([
+  '/chat',                        // Chat page (handles own auth for trial mode)
+  '/api/chat/trial-temp/stream',  // Trial streaming endpoint
+]);
+
 // Define protected routes that require authentication
 const isProtectedRoute = createRouteMatcher([
-  '/chat(.*)',           // Chat application
+  '/chat/(.*)',          // Authenticated chat routes (with chat ID)
   '/admin(.*)',          // Admin pages
   '/settings(.*)',       // Settings page
   '/memories(.*)',       // Memories page
-  '/api/chat(.*)',       // Chat API
+  '/api/chat(.*)',       // Chat API (except trial-temp, handled above)
   '/api/user(.*)',       // User API
   '/api/stripe(.*)',     // Stripe API
   '/api/revenuecat(.*)', // RevenueCat API
@@ -29,6 +35,11 @@ const isProtectedRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
+  // Allow trial routes without authentication
+  if (isTrialRoute(request)) {
+    return;
+  }
+
   // If it's a protected route, require authentication
   if (isProtectedRoute(request)) {
     await auth.protect();
