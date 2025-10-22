@@ -174,14 +174,15 @@ export class IntelligentSearchService {
 
         // Choose search method based on analysis
         if (analysis.searchIntensity === 'comprehensive' || analysis.searchIntensity === 'deep') {
-          // Use streaming multi-search for comprehensive/deep queries
-          console.log(`🚀 [INTELLIGENT_SEARCH] Using streaming multi-search for ${analysis.searchIntensity} query`)
-          searchResult = await searchHiveService.performStreamingMultiSearch(
+          // Use smart search for comprehensive/deep queries with controlled parallelization
+          console.log(`🧠 [INTELLIGENT_SEARCH] Using smart search for ${analysis.searchIntensity} query`)
+          searchResult = await searchHiveService.performSmartSearch(
             query,
+            'deep',
             options.progressCallback
           )
-          actualSources = 15 // Estimated from multiple search variations
-          actualScraping = 15
+          actualSources = 8 // More realistic estimate for controlled search
+          actualScraping = 5
         } else if (analysis.searchIntensity === 'light' || analysis.recommendedSources <= 3) {
           // Use simple search for light intensity
           searchResult = await searchHiveService.performSimpleSearch(

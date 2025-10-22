@@ -30,26 +30,22 @@ import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts
 import { maybeTraceable, isTracingEnabled } from './tracing'
 import { Client } from 'langsmith'
 import agentConfig from '../../config/agent-prompts.json'
-import { searchHiveService } from './searchhive'
 import { getOpenRouterClient, OPENROUTER_IMAGE_MODEL } from './openrouter'
 import { parseDataUrl, extensionForMime } from './dataurl'
 import { uploadToBlob } from './blob'
 import { parseFromUrl } from './parse-doc'
-import { intelligentSearch } from './intelligent-search'
 import { adaptiveMemory } from './adaptive-memory'
-import { getRelevantMemories, processMessageForMemories } from './memory-extractor'
-import { getUserWithMemories } from './auth'
+import { processMessageForMemories } from './memory-extractor'
 import { StreamingCallbackHandler, StreamingEvent } from './streaming-callback'
 import { responseCache } from './response-cache'
-import { smartChunkIterator } from './smart-chunking'
 
 config({ path: path.join(process.cwd(), '.env') })
 
 // Optional LangSmith client (only used when tracing is enabled)
-const langsmithClient = new Client({
-  apiUrl: process.env.LANGSMITH_ENDPOINT || 'https://api.smith.langchain.com',
-  apiKey: process.env.LANGSMITH_API_KEY,
-})
+// const langsmithClient = new Client({
+//   apiUrl: process.env.LANGSMITH_ENDPOINT || 'https://api.smith.langchain.com',
+//   apiKey: process.env.LANGSMITH_API_KEY,
+// })
 
 // Helper function to add metadata to traces
 const addTraceMetadata = (metadata: Record<string, any>) => {
@@ -63,122 +59,183 @@ const addTraceMetadata = (metadata: Record<string, any>) => {
   }
 }
 
-// Intelligent web search tool with query classification and caching
-const createWebSearchTool = (eventCallback?: (event: any) => void) => new DynamicTool({
-  name: 'web_search',
-  description: 'Intelligently search the web with automatic query analysis, caching, and optimized search strategies. Uses ML-driven query classification to determine optimal search depth and sources needed.',
+// Simple search tool - returns URLs, titles, and snippets
+const createSearchTool = (eventCallback?: (event: any) => void) => new DynamicTool({
+  name: 'search',
+  description: 'Search the web for information. Returns a list of URLs with titles and snippets. Use this to find relevant sources, then use scrape() to get detailed content from specific sources.',
   func: maybeTraceable(async (query: string) => {
     try {
-      console.log(`🧠 [TRACE] Intelligent Web Search called with query: "${query}"`)
+      console.log(`🔍 [TRACE] Simple Search called with query: "${query}"`)
       const startTime = Date.now()
       
-      // Use intelligent search system
-      const searchResult = await intelligentSearch.search(query, {
-        progressCallback: eventCallback
+      // Emit search start event
+      eventCallback?.({
+        type: 'search_start',
+        content: `Searching for: "${query}"`,
+        metadata: { query, phase: 'searching', timestamp: Date.now() }
       })
       
-      const duration = Date.now() - startTime
+      // Create a new client instance for simple search
+      const { SearchHiveClient } = await import('./searchhive')
+      const searchClient = new SearchHiveClient()
       
-      console.log(`✅ [TRACE] Intelligent Search completed in ${duration}ms`, {
-        fromCache: searchResult.fromCache,
-        searchExecuted: searchResult.searchStrategy.executed,
-        intensity: searchResult.searchStrategy.analysis.searchIntensity,
-        sources: searchResult.searchStrategy.actualSources,
-        resultLength: searchResult.content.length
-      })
-      
-      return searchResult.content
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      console.error(`❌ [TRACE] Intelligent Web Search failed: ${errorMessage}`)
-      return `Error performing intelligent web search: ${errorMessage}`
-    }
-  }, { 
-    name: "intelligent_web_search_tool",
-    ...addTraceMetadata({ tool_type: "intelligent_search", search_type: "adaptive" })
-  })
-})
-
-const webSearchTool = createWebSearchTool()
-
-// Progressive comprehensive research tool with quality assessment
-const createComprehensiveSearchTool = (eventCallback?: (event: any) => void) => new DynamicTool({
-  name: 'comprehensive_search',
-  description: 'Perform progressive comprehensive research with quality assessment. Starts with moderate search and escalates to deep research if needed. Automatically determines optimal search strategy.',
-  func: maybeTraceable(async (topic: string) => {
-    try {
-      console.log(`🔬 [TRACE] Progressive Search Tool called with topic: "${topic}"`)
-      const startTime = Date.now()
-      
-      // Use progressive search strategy
-      const searchResult = await intelligentSearch.progressiveSearch(topic, {
-        progressCallback: eventCallback
-      }, 0.7) // Quality threshold of 70%
-      
-      const duration = Date.now() - startTime
-      
-      console.log(`✅ [TRACE] Progressive Search completed in ${duration}ms`, {
-        intensity: searchResult.searchStrategy.analysis.searchIntensity,
-        sources: searchResult.searchStrategy.actualSources,
-        resultLength: searchResult.content.length
-      })
-      
-      return searchResult.content
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      console.error(`❌ [TRACE] Progressive Search failed: ${errorMessage}`)
-      return `Error performing progressive search: ${errorMessage}`
-    }
-  }, { 
-    name: "progressive_search_tool",
-    ...addTraceMetadata({ tool_type: "intelligent_search", search_type: "progressive" })
-  })
-})
-
-const comprehensiveSearchTool = createComprehensiveSearchTool()
-
-// Deep multi-query search tool with parallel searching and scraping
-const createDeepSearchTool = (eventCallback?: (event: any) => void) => new DynamicTool({
-  name: 'deep_search',
-  description: 'Perform ultra-fast deep web search by expanding queries into multiple variations and searching in parallel. Automatically scrapes and streams results as they arrive. Best for comprehensive research, comparisons, and when you need broad coverage. Returns raw content from multiple sources.',
-  func: maybeTraceable(async (query: string) => {
-    try {
-      console.log(`🚀 [TRACE] Deep Search Tool called with query: "${query}"`)
-      const startTime = Date.now()
-
-      // Use streaming multi-search for maximum speed and coverage
-      const result = await searchHiveService.performStreamingMultiSearch(
+      // Use basic search without auto-scraping
+      const result = await searchClient.swiftSearch({
         query,
-        eventCallback
-      )
-
-      const duration = Date.now() - startTime
-
-      console.log(`✅ [TRACE] Deep Search completed in ${duration}ms`, {
-        resultLength: result.length,
-        duration
+        max_results: 8,
+        auto_scrape_top: 0, // No auto-scraping - agent will decide what to scrape
+        include_contacts: false,
+        include_social: false,
       })
-
-      return result
+      
+      const duration = Date.now() - startTime
+      
+      // Format results for agent
+      let formattedResults = `Found ${result.search_results.length} search results for "${query}":\n\n`
+      
+      result.search_results.forEach((item, index) => {
+        formattedResults += `${index + 1}. **${item.title}**\n`
+        formattedResults += `   URL: ${item.link}\n`
+        formattedResults += `   Snippet: ${item.snippet}\n\n`
+      })
+      
+      formattedResults += `Credits used: ${result.credits_used} | Search completed in ${duration}ms`
+      
+      // Emit search complete event
+      eventCallback?.({
+        type: 'search_complete',
+        content: `Found ${result.search_results.length} sources`,
+        metadata: { 
+          query, 
+          resultsFound: result.search_results.length,
+          creditsUsed: result.credits_used,
+          duration,
+          phase: 'complete',
+          timestamp: Date.now()
+        }
+      })
+      
+      console.log(`✅ [TRACE] Simple Search completed in ${duration}ms - ${result.search_results.length} results`)
+      
+      return formattedResults
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      console.error(`❌ [TRACE] Deep Search failed: ${errorMessage}`)
-      return `Error performing deep search: ${errorMessage}`
+      console.error(`❌ [TRACE] Simple Search failed: ${errorMessage}`)
+      
+      eventCallback?.({
+        type: 'search_error',
+        content: `Search failed: ${errorMessage}`,
+        metadata: { query, error: errorMessage, phase: 'error', timestamp: Date.now() }
+      })
+      
+      return `Search error: ${errorMessage}`
     }
-  }, {
-    name: "deep_search_tool",
-    ...addTraceMetadata({ tool_type: "streaming_multi_search", search_type: "deep_parallel" })
+  }, { 
+    name: "simple_search_tool",
+    ...addTraceMetadata({ tool_type: "search", search_type: "simple" })
   })
 })
 
-const deepSearchTool = createDeepSearchTool()
+// Simple scrape tool - extracts full content from one URL
+const createScrapeTool = (eventCallback?: (event: any) => void) => new DynamicTool({
+  name: 'scrape',
+  description: 'Extract full content from a specific URL. Use this when you need detailed information from a source that you found using search(). Provide the full URL as input.',
+  func: maybeTraceable(async (url: string) => {
+    try {
+      console.log(`📄 [TRACE] Simple Scrape called with URL: "${url}"`)
+      const startTime = Date.now()
+      
+      // Validate URL
+      if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
+        throw new Error('Invalid URL. Must start with http:// or https://')
+      }
+      
+      // Emit scrape start event
+      eventCallback?.({
+        type: 'scrape_start',
+        content: `Extracting content from: ${new URL(url).hostname}`,
+        metadata: { url, phase: 'scraping', timestamp: Date.now() }
+      })
+      
+      // Create a new client instance for scraping
+      const { SearchHiveClient } = await import('./searchhive')
+      const searchClient = new SearchHiveClient()
+      
+      // Scrape the URL
+      const result = await searchClient.scrapeForge({
+        url,
+        render_js: false,
+        extract_meta: true,
+        extract_links: false,
+        extract_images: false
+      })
+      
+      const duration = Date.now() - startTime
+      
+      if (!result.success || !result.primary_content) {
+        throw new Error('Scraping failed or no content returned')
+      }
+      
+      const content = result.primary_content
+      const extractedText = content.text || content.text_content || 'No content extracted'
+      
+      // Format results for agent
+      let formattedResult = `**Title:** ${content.title}\n`
+      formattedResult += `**URL:** ${url}\n`
+      formattedResult += `**Content Length:** ${extractedText.length} characters\n\n`
+      formattedResult += `**Content:**\n${extractedText.substring(0, 3000)}`
+      
+      if (extractedText.length > 3000) {
+        formattedResult += `\n\n[Content truncated - full content available]`
+      }
+      
+      formattedResult += `\n\nCredits used: ${result.credits_used} | Scraping completed in ${duration}ms`
+      
+      // Emit scrape complete event
+      eventCallback?.({
+        type: 'scrape_complete',
+        content: `Extracted ${(extractedText.length / 1000).toFixed(1)}k characters`,
+        metadata: { 
+          url, 
+          title: content.title,
+          contentLength: extractedText.length,
+          creditsUsed: result.credits_used,
+          duration,
+          phase: 'complete',
+          timestamp: Date.now()
+        }
+      })
+      
+      console.log(`✅ [TRACE] Simple Scrape completed in ${duration}ms - ${extractedText.length} chars`)
+      
+      return formattedResult
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      console.error(`❌ [TRACE] Simple Scrape failed: ${errorMessage}`)
+      
+      eventCallback?.({
+        type: 'scrape_error',
+        content: `Scraping failed: ${errorMessage}`,
+        metadata: { url, error: errorMessage, phase: 'error', timestamp: Date.now() }
+      })
+      
+      return `Scraping error: ${errorMessage}`
+    }
+  }, { 
+    name: "simple_scrape_tool",
+    ...addTraceMetadata({ tool_type: "scrape", operation_type: "content_extraction" })
+  })
+})
+
+const searchTool = createSearchTool()
+const scrapeTool = createScrapeTool()
 
 class AIAgent {
   private llm: ChatOpenAI
   private streamingLLM: ChatOpenAI
   private agent: AgentExecutor | null = null
   private streamingAgent: AgentExecutor | null = null
-  private tools = [webSearchTool, comprehensiveSearchTool, deepSearchTool]
+  private tools = [searchTool, scrapeTool]
   private initialized = false
   private initPromise: Promise<void> | null = null
 
@@ -273,7 +330,7 @@ class AIAgent {
     console.log('🚀 [AGENT] Initializing optimized agent...')
     
     // Lazy load multimodal tools only when needed
-    const coreTools = [webSearchTool, comprehensiveSearchTool]
+    const coreTools = [searchTool, scrapeTool]
     
     // For faster initialization, start with core tools only
     this.tools = coreTools
@@ -792,9 +849,8 @@ class AIAgent {
       }
       
       const streamingTools: any[] = [
-        createWebSearchTool(toolEventCallback),
-        createComprehensiveSearchTool(toolEventCallback),
-        createDeepSearchTool(toolEventCallback),
+        createSearchTool(toolEventCallback),
+        createScrapeTool(toolEventCallback),
         // Image edit (image-to-image)
         new DynamicStructuredTool({
           name: 'image_edit',

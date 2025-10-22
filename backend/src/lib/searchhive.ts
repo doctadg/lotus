@@ -609,256 +609,286 @@ export class SearchHiveService {
 
 
   /**
-   * Progressive multi-query search with raw content streaming
-   * Expands query, searches in parallel, scrapes in parallel, streams results as they arrive
+   * Smart Search Scheduler - Controlled parallelization with rate limiting
+   * Prevents system overload while maintaining fast performance
    */
-  async performStreamingMultiSearch(
+  async performSmartSearch(
     query: string,
+    intensity: 'light' | 'moderate' | 'deep' = 'moderate',
     progressCallback?: (event: { type: string; content: string; metadata?: any }) => void
   ): Promise<string> {
+    const startTime = Date.now()
+    
     try {
-      console.log(`🚀 [STREAMING_MULTI_SEARCH] Starting for: "${query}"`)
-      const startTime = Date.now()
-
-      // Step 1: Expand query into variations (instant, rule-based)
-      const variations = this.expandQueryVariations(query)
-      console.log(`📊 [STREAMING_MULTI_SEARCH] Expanded to ${variations.length} variations:`, variations)
-
+      console.log(`🧠 [SMART_SEARCH] Starting ${intensity} search for: "${query}"`)
+      
       progressCallback?.({
-        type: 'query_expanded',
-        content: `Searching from ${variations.length} different angles: ${variations.join(', ')}`,
+        type: 'search_planning',
+        content: `Planning ${intensity} search strategy for: "${query}"`,
         metadata: {
-          originalQuery: query,
-          variations,
-          timestamp: Date.now()
+          phase: 'planning',
+          query,
+          strategy: intensity,
+          progress: 10,
+          sources: { total: 0, completed: 0, failed: 0 }
         }
       })
 
-      // Step 2: Fire ALL searches in parallel (no auto-scraping)
-      console.log(`⚡ [STREAMING_MULTI_SEARCH] Firing ${variations.length} parallel searches`)
-      const searchPromises = variations.map(async (variation, index) => {
-        try {
-          const result = await this.client.swiftSearch({
-            query: variation,
-            auto_scrape_top: 0, // We control scraping
-            max_results: 5,
-            include_contacts: false,
-            include_social: false,
-          })
-          console.log(`✅ [STREAMING_MULTI_SEARCH] Search ${index + 1}/${variations.length} complete: ${result.search_results.length} results`)
-          return { variation, result, index }
-        } catch (error) {
-          console.error(`❌ [STREAMING_MULTI_SEARCH] Search failed for "${variation}":`, error)
-          return { variation, result: null, index }
-        }
-      })
-
-      progressCallback?.({
-        type: 'search_batch_started',
-        content: `Fired ${variations.length} parallel searches`,
-        metadata: {
-          variationCount: variations.length,
-          timestamp: Date.now()
-        }
-      })
-
-      // Step 3: Collect URLs and deduplicate as searches complete
-      const urlSet = new Set<string>()
-      const urlToResult = new Map<string, SearchResult>()
-      const allScrapedContent: Array<{url: string; title: string; content: string}> = []
-      let completedSearches = 0
-
-      // Process searches as they complete
-      const scrapePromises: Promise<any>[] = []
-
-      for (const searchPromise of searchPromises) {
-        searchPromise.then(({ variation, result, index }) => {
-          completedSearches++
-
-          if (!result || !result.search_results) {
-            progressCallback?.({
-              type: 'search_complete_partial',
-              content: `Search ${completedSearches}/${variations.length} had no results`,
-              metadata: {
-                variation,
-                completedSearches,
-                totalSearches: variations.length
-              }
-            })
-            return
-          }
-
-          // Extract top URLs and deduplicate
-          const newUrls: string[] = []
-          for (const searchResult of result.search_results.slice(0, 3)) {
-            const normalizedUrl = this.normalizeUrl(searchResult.link)
-            if (!urlSet.has(normalizedUrl)) {
-              urlSet.add(normalizedUrl)
-              urlToResult.set(searchResult.link, searchResult)
-              newUrls.push(searchResult.link)
-            }
-          }
-
-          console.log(`🔗 [STREAMING_MULTI_SEARCH] Search ${completedSearches}/${variations.length}: found ${newUrls.length} new unique URLs (total: ${urlSet.size})`)
-
-          progressCallback?.({
-            type: 'search_complete_partial',
-            content: `Search ${completedSearches}/${variations.length} complete - found ${newUrls.length} new URLs (${urlSet.size} unique total)`,
-            metadata: {
-              variation,
-              newUrls: newUrls.length,
-              totalUniqueUrls: urlSet.size,
-              completedSearches,
-              totalSearches: variations.length
-            }
-          })
-
-          // Step 4: Fire scrapes immediately for new URLs
-          for (const url of newUrls) {
-            const searchResult = urlToResult.get(url)!
-
-            const scrapePromise = this.client.scrapeForge({
-              url,
-              render_js: false,
-              extract_meta: true,
-              extract_links: false,
-              extract_images: false
-            })
-              .then(scraped => {
-                const content = scraped.primary_content
-                const extractedText = content.text || content.text_content || searchResult.snippet || ''
-
-                const scrapedData = {
-                  url,
-                  title: content.title || searchResult.title,
-                  content: extractedText
-                }
-
-                allScrapedContent.push(scrapedData)
-
-                console.log(`📄 [STREAMING_MULTI_SEARCH] Scraped ${allScrapedContent.length}/${urlSet.size}: ${new URL(url).hostname} (${(extractedText.length / 1000).toFixed(1)}k chars)`)
-
-                // Step 5: Stream raw content immediately
-                progressCallback?.({
-                  type: 'raw_content_chunk',
-                  content: JSON.stringify(scrapedData),
-                  metadata: {
-                    url,
-                    title: scrapedData.title,
-                    contentLength: extractedText.length,
-                    scrapedCount: allScrapedContent.length,
-                    totalUrls: urlSet.size,
-                    timestamp: Date.now()
-                  }
-                })
-
-                return scrapedData
-              })
-              .catch(error => {
-                console.error(`❌ [STREAMING_MULTI_SEARCH] Scrape failed for ${url}:`, error)
-
-                // Fallback to snippet
-                const fallbackData = {
-                  url,
-                  title: searchResult.title,
-                  content: searchResult.snippet
-                }
-
-                allScrapedContent.push(fallbackData)
-
-                progressCallback?.({
-                  type: 'raw_content_chunk',
-                  content: JSON.stringify(fallbackData),
-                  metadata: {
-                    url,
-                    title: fallbackData.title,
-                    contentLength: fallbackData.content.length,
-                    scrapedCount: allScrapedContent.length,
-                    totalUrls: urlSet.size,
-                    fallback: true,
-                    timestamp: Date.now()
-                  }
-                })
-
-                return fallbackData
-              })
-
-            scrapePromises.push(scrapePromise)
-          }
-        })
-      }
-
-      // Wait for all searches to complete
-      await Promise.allSettled(searchPromises)
-
-      console.log(`🔍 [STREAMING_MULTI_SEARCH] All searches complete. Found ${urlSet.size} unique URLs. Waiting for scrapes...`)
-
-      progressCallback?.({
-        type: 'urls_discovered',
-        content: `Found ${urlSet.size} unique URLs across all searches - scraping in parallel`,
-        metadata: {
-          totalUrls: urlSet.size,
-          timestamp: Date.now()
-        }
-      })
-
-      // Wait for all scrapes to complete
-      await Promise.allSettled(scrapePromises)
-
+      // Determine search parameters based on intensity
+      const searchConfig = this.getSearchConfig(intensity)
+      
+      // Execute search with controlled parallelization
+      const result = await this.executeControlledSearch(query, searchConfig, progressCallback)
+      
       const totalTime = Date.now() - startTime
-
-      console.log(`✅ [STREAMING_MULTI_SEARCH] Complete! Scraped ${allScrapedContent.length} sources in ${totalTime}ms`)
-
+      
       progressCallback?.({
-        type: 'streaming_complete',
-        content: `Complete - analyzed ${allScrapedContent.length} sources from ${variations.length} search angles in ${(totalTime / 1000).toFixed(1)}s`,
+        type: 'search_complete',
+        content: `Complete - analyzed ${result.sourcesScraped} sources using ${intensity} strategy in ${(totalTime / 1000).toFixed(1)}s`,
         metadata: {
-          totalSources: allScrapedContent.length,
-          totalVariations: variations.length,
-          totalTime,
-          timestamp: Date.now()
+          phase: 'complete',
+          query,
+          strategy: intensity,
+          progress: 100,
+          sources: { 
+            total: result.sourcesFound, 
+            completed: result.sourcesScraped, 
+            failed: result.sourcesFound - result.sourcesScraped 
+          },
+          quality: {
+            score: result.qualityScore,
+            relevance: this.calculateRelevance(result.content),
+            confidence: 0.85
+          },
+          metrics: {
+            duration: totalTime,
+            requestsUsed: result.requestsUsed,
+            tokensFound: result.content.length
+          }
         }
       })
 
-      // Return formatted results for the agent
-      return this.formatStreamingResults({
-        query,
-        variations,
-        scrapedContent: allScrapedContent,
-        totalTime
-      })
-
+      console.log(`✅ [SMART_SEARCH] ${intensity} search completed in ${totalTime}ms - ${result.sourcesScraped}/${result.sourcesFound} sources`)
+      
+      return result.content
+      
     } catch (error) {
-      console.error('❌ [STREAMING_MULTI_SEARCH] Error:', error)
-      return `Error performing streaming multi-search: ${error instanceof Error ? error.message : 'Unknown error'}`
+      console.error(`❌ [SMART_SEARCH] Error:`, error)
+      
+      progressCallback?.({
+        type: 'search_error',
+        content: `Search error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        metadata: {
+          phase: 'error',
+          query,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          progress: 0
+        }
+      })
+      
+      return `Search error: ${error instanceof Error ? error.message : 'Unknown error'}`
     }
   }
 
-  private formatStreamingResults(data: {
-    query: string
-    variations: string[]
-    scrapedContent: Array<{url: string; title: string; content: string}>
-    totalTime: number
-  }): string {
-    let output = `Deep search results for "${data.query}":\n\n`
-    output += `Searched ${data.variations.length} query variations and analyzed ${data.scrapedContent.length} sources\n\n`
+  private getSearchConfig(intensity: 'light' | 'moderate' | 'deep') {
+    const configs = {
+      light: {
+        maxResults: 3,
+        scrapeTop: 2,
+        maxConcurrent: 2,
+        timeout: 8000,
+        prioritizeReliable: true
+      },
+      moderate: {
+        maxResults: 5,
+        scrapeTop: 3,
+        maxConcurrent: 3,
+        timeout: 12000,
+        prioritizeReliable: false
+      },
+      deep: {
+        maxResults: 8,
+        scrapeTop: 5,
+        maxConcurrent: 3,
+        timeout: 15000,
+        prioritizeReliable: false
+      }
+    }
+    
+    return configs[intensity]
+  }
 
-    // Add scraped content
-    data.scrapedContent.forEach((content, index) => {
-      output += `## ${index + 1}. ${content.title}\n`
-
-      // Truncate very long content
-      const summary = content.content.length > 800
-        ? content.content.substring(0, 800) + '...\n\n[Content truncated]'
-        : content.content
-
-      output += `${summary}\n\n**Source:** ${content.url}\n\n`
-      output += `---\n\n`
+  private async executeControlledSearch(
+    query: string,
+    config: any,
+    progressCallback?: (event: { type: string; content: string; metadata?: any }) => void
+  ): Promise<{
+    content: string
+    sourcesFound: number
+    sourcesScraped: number
+    qualityScore: number
+    requestsUsed: number
+  }> {
+    // Phase 1: Search
+    progressCallback?.({
+      type: 'search_progress',
+      content: `Searching web sources for: "${query}"`,
+      metadata: {
+        phase: 'searching',
+        query,
+        progress: 30,
+        sources: { total: 0, completed: 0, failed: 0 }
+      }
     })
 
-    output += `\nSearch completed in ${(data.totalTime / 1000).toFixed(1)}s | Query variations: ${data.variations.join(', ')}`
+    const searchResult = await this.client.swiftSearch({
+      query,
+      auto_scrape_top: 0,
+      max_results: config.maxResults,
+      include_contacts: false,
+      include_social: false,
+    })
 
-    return output
+    if (!searchResult.search_results || searchResult.search_results.length === 0) {
+      return {
+        content: `No results found for: ${query}`,
+        sourcesFound: 0,
+        sourcesScraped: 0,
+        qualityScore: 0,
+        requestsUsed: 1
+      }
+    }
+
+    // Phase 2: Scraping with controlled concurrency
+    progressCallback?.({
+      type: 'search_progress',
+      content: `Extracting content from ${searchResult.search_results.length} sources`,
+      metadata: {
+        phase: 'scraping',
+        query,
+        progress: 60,
+        sources: { 
+          total: searchResult.search_results.length, 
+          completed: 0, 
+          failed: 0 
+        }
+      }
+    })
+
+    const urlsToScrape = searchResult.search_results.slice(0, config.scrapeTop)
+    const scrapedContent = await this.scrapeWithConcurrencyControl(
+      urlsToScrape,
+      config.maxConcurrent,
+      progressCallback
+    )
+
+    // Phase 3: Analysis
+    progressCallback?.({
+      type: 'search_progress',
+      content: `Analyzing and synthesizing ${scrapedContent.length} sources`,
+      metadata: {
+        phase: 'analyzing',
+        query,
+        progress: 90,
+        sources: { 
+          total: searchResult.search_results.length, 
+          completed: scrapedContent.length, 
+          failed: urlsToScrape.length - scrapedContent.length 
+        }
+      }
+    })
+
+    const formattedContent = this.formatSearchAndScrapeResults({
+      query,
+      searchResults: searchResult.search_results,
+      scrapedContent,
+      totalResults: searchResult.results_count,
+      creditsUsed: searchResult.credits_used + scrapedContent.length * 3
+    })
+
+    return {
+      content: formattedContent,
+      sourcesFound: searchResult.search_results.length,
+      sourcesScraped: scrapedContent.length,
+      qualityScore: this.calculateQualityScore(formattedContent),
+      requestsUsed: 1 + scrapedContent.length
+    }
+  }
+
+  private async scrapeWithConcurrencyControl(
+    urls: SearchResult[],
+    maxConcurrent: number,
+    progressCallback?: (event: { type: string; content: string; metadata?: any }) => void
+  ): Promise<Array<{url: string; title: string; content: string; error?: string}>> {
+    const results: Array<{url: string; title: string; content: string; error?: string}> = []
+    const chunks = this.chunkArray(urls, maxConcurrent)
+    
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i]
+      console.log(`🔄 [CONCURRENT_SCRAPING] Processing chunk ${i + 1}/${chunks.length} (${chunk.length} URLs)`)
+      
+      const chunkPromises = chunk.map((result, index) => 
+        this.performSingleScrape(result, i * maxConcurrent + index, urls.length, progressCallback)
+          .catch(error => {
+            console.error(`❌ [CONCURRENT_SCRAPING] Scrape failed for ${result.link}:`, error)
+            return {
+              url: result.link,
+              title: result.title,
+              content: result.snippet,
+              error: error instanceof Error ? error.message : 'Unknown error'
+            }
+          })
+      )
+      
+      const chunkResults = await Promise.allSettled(chunkPromises)
+      
+      chunkResults.forEach((result) => {
+        if (result.status === 'fulfilled' && result.value) {
+          results.push(result.value)
+        }
+      })
+      
+      // Small delay between chunks to prevent overwhelming the API
+      if (i < chunks.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+    }
+    
+    return results
+  }
+
+  private chunkArray<T>(array: T[], chunkSize: number): T[][] {
+    const chunks: T[][] = []
+    for (let i = 0; i < array.length; i += chunkSize) {
+      chunks.push(array.slice(i, i + chunkSize))
+    }
+    return chunks
+  }
+
+  private calculateQualityScore(content: string): number {
+    let score = 0
+    
+    // Length-based scoring
+    if (content.length > 1000) score += 0.3
+    if (content.length > 2000) score += 0.2
+    
+    // Source diversity
+    const sourceCount = (content.match(/##\s+\d+\./g) || []).length
+    if (sourceCount >= 3) score += 0.3
+    if (sourceCount >= 5) score += 0.2
+    
+    // Content quality indicators
+    if (content.includes('Credits used')) score += 0.1
+    if (!content.includes('Error')) score += 0.1
+    
+    return Math.min(1.0, score)
+  }
+
+  private calculateRelevance(content: string): 'high' | 'medium' | 'low' {
+    const score = this.calculateQualityScore(content)
+    if (score >= 0.7) return 'high'
+    if (score >= 0.4) return 'medium'
+    return 'low'
   }
 
   /**
