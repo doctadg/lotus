@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
+import { useSubscription } from '@/hooks/useSubscription'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,11 +20,10 @@ interface Subscription {
 
 export default function SettingsPage() {
   const { user, signOut } = useAuth()
+  const { subscription, loading } = useSubscription()
   const router = useRouter()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [subscription, setSubscription] = useState<Subscription | null>(null)
-  const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
   const [message, setMessage] = useState('')
 
@@ -36,25 +36,7 @@ export default function SettingsPage() {
     // Load user data
     setName(user?.name || '')
     setEmail(user?.email || '')
-
-    // Load subscription data
-    fetchSubscription()
   }, [user, router])
-
-  const fetchSubscription = async () => {
-    try {
-      const response = await fetch('/api/user/subscription')
-
-      if (response.ok) {
-        const data = await response.json()
-        setSubscription(data.data.subscription)
-      }
-    } catch (error) {
-      console.error('Error fetching subscription:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault()

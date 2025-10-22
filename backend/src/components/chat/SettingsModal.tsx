@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/hooks/useAuth'
+import { useSubscription } from '@/hooks/useSubscription'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -21,9 +22,9 @@ interface SettingsModalProps {
 
 export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const { user, signOut } = useAuth()
+  const { subscription } = useSubscription()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [subscription, setSubscription] = useState<Subscription | null>(null)
 
   const [updating, setUpdating] = useState(false)
   const [message, setMessage] = useState('')
@@ -38,22 +39,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     setName(user?.name || '')
     setEmail(user?.email || '')
     setProfilePicture(user?.imageUrl || null)
-
-    // Load subscription data
-    fetchSubscription()
   }, [user])
-
-  const fetchSubscription = async () => {
-    try {
-      const response = await fetch('/api/user/subscription')
-      if (response.ok) {
-        const data = await response.json()
-        setSubscription(data.data.subscription)
-      }
-    } catch (error) {
-      console.error('Error fetching subscription:', error)
-    }
-  }
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault()
