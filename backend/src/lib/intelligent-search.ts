@@ -159,7 +159,7 @@ export class IntelligentSearchService {
       if (analysis.searchNeeded || options.forceSearch) {
         console.log(`🔍 [INTELLIGENT_SEARCH] Executing ${analysis.searchIntensity} search...`)
         const searchStart = Date.now()
-        
+
         // Emit search decision reasoning
         options.progressCallback?.({
           type: 'search_decision',
@@ -173,13 +173,15 @@ export class IntelligentSearchService {
         })
 
         // Choose search method based on analysis
-        if (analysis.searchIntensity === 'comprehensive') {
-          searchResult = await searchHiveService.performComprehensiveSearch(
+        if (analysis.searchIntensity === 'comprehensive' || analysis.searchIntensity === 'deep') {
+          // Use streaming multi-search for comprehensive/deep queries
+          console.log(`🚀 [INTELLIGENT_SEARCH] Using streaming multi-search for ${analysis.searchIntensity} query`)
+          searchResult = await searchHiveService.performStreamingMultiSearch(
             query,
             options.progressCallback
           )
-          actualSources = 8
-          actualScraping = 5
+          actualSources = 15 // Estimated from multiple search variations
+          actualScraping = 15
         } else if (analysis.searchIntensity === 'light' || analysis.recommendedSources <= 3) {
           // Use simple search for light intensity
           searchResult = await searchHiveService.performSimpleSearch(
@@ -192,7 +194,7 @@ export class IntelligentSearchService {
           // Use intelligent parameters based on analysis
           const maxResults = analysis.recommendedSources
           const scrapeCount = analysis.recommendedScraping
-          
+
           searchResult = await searchHiveService.performSearchAndScrape(
             query,
             maxResults,

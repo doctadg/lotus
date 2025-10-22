@@ -608,6 +608,310 @@ export class SearchHiveService {
   }
 
 
+  /**
+   * Progressive multi-query search with raw content streaming
+   * Expands query, searches in parallel, scrapes in parallel, streams results as they arrive
+   */
+  async performStreamingMultiSearch(
+    query: string,
+    progressCallback?: (event: { type: string; content: string; metadata?: any }) => void
+  ): Promise<string> {
+    try {
+      console.log(`🚀 [STREAMING_MULTI_SEARCH] Starting for: "${query}"`)
+      const startTime = Date.now()
+
+      // Step 1: Expand query into variations (instant, rule-based)
+      const variations = this.expandQueryVariations(query)
+      console.log(`📊 [STREAMING_MULTI_SEARCH] Expanded to ${variations.length} variations:`, variations)
+
+      progressCallback?.({
+        type: 'query_expanded',
+        content: `Searching from ${variations.length} different angles: ${variations.join(', ')}`,
+        metadata: {
+          originalQuery: query,
+          variations,
+          timestamp: Date.now()
+        }
+      })
+
+      // Step 2: Fire ALL searches in parallel (no auto-scraping)
+      console.log(`⚡ [STREAMING_MULTI_SEARCH] Firing ${variations.length} parallel searches`)
+      const searchPromises = variations.map(async (variation, index) => {
+        try {
+          const result = await this.client.swiftSearch({
+            query: variation,
+            auto_scrape_top: 0, // We control scraping
+            max_results: 5,
+            include_contacts: false,
+            include_social: false,
+          })
+          console.log(`✅ [STREAMING_MULTI_SEARCH] Search ${index + 1}/${variations.length} complete: ${result.search_results.length} results`)
+          return { variation, result, index }
+        } catch (error) {
+          console.error(`❌ [STREAMING_MULTI_SEARCH] Search failed for "${variation}":`, error)
+          return { variation, result: null, index }
+        }
+      })
+
+      progressCallback?.({
+        type: 'search_batch_started',
+        content: `Fired ${variations.length} parallel searches`,
+        metadata: {
+          variationCount: variations.length,
+          timestamp: Date.now()
+        }
+      })
+
+      // Step 3: Collect URLs and deduplicate as searches complete
+      const urlSet = new Set<string>()
+      const urlToResult = new Map<string, SearchResult>()
+      const allScrapedContent: Array<{url: string; title: string; content: string}> = []
+      let completedSearches = 0
+
+      // Process searches as they complete
+      const scrapePromises: Promise<any>[] = []
+
+      for (const searchPromise of searchPromises) {
+        searchPromise.then(({ variation, result, index }) => {
+          completedSearches++
+
+          if (!result || !result.search_results) {
+            progressCallback?.({
+              type: 'search_complete_partial',
+              content: `Search ${completedSearches}/${variations.length} had no results`,
+              metadata: {
+                variation,
+                completedSearches,
+                totalSearches: variations.length
+              }
+            })
+            return
+          }
+
+          // Extract top URLs and deduplicate
+          const newUrls: string[] = []
+          for (const searchResult of result.search_results.slice(0, 3)) {
+            const normalizedUrl = this.normalizeUrl(searchResult.link)
+            if (!urlSet.has(normalizedUrl)) {
+              urlSet.add(normalizedUrl)
+              urlToResult.set(searchResult.link, searchResult)
+              newUrls.push(searchResult.link)
+            }
+          }
+
+          console.log(`🔗 [STREAMING_MULTI_SEARCH] Search ${completedSearches}/${variations.length}: found ${newUrls.length} new unique URLs (total: ${urlSet.size})`)
+
+          progressCallback?.({
+            type: 'search_complete_partial',
+            content: `Search ${completedSearches}/${variations.length} complete - found ${newUrls.length} new URLs (${urlSet.size} unique total)`,
+            metadata: {
+              variation,
+              newUrls: newUrls.length,
+              totalUniqueUrls: urlSet.size,
+              completedSearches,
+              totalSearches: variations.length
+            }
+          })
+
+          // Step 4: Fire scrapes immediately for new URLs
+          for (const url of newUrls) {
+            const searchResult = urlToResult.get(url)!
+
+            const scrapePromise = this.client.scrapeForge({
+              url,
+              render_js: false,
+              extract_meta: true,
+              extract_links: false,
+              extract_images: false
+            })
+              .then(scraped => {
+                const content = scraped.primary_content
+                const extractedText = content.text || content.text_content || searchResult.snippet || ''
+
+                const scrapedData = {
+                  url,
+                  title: content.title || searchResult.title,
+                  content: extractedText
+                }
+
+                allScrapedContent.push(scrapedData)
+
+                console.log(`📄 [STREAMING_MULTI_SEARCH] Scraped ${allScrapedContent.length}/${urlSet.size}: ${new URL(url).hostname} (${(extractedText.length / 1000).toFixed(1)}k chars)`)
+
+                // Step 5: Stream raw content immediately
+                progressCallback?.({
+                  type: 'raw_content_chunk',
+                  content: JSON.stringify(scrapedData),
+                  metadata: {
+                    url,
+                    title: scrapedData.title,
+                    contentLength: extractedText.length,
+                    scrapedCount: allScrapedContent.length,
+                    totalUrls: urlSet.size,
+                    timestamp: Date.now()
+                  }
+                })
+
+                return scrapedData
+              })
+              .catch(error => {
+                console.error(`❌ [STREAMING_MULTI_SEARCH] Scrape failed for ${url}:`, error)
+
+                // Fallback to snippet
+                const fallbackData = {
+                  url,
+                  title: searchResult.title,
+                  content: searchResult.snippet
+                }
+
+                allScrapedContent.push(fallbackData)
+
+                progressCallback?.({
+                  type: 'raw_content_chunk',
+                  content: JSON.stringify(fallbackData),
+                  metadata: {
+                    url,
+                    title: fallbackData.title,
+                    contentLength: fallbackData.content.length,
+                    scrapedCount: allScrapedContent.length,
+                    totalUrls: urlSet.size,
+                    fallback: true,
+                    timestamp: Date.now()
+                  }
+                })
+
+                return fallbackData
+              })
+
+            scrapePromises.push(scrapePromise)
+          }
+        })
+      }
+
+      // Wait for all searches to complete
+      await Promise.allSettled(searchPromises)
+
+      console.log(`🔍 [STREAMING_MULTI_SEARCH] All searches complete. Found ${urlSet.size} unique URLs. Waiting for scrapes...`)
+
+      progressCallback?.({
+        type: 'urls_discovered',
+        content: `Found ${urlSet.size} unique URLs across all searches - scraping in parallel`,
+        metadata: {
+          totalUrls: urlSet.size,
+          timestamp: Date.now()
+        }
+      })
+
+      // Wait for all scrapes to complete
+      await Promise.allSettled(scrapePromises)
+
+      const totalTime = Date.now() - startTime
+
+      console.log(`✅ [STREAMING_MULTI_SEARCH] Complete! Scraped ${allScrapedContent.length} sources in ${totalTime}ms`)
+
+      progressCallback?.({
+        type: 'streaming_complete',
+        content: `Complete - analyzed ${allScrapedContent.length} sources from ${variations.length} search angles in ${(totalTime / 1000).toFixed(1)}s`,
+        metadata: {
+          totalSources: allScrapedContent.length,
+          totalVariations: variations.length,
+          totalTime,
+          timestamp: Date.now()
+        }
+      })
+
+      // Return formatted results for the agent
+      return this.formatStreamingResults({
+        query,
+        variations,
+        scrapedContent: allScrapedContent,
+        totalTime
+      })
+
+    } catch (error) {
+      console.error('❌ [STREAMING_MULTI_SEARCH] Error:', error)
+      return `Error performing streaming multi-search: ${error instanceof Error ? error.message : 'Unknown error'}`
+    }
+  }
+
+  private formatStreamingResults(data: {
+    query: string
+    variations: string[]
+    scrapedContent: Array<{url: string; title: string; content: string}>
+    totalTime: number
+  }): string {
+    let output = `Deep search results for "${data.query}":\n\n`
+    output += `Searched ${data.variations.length} query variations and analyzed ${data.scrapedContent.length} sources\n\n`
+
+    // Add scraped content
+    data.scrapedContent.forEach((content, index) => {
+      output += `## ${index + 1}. ${content.title}\n`
+
+      // Truncate very long content
+      const summary = content.content.length > 800
+        ? content.content.substring(0, 800) + '...\n\n[Content truncated]'
+        : content.content
+
+      output += `${summary}\n\n**Source:** ${content.url}\n\n`
+      output += `---\n\n`
+    })
+
+    output += `\nSearch completed in ${(data.totalTime / 1000).toFixed(1)}s | Query variations: ${data.variations.join(', ')}`
+
+    return output
+  }
+
+  /**
+   * Expand a single query into multiple search variations for broader coverage
+   * Uses rule-based patterns for instant expansion (no LLM delay)
+   */
+  expandQueryVariations(query: string): string[] {
+    const variations: string[] = [query] // Always include original
+
+    // Skip expansion for very specific queries (URLs, exact phrases, etc.)
+    if (query.startsWith('http') || query.startsWith('site:') || query.includes('"')) {
+      return variations
+    }
+
+    const lowerQuery = query.toLowerCase()
+
+    // Add contextual variations based on query type
+    if (!lowerQuery.includes('tutorial') && !lowerQuery.includes('guide')) {
+      variations.push(`${query} tutorial`)
+      variations.push(`${query} guide`)
+    }
+
+    if (!lowerQuery.includes('documentation') && !lowerQuery.includes('docs')) {
+      variations.push(`${query} documentation`)
+    }
+
+    if (!lowerQuery.includes('latest') && !lowerQuery.includes('2024') && !lowerQuery.includes('2025')) {
+      variations.push(`${query} latest`)
+    }
+
+    if (!lowerQuery.includes('example') && !lowerQuery.includes('examples')) {
+      variations.push(`${query} examples`)
+    }
+
+    // Limit to 5 variations to avoid overwhelming the search
+    return variations.slice(0, 5)
+  }
+
+  /**
+   * Normalize URL for deduplication
+   * Strips protocol, www, trailing slashes for consistent comparison
+   */
+  private normalizeUrl(url: string): string {
+    try {
+      const parsed = new URL(url)
+      return `${parsed.hostname}${parsed.pathname}`.toLowerCase()
+        .replace(/^www\./, '')
+        .replace(/\/$/, '')
+    } catch {
+      return url.toLowerCase()
+    }
+  }
+
   needsCurrentInfo(query: string): boolean {
     const currentInfoKeywords = [
       'latest', 'recent', 'current', 'today', 'now', 'this year', '2024', '2025',

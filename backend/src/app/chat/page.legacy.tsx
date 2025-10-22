@@ -471,6 +471,36 @@ function ChatPageContent() {
                   setIsTyping(parsed.data?.typing || false)
                   break
                   
+                case 'ai_token':
+                  if (parsed.data?.content) {
+                    const content = parsed.data.content
+                    setIsTyping(false) // Clear typing when content starts coming
+                    
+                    // Update message content
+                    setMessages(prev => {
+                  let newMessages = prev
+                  const currentMsg = prev.find(msg => msg.id === assistantMessage.id)
+                  
+                  if (currentMsg && (currentMsg.content.startsWith('Thinking...') || currentMsg.content.startsWith('Using tools...'))) {
+                    // Clear the thinking/tool message, start fresh
+                    newMessages = prev.map(msg => 
+                      msg.id === assistantMessage.id 
+                        ? { ...msg, content: content }
+                        : msg
+                    )
+                  } else {
+                    // Append to existing content
+                    newMessages = prev.map(msg => 
+                      msg.id === assistantMessage.id 
+                        ? { ...msg, content: (msg.content || '') + content }
+                        : msg
+                    )
+                  }
+                  return newMessages
+                })
+                  }
+                  break
+                  
                 case 'ai_chunk':
                   if (parsed.data?.content) {
                     const content = parsed.data.content

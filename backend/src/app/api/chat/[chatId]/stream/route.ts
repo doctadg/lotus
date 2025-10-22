@@ -72,7 +72,13 @@ export async function POST(
               false // No deep research
             )) {
               // Handle different event types
-              if (event.type === 'content') {
+              if (event.type === 'token') {
+                // Handle individual token streaming
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                  type: 'ai_token',
+                  data: { content: event.content }
+                })}\n\n`))
+              } else if (event.type === 'content') {
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({
                   type: 'ai_chunk',
                   data: { content: event.content }
@@ -282,7 +288,14 @@ export async function POST(
             deepResearchMode
           )) {
             // Handle different event types
-            if (event.type === 'content') {
+            if (event.type === 'token') {
+              // Handle individual token streaming
+              fullResponse += event.content || ''
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+                type: 'ai_token', 
+                data: { content: event.content } 
+              })}\n\n`))
+            } else if (event.type === 'content') {
               // Send as ai_chunk which the frontend expects
               fullResponse += event.content || ''
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 

@@ -137,12 +137,48 @@ const createComprehensiveSearchTool = (eventCallback?: (event: any) => void) => 
 
 const comprehensiveSearchTool = createComprehensiveSearchTool()
 
+// Deep multi-query search tool with parallel searching and scraping
+const createDeepSearchTool = (eventCallback?: (event: any) => void) => new DynamicTool({
+  name: 'deep_search',
+  description: 'Perform ultra-fast deep web search by expanding queries into multiple variations and searching in parallel. Automatically scrapes and streams results as they arrive. Best for comprehensive research, comparisons, and when you need broad coverage. Returns raw content from multiple sources.',
+  func: maybeTraceable(async (query: string) => {
+    try {
+      console.log(`🚀 [TRACE] Deep Search Tool called with query: "${query}"`)
+      const startTime = Date.now()
+
+      // Use streaming multi-search for maximum speed and coverage
+      const result = await searchHiveService.performStreamingMultiSearch(
+        query,
+        eventCallback
+      )
+
+      const duration = Date.now() - startTime
+
+      console.log(`✅ [TRACE] Deep Search completed in ${duration}ms`, {
+        resultLength: result.length,
+        duration
+      })
+
+      return result
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      console.error(`❌ [TRACE] Deep Search failed: ${errorMessage}`)
+      return `Error performing deep search: ${errorMessage}`
+    }
+  }, {
+    name: "deep_search_tool",
+    ...addTraceMetadata({ tool_type: "streaming_multi_search", search_type: "deep_parallel" })
+  })
+})
+
+const deepSearchTool = createDeepSearchTool()
+
 class AIAgent {
   private llm: ChatOpenAI
   private streamingLLM: ChatOpenAI
   private agent: AgentExecutor | null = null
   private streamingAgent: AgentExecutor | null = null
-  private tools = [webSearchTool, comprehensiveSearchTool]
+  private tools = [webSearchTool, comprehensiveSearchTool, deepSearchTool]
   private initialized = false
   private initPromise: Promise<void> | null = null
 
@@ -758,6 +794,7 @@ class AIAgent {
       const streamingTools: any[] = [
         createWebSearchTool(toolEventCallback),
         createComprehensiveSearchTool(toolEventCallback),
+        createDeepSearchTool(toolEventCallback),
         // Image edit (image-to-image)
         new DynamicStructuredTool({
           name: 'image_edit',
@@ -978,11 +1015,30 @@ class AIAgent {
         new MessagesPlaceholder('agent_scratchpad')
       ])
 
-      const tempStreamingAgent = await createToolCallingAgent({
-        llm: this.streamingLLM,
-        tools: streamingTools,
-        prompt
-      })
+       // Create a temporary streaming LLM with the callback handler
+       const tempStreamingLLM = new ChatOpenAI({
+         model: process.env.OPENROUTER_MODEL || 'openai/gpt-oss-20b',
+         temperature: agentConfig.modelConfig.temperature,
+         maxTokens: agentConfig.modelConfig.maxTokens,
+         streaming: true,
+         apiKey: process.env.OPENROUTER_API_KEY,
+         maxRetries: 3,
+         timeout: 30000,
+         configuration: {
+           baseURL: 'https://openrouter.ai/api/v1',
+           defaultHeaders: {
+             'HTTP-Referer': process.env.NEXTAUTH_URL || 'https://lotus-backend.vercel.app',
+             'X-Title': 'AI Chat App',
+           },
+         },
+         callbacks: [callbackHandler]
+       })
+
+       const tempStreamingAgent = await createToolCallingAgent({
+         llm: tempStreamingLLM,
+         tools: streamingTools,
+         prompt
+       })
 
       const tempAgentExecutor = new AgentExecutor({
         agent: tempStreamingAgent,
@@ -992,29 +1048,39 @@ class AIAgent {
         maxIterations: Number(process.env.AGENT_MAX_ITERATIONS || 8)
       })
 
-      // Start agent execution in background
-      console.log('🤖 [AGENT] Starting async agent execution with callbacks')
-      const agentPromise = tempAgentExecutor.invoke({
-        input: processedMessage,
-        chat_history: formattedHistory,
-        callbacks: [callbackHandler]
-      }).then(result => {
-        console.log(`⚡ [TRACE] Agent execution completed in ${Date.now() - agentStartTime}ms`)
-        console.log(`🔧 [TRACE] Tools used: ${result.intermediateSteps?.length > 0 ? 'Yes' : 'No'} (${result.intermediateSteps?.length || 0} steps)`)
-        agentExecutionComplete = true
-        // Signal completion
-        if (eventQueueResolver) {
-          eventQueueResolver(null)
-        }
-        return result
-      }).catch(error => {
-        console.error('❌ [AGENT] Execution error:', error)
-        agentExecutionComplete = true
-        if (eventQueueResolver) {
-          eventQueueResolver(null)
-        }
-        throw error
-      })
+       // Start agent execution with token streaming via callbacks
+       console.log('🤖 [AGENT] Starting token streaming via callbacks')
+      
+       const agentExecution = async () => {
+         try {
+           // Use langchain's invoke with streaming callbacks
+           // The token streaming will happen through handleLLMNewToken in the callback handler
+           const result = await tempAgentExecutor.invoke({
+             input: processedMessage,
+             chat_history: formattedHistory,
+             callbacks: [callbackHandler]
+           })
+           
+           console.log(`⚡ [TRACE] Agent execution completed in ${Date.now() - agentStartTime}ms`)
+           console.log(`🔧 [TRACE] Tools used: ${result.intermediateSteps?.length > 0 ? 'Yes' : 'No'} (${result.intermediateSteps?.length || 0} steps)`)
+           
+           agentExecutionComplete = true
+           if (eventQueueResolver) {
+             eventQueueResolver(null)
+           }
+           
+           return result
+         } catch (error) {
+           console.error('❌ [AGENT] Execution error:', error)
+           agentExecutionComplete = true
+           if (eventQueueResolver) {
+             eventQueueResolver(null)
+           }
+           throw error
+         }
+       }
+      
+      const agentPromise = agentExecution()
       
       // Helper function to get next event from queue or wait for one
       const getNextEvent = (): Promise<StreamingEvent | null> => {
@@ -1039,66 +1105,41 @@ class AIAgent {
         // No artificial delay - stream as fast as possible
       }
       
-      // Wait for agent to complete and get result
-      const result = await agentPromise
-      
-      console.log('🤖 [AGENT] Agent execution complete, processing final result')
-      console.log('🤖 [AGENT] Result keys:', Object.keys(result))
-      console.log('🤖 [AGENT] Result output length:', result.output?.length || 0)
+       // Wait for agent to complete and get final result
+       const result = await agentPromise
+       
+       console.log('🤖 [AGENT] Agent execution complete, tokens have been streamed')
+       console.log('🤖 [AGENT] Result keys:', Object.keys(result))
+       console.log('🤖 [AGENT] Final content length:', result?.output?.length || 0)
 
-      // Skip verbose thinking events - just stream the actual content faster
+       // No need to chunk content - tokens have already been streamed via handleLLMNewToken
+       // Just yield completion with metadata
+       if (!result?.output || result.output.length === 0) {
+         console.error('❌ [AGENT] No content was streamed! Result:', result)
+         yield {
+           type: 'content',
+           content: 'I apologize, but I encountered an issue generating a response. Please try again.',
+           metadata: { error: 'no_content' }
+         }
+       }
       
-      // Stream the response using smart chunking that respects markdown boundaries
-      const content = result.output || ''
-      
-      console.log('📝 [AGENT] Streaming response content with smart chunking, length:', content.length)
-      
-      if (content.length > 0) {
-        let chunkIndex = 0
-        const totalChunks = Math.ceil(content.length / 150) // Approximate total for progress
-        
-        for (const chunk of smartChunkIterator(content, { 
-          maxChunkSize: 150, 
-          minChunkSize: 30 
-        })) {
-          chunkIndex++
-          console.log(`📝 [AGENT] Streaming smart chunk ${chunkIndex}:`, chunk.substring(0, 50))
-          yield { 
-            type: 'content', 
-            content: chunk,
-            metadata: {
-              progress: Math.floor((chunkIndex / totalChunks) * 100),
-              chunkIndex,
-              totalChunks,
-              smartChunking: true
-            }
-          }
-        }
-      } else {
-        console.error('❌ [AGENT] No content to stream! Result:', result)
-        yield {
-          type: 'content',
-          content: 'I apologize, but I encountered an issue generating a response. Please try again.',
-          metadata: { error: 'no_content' }
-        }
-      }
-      
-      // Enhanced completion with comprehensive metadata
-      const agentDuration = Date.now() - agentStartTime
-      yield { 
-        type: 'complete', 
-        metadata: {
-          ...result.metadata,
-          reasoning_steps: result.intermediateSteps?.length || 0,
-          total_duration_ms: agentDuration,
-          response_length: content.length,
-          tools_used: result.intermediateSteps?.map((step: any) => step.action?.tool).filter(Boolean) || [],
-          information_sources: result.intermediateSteps?.length || 0,
-          memory_used: userMemoriesContext.length > 0,
-          deep_research_mode: deepResearchMode,
-          completion_timestamp: Date.now()
-        }
-      }
+       // Enhanced completion with comprehensive metadata
+       const agentDuration = Date.now() - agentStartTime
+       yield { 
+         type: 'complete', 
+         metadata: {
+           ...result?.metadata,
+           reasoning_steps: result?.intermediateSteps?.length || 0,
+           total_duration_ms: agentDuration,
+            response_length: result?.output?.length || 0,
+           tools_used: result?.intermediateSteps?.map((step: any) => step.action?.tool).filter(Boolean) || [],
+           information_sources: result?.intermediateSteps?.length || 0,
+           memory_used: userMemoriesContext.length > 0,
+           deep_research_mode: deepResearchMode,
+           completion_timestamp: Date.now(),
+           streaming_type: 'token_based'
+         }
+       }
       
       // Process message for memories in the background if userId is provided
       if (userId) {

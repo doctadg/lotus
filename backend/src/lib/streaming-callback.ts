@@ -395,8 +395,17 @@ export class StreamingCallbackHandler extends BaseCallbackHandler {
 
   // Text/Token streaming (for real-time response generation)
   async handleLLMNewToken(token: string) {
-    // We'll handle this separately in the main streaming logic
-    // to avoid double-streaming
+    // Emit individual tokens for character-by-character streaming
+    if (token && token.trim()) {
+      this.emitEvent({
+        type: 'token',
+        content: token,
+        metadata: {
+          phase: 'token_generation',
+          timestamp: Date.now()
+        }
+      })
+    }
   }
 
   async handleText(text: string) {

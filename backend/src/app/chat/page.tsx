@@ -453,6 +453,14 @@ function ChatLayout() {
           try {
             const evt = JSON.parse(data)
             switch (evt.type) {
+              case 'ai_token': {
+                const token = evt.data?.content as string
+                if (token) {
+                  setIsThinking(false)
+                  setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + token } : m)))
+                }
+                break
+              }
               case 'ai_chunk': {
                 const chunk = evt.data?.content as string
                 if (chunk) {
