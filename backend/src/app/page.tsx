@@ -1,16 +1,15 @@
 "use client"
-import { ArrowRight, Brain, Sparkles, Zap, Shield, Heart, Layers, Send } from "lucide-react"
+import { ArrowRight, Brain, Sparkles, Zap, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SignedIn, SignedOut } from "@clerk/nextjs"
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { motion, useScroll, useTransform } from "framer-motion"
+import { motion } from "framer-motion"
 import TextType from "@/components/landing/TextType"
 import ShinyText from "@/components/landing/ShinyText"
 import ScrambledText from "@/components/landing/ScrambledText"
 import GrayGlowBackground from "@/components/landing/GrayGlowBackground"
-import AnimatedBlob from "@/components/landing/AnimatedBlob"
 import DynamicNavbar from "@/components/landing/DynamicNavbar"
 import FadeInView from "@/components/landing/FadeInView"
 import HoverCard from "@/components/landing/HoverCard"
@@ -18,51 +17,36 @@ import StaggerChildren from "@/components/landing/StaggerChildren"
 import ComparisonDashboard from "@/components/landing/ComparisonDashboard"
 import AdaptiveFeatureCard from "@/components/landing/AdaptiveFeatureCard"
 import { Logo } from "@/components/ui/Logo"
-import GradientBlinds from "@/components/ui/GradientBlinds"
+import HeroBackground from "@/components/landing/HeroBackground"
+import ScrollProgress from "@/components/landing/ScrollProgress"
 
 export default function LandingPage() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [heroMessage, setHeroMessage] = useState('')
   const router = useRouter()
 
-  const { scrollYProgress } = useScroll()
-  const yParallax = useTransform(scrollYProgress, [0, 1], [0, -50])
 
-  const handleHeroSubmit = (e: React.FormEvent) => {
+
+  const handleHeroSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault()
     if (heroMessage.trim()) {
       router.push(`/chat?message=${encodeURIComponent(heroMessage.trim())}`)
     }
-  }
+  }, [heroMessage, router])
+
+  const handleHeroMessageChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setHeroMessage(e.target.value)
+  }, [])
 
   return (
     <div className="min-h-screen bg-white dark:bg-black text-neutral-900 dark:text-white overflow-x-hidden">
-      <motion.div
-        className="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-white via-gray-300 to-white z-50 origin-left"
-        style={{ scaleX: scrollYProgress }}
-      />
+      <ScrollProgress />
 
       <DynamicNavbar />
 
       {/* Hero Section - Chat Input */}
       <section className="relative min-h-screen pt-20 sm:pt-24 pb-12 sm:pb-16 overflow-hidden">
-        {/* GradientBlinds Background */}
-        <div className="absolute inset-0 z-0">
-          <GradientBlinds
-            gradientColors={['#1a1a1a', '#404040']}
-            angle={45}
-            noise={0.3}
-            blindCount={12}
-            blindMinWidth={50}
-            spotlightRadius={0.5}
-            spotlightSoftness={1}
-            spotlightOpacity={1}
-            mouseDampening={0.15}
-            distortAmount={0}
-            shineDirection="left"
-            mixBlendMode="lighten"
-          />
-        </div>
+        {/* Animated Background */}
+        <HeroBackground />
 
         {/* Content Container */}
         <div className="relative z-10 min-h-[calc(100vh-8rem)] flex flex-col justify-center">
@@ -99,7 +83,7 @@ export default function LandingPage() {
                     <div className="flex flex-col gap-4">
                       <textarea
                         value={heroMessage}
-                        onChange={(e) => setHeroMessage(e.target.value)}
+                        onChange={handleHeroMessageChange}
                         placeholder="Ask MROR anything... Type a question or describe what you need help with."
                         rows={4}
                         className="w-full bg-white/10 border border-white/20 rounded-xl px-6 py-4 text-white placeholder-white/50 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-white/30 focus:border-transparent transition-all backdrop-blur-sm resize-none"
