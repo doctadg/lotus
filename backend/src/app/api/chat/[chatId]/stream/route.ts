@@ -383,7 +383,39 @@ export async function POST(
           }
         } catch (error) {
           console.error('Stream error:', error)
-          controller.error(error)
+
+          // Send error message to client instead of abruptly terminating
+          const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred'
+
+          // Add error message to response if we have partial content
+          const errorResponse = fullResponse
+            ? `${fullResponse}\n\n---\n\n⚠️ An error occurred while processing: ${errorMessage}`
+            : `⚠️ I encountered an error while processing your request: ${errorMessage}. Please try again.`
+
+          // Send error event to frontend
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'error',
+            data: { content: errorMessage }
+          })}\n\n`))
+
+          // Try to save whatever response we have
+          try {
+            if (fullResponse || errorResponse) {
+              await prisma.message.update({
+                where: { id: assistantMessage.id },
+                data: { content: errorResponse }
+              })
+            }
+          } catch (dbError) {
+            console.error('Failed to save error response to database:', dbError)
+          }
+
+          // Send complete and done signals to properly close the stream
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'complete' })}\n\n`))
+          controller.enqueue(encoder.encode(`data: [DONE]\n\n`))
+
+          // Close the stream gracefully instead of throwing
+          controller.close()
         }
       }
     })

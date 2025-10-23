@@ -109,7 +109,10 @@ export class SearchHiveClient {
     this.apiKey = apiKey
   }
 
-  private async makeRequest<T>(endpoint: string, data: Record<string, unknown>): Promise<T> {
+  private async makeRequest<T>(endpoint: string, data: Record<string, unknown>, retryCount = 0): Promise<T> {
+    const maxRetries = Number(process.env.SEARCHHIVE_MAX_RETRIES || 2)
+    const baseDelayMs = 1000
+
     try {
       const controller = new AbortController()
       const timeoutMs = Number(process.env.SEARCHHIVE_TIMEOUT_MS || 12000)
@@ -127,11 +130,33 @@ export class SearchHiveClient {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(`SearchHive API error (${response.status}): ${errorData.message || response.statusText}`)
+        const errorMessage = `SearchHive API error (${response.status}): ${errorData.message || response.statusText}`
+
+        // Retry on 5xx server errors if we haven't exhausted retries
+        if (response.status >= 500 && response.status < 600 && retryCount < maxRetries) {
+          const delayMs = baseDelayMs * Math.pow(2, retryCount) // exponential backoff
+          console.warn(`⚠️ SearchHive ${response.status} error, retrying in ${delayMs}ms (attempt ${retryCount + 1}/${maxRetries})`)
+          await new Promise(resolve => setTimeout(resolve, delayMs))
+          return this.makeRequest<T>(endpoint, data, retryCount + 1)
+        }
+
+        throw new Error(errorMessage)
       }
 
       return await response.json()
     } catch (error) {
+      // Handle timeout/abort errors
+      if (error instanceof Error && error.name === 'AbortError') {
+        // Retry on timeout if we haven't exhausted retries
+        if (retryCount < maxRetries) {
+          const delayMs = baseDelayMs * Math.pow(2, retryCount)
+          console.warn(`⚠️ SearchHive request timeout, retrying in ${delayMs}ms (attempt ${retryCount + 1}/${maxRetries})`)
+          await new Promise(resolve => setTimeout(resolve, delayMs))
+          return this.makeRequest<T>(endpoint, data, retryCount + 1)
+        }
+        throw new Error(`SearchHive request timed out after ${retryCount + 1} attempts`)
+      }
+
       if (error instanceof Error) {
         throw error
       }
